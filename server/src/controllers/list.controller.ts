@@ -80,7 +80,7 @@ export async function createList(req: AuthenticatedRequest, res: Response) {
 
 export async function updateList(req: AuthenticatedRequest, res: Response) {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const userId = req.user!.id;
     const body = UpdateListSchema.parse(req.body);
 
@@ -105,7 +105,7 @@ export async function updateList(req: AuthenticatedRequest, res: Response) {
       success: true,
       list: {
         ...updated,
-        prospectsCount: updated._count.prospects,
+        prospectsCount: (updated as any)._count?.prospects ?? 0,
       },
     });
   } catch (err: any) {
@@ -119,7 +119,7 @@ export async function updateList(req: AuthenticatedRequest, res: Response) {
 
 export async function deleteList(req: AuthenticatedRequest, res: Response) {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const userId = req.user!.id;
 
     const existing = await prisma.prospectList.findFirst({

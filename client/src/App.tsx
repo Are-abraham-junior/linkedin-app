@@ -7,6 +7,7 @@ import { AdminDashboard } from "./components/admin/AdminDashboard";
 import { UserManagement } from "./components/admin/UserManagement";
 import { MainDashboard } from "./components/dashboard/MainDashboard";
 import { ProspectsView } from "./components/prospects/ProspectsView";
+import { CampaignsView } from "./components/campaigns/CampaignsView";
 import { ProfileModal } from "./components/profile/ProfileModal";
 
 export const App: React.FC = () => {
@@ -43,7 +44,7 @@ export const App: React.FC = () => {
   return (
     <div
       className={`text-[#353241] flex flex-col ${
-        activeTab === "prospects"
+        activeTab === "prospects" || activeTab === "campaigns"
           ? "h-screen overflow-hidden bg-[#f8f9fc]"
           : "min-h-screen bg-[#f8f9fc]"
       }`}
@@ -58,7 +59,7 @@ export const App: React.FC = () => {
       {/* Main View Area */}
       <main
         className={`flex-1 ${
-          activeTab === "prospects"
+          activeTab === "prospects" || activeTab === "campaigns"
             ? "min-h-0 overflow-hidden flex flex-col"
             : "pb-16"
         }`}
@@ -72,11 +73,15 @@ export const App: React.FC = () => {
         )}
 
         {activeTab === "dashboard" && (
-          <MainDashboard />
+          <MainDashboard onStartCampaign={() => setCurrentTab("campaigns")} />
+        )}
+
+        {activeTab === "campaigns" && (
+          <CampaignsView />
         )}
 
         {activeTab === "prospects" && (
-          <ProspectsView />
+          <ProspectsView onStartCampaign={() => setCurrentTab("campaigns")} />
         )}
       </main>
 

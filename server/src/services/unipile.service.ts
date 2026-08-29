@@ -202,4 +202,193 @@ export class UnipileService {
       return { items: accumulatedItems, totalCount: accumulatedItems.length };
     }
   }
+
+  /**
+   * Envoie une invitation de connexion LinkedIn (avec ou sans note personnalisée)
+   * Doc Unipile : POST /api/v1/users/invite
+   */
+  static async sendInvitation(params: {
+    accountId?: string;
+    providerId: string;
+    message?: string;
+  }): Promise<{ success: boolean; invitationId?: string; error?: string }> {
+    const accountId = params.accountId || UNIPILE_ACCOUNT_ID;
+    try {
+      const body: any = {
+        account_id: accountId,
+        provider_id: params.providerId,
+      };
+      if (params.message && params.message.trim().length > 0) {
+        body.message = params.message.trim().substring(0, 300); // Limite LinkedIn 300 car.
+      }
+
+      console.log(`[Unipile] Sending invitation to ${params.providerId} with account ${accountId}...`);
+      const res = await fetch(`${BASE_URL}/api/v1/users/invite`, {
+        method: "POST",
+        headers: this.getHeaders(),
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error(`[Unipile] Error sending invite (${res.status}):`, errText);
+        return { success: false, error: errText || res.statusText };
+      }
+
+      const data: any = await res.json();
+      return {
+        success: true,
+        invitationId: data.invitation_id || "sent",
+      };
+    } catch (err: any) {
+      console.error("[Unipile] Exception in sendInvitation:", err.message);
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * Envoie un message direct LinkedIn à un contact
+   * Doc Unipile : POST /api/v1/chats
+   */
+  static async sendMessage(params: {
+    accountId?: string;
+    attendeeId: string;
+    text: string;
+  }): Promise<{ success: boolean; chatId?: string; messageId?: string; error?: string }> {
+    const accountId = params.accountId || UNIPILE_ACCOUNT_ID;
+    try {
+      const body = {
+        account_id: accountId,
+        text: params.text,
+        attendees_ids: [params.attendeeId],
+      };
+
+      console.log(`[Unipile] Sending message to attendee ${params.attendeeId} with account ${accountId}...`);
+      const res = await fetch(`${BASE_URL}/api/v1/chats`, {
+        method: "POST",
+        headers: this.getHeaders(),
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error(`[Unipile] Error sending message (${res.status}):`, errText);
+        return { success: false, error: errText || res.statusText };
+      }
+
+      const data: any = await res.json();
+      return {
+        success: true,
+        chatId: data.chat_id || data.id,
+        messageId: data.message_id,
+      };
+    } catch (err: any) {
+      console.error("[Unipile] Exception in sendMessage:", err.message);
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * Récupère les détails d'un profil LinkedIn et son statut de connexion
+   * Doc Unipile : GET /api/v1/users/{identifier}
+   */
+  static async getProfile(params: {
+    accountId?: string;
+    identifier: string;
+  }): Promise<{ success: boolean; profile?: any; error?: string }> {
+    const accountId = params.accountId || UNIPILE_ACCOUNT_ID;
+    try {
+      const url = `${BASE_URL}/api/v1/users/${encodeURIComponent(params.identifier)}?account_id=${accountId}`;
+      const res = await fetch(url, {
+        method: "GET",
+        headers: this.getHeaders(),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        return { success: false, error: errText || res.statusText };
+      }
+
+      const profile = await res.json();
+      return { success: true, profile };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * Récupère la liste des relations (connexions au 1er degré)
+   * Doc Unipile : GET /api/v1/users/relations
+   */
+  static async getRelations(params: {
+    accountId?: string;
+    limit?: number;
+  }): Promise<{ success: boolean; items: any[]; error?: string }> {
+    const accountId = params.accountId || UNIPILE_ACCOUNT_ID;
+    try {
+      const limit = params.limit || 100;
+      const url = `${BASE_URL}/api/v1/users/relations?account_id=${accountId}&limit=${limit}`;
+      const res = await fetch(url, {
+        method: "GET",
+        headers: this.getHeaders(),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        return { success: false, items: [], error: errText || res.statusText };
+      }
+
+      const data: any = await res.json();
+      return { success: true, items: data.items || [] };
+    } catch (err: any) {
+      return { success: false, items: [], error: err.message };
+    }
+  }
+
+  /**
+   * Visite un profil LinkedIn (déclenche la notification de vue de profil chez le prospect)
+   * Doc Unipile : GET /api/v1/users/{identifier}?account_id=...&notify=true
+   */
+  static async visitProfile(params: {
+    accountId?: string;
+    identifier: string;
+  }): Promise<{ success: boolean; profile?: any; error?: string }> {
+    return this.getProfile(params);
+  }
+
+  /**
+   * Suit un profil LinkedIn via la route Unipile Magic Route
+   * Doc Unipile : POST /api/v1/linkedin
+   * body: { patch: { "$set": { following: true } } }
+   * request_url: "https://www.linkedin.com/voyager/api/feed/dash/followingStates/urn:li:fsd_followingState:urn:li:fsd_profile:{providerId}"
+   */
+  static async followProfile(params: {
+    accountId?: string;
+    providerId: string;
+  }): Promise<{ success: boolean; error?: string }> {
+    const accountId = params.accountId || UNIPILE_ACCOUNT_ID;
+    try {
+      const url = `${BASE_URL}/api/v1/linkedin`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: this.getHeaders(),
+        body: JSON.stringify({
+          account_id: accountId,
+          method: "POST",
+          request_url: `https://www.linkedin.com/voyager/api/feed/dash/followingStates/urn:li:fsd_followingState:urn:li:fsd_profile:${params.providerId}`,
+          body: { patch: { "$set": { following: true } } },
+          encoding: false,
+        }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        return { success: false, error: errText || res.statusText };
+      }
+
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  }
 }

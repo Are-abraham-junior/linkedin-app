@@ -49,3 +49,47 @@ export interface PlatformMetrics {
   connectedAccounts: number;
   usersByRole: Record<string, number>;
 }
+
+export type CampaignStatus = "DRAFT" | "ACTIVE" | "PAUSED" | "COMPLETED" | "ARCHIVED";
+export type ActionType = "INVITATION" | "MESSAGE" | "VISIT_PROFILE" | "VISIT" | "FOLLOW" | "DELAY";
+export type ProspectStepStatus =
+  | "PENDING"
+  | "WAITING_CONDITION"
+  | "WAITING_DELAY"
+  | "IN_PROGRESS"
+  | "REPLIED"
+  | "COMPLETED"
+  | "FAILED";
+
+export interface CampaignStep {
+  id?: string;
+  stepOrder: number;
+  actionType: ActionType;
+  delayDays: number;
+  messageText?: string | null;
+}
+
+export interface CampaignStats {
+  totalProspects: number;
+  acceptedCount: number;
+  repliedCount: number;
+  completedCount: number;
+  acceptanceRate: number;
+  replyRate: number;
+  waitingCondition?: number;
+  waitingDelay?: number;
+  failed?: number;
+}
+
+export interface Campaign {
+  id: string;
+  name: string;
+  status: CampaignStatus;
+  type: string;
+  createdAt: string;
+  updatedAt: string;
+  stepsCount?: number;
+  steps: CampaignStep[];
+  stats: CampaignStats;
+}
+

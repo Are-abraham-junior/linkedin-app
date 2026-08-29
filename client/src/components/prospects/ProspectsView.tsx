@@ -74,7 +74,11 @@ const DEFAULT_COLUMNS: ColumnDef[] = [
 
 const STORAGE_KEY = "bime_prospects_columns_order_v1";
 
-export const ProspectsView: React.FC = () => {
+interface ProspectsViewProps {
+  onStartCampaign?: () => void;
+}
+
+export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign }) => {
   const [lists, setLists] = useState<any[]>([]);
   const [selectedListId, setSelectedListId] = useState<string>("ALL");
   const [prospects, setProspects] = useState<any[]>([]);
@@ -791,13 +795,17 @@ export const ProspectsView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => {
-                  alert(
-                    selectedIds.size > 0
-                      ? `Lancement d'une campagne pour ${selectedIds.size} prospect(s) sélectionné(s) !`
-                      : `Lancement d'une campagne pour la liste "${activeListTitle}" (${total} prospects) !`
-                  );
+                  if (onStartCampaign) {
+                    onStartCampaign();
+                  } else {
+                    alert(
+                      selectedIds.size > 0
+                        ? `Lancement d'une campagne pour ${selectedIds.size} prospect(s) sélectionné(s) !`
+                        : `Lancement d'une campagne pour la liste "${activeListTitle}" (${total} prospects) !`
+                    );
+                  }
                 }}
-                className="py-1.5 px-3 rounded-xl border border-[#592eff]/30 bg-[#592eff]/10 hover:bg-[#592eff]/20 text-[#592eff] text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-2xs"
+                className="py-1.5 px-3 rounded-xl border border-[#592eff]/30 bg-[#592eff]/10 hover:bg-[#592eff]/20 text-[#592eff] text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-2xs cursor-pointer"
               >
                 <Rocket className="w-3.5 h-3.5" /> Démarrer une campagne
               </button>
@@ -1477,7 +1485,11 @@ export const ProspectsView: React.FC = () => {
         isOpen={isExcelModalOpen}
         onClose={() => setIsExcelModalOpen(false)}
         lists={lists}
-        defaultListId={selectedListId !== "ALL" && selectedListId !== "DO_NOT_CONTACT" ? selectedListId : undefined}
+        defaultListId={
+          selectedListId !== "ALL" && selectedListId !== "DO_NOT_CONTACT"
+            ? selectedListId
+            : lists[0]?.id
+        }
         onSuccess={() => {
           fetchProspects();
           fetchLists();
@@ -1489,7 +1501,11 @@ export const ProspectsView: React.FC = () => {
         isOpen={isSearchModalOpen}
         onClose={() => setIsSearchModalOpen(false)}
         lists={lists}
-        defaultListId={selectedListId !== "ALL" && selectedListId !== "DO_NOT_CONTACT" ? selectedListId : undefined}
+        defaultListId={
+          selectedListId !== "ALL" && selectedListId !== "DO_NOT_CONTACT"
+            ? selectedListId
+            : lists[0]?.id
+        }
         onSuccess={() => {
           fetchProspects();
           fetchLists();

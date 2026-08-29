@@ -105,7 +105,7 @@ export async function updateProfile(req: AuthenticatedRequest, res: Response) {
     });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ success: false, error: error.errors[0].message });
+      res.status(400).json({ success: false, error: error.issues?.[0]?.message || error.message });
       return;
     }
     res.status(500).json({ success: false, error: error.message });

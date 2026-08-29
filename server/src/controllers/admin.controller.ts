@@ -158,7 +158,7 @@ export async function getUsers(req: AuthenticatedRequest, res: Response) {
 
 export async function getUserDetails(req: AuthenticatedRequest, res: Response) {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
 
     const user = await prisma.user.findUnique({
       where: { id },
@@ -234,7 +234,7 @@ export async function createUser(req: AuthenticatedRequest, res: Response) {
 
 export async function updateUser(req: AuthenticatedRequest, res: Response) {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const body = UpdateUserSchema.parse(req.body);
 
     const data: any = { ...body };
@@ -268,7 +268,7 @@ export async function updateUser(req: AuthenticatedRequest, res: Response) {
 
 export async function deleteUser(req: AuthenticatedRequest, res: Response) {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
 
     // Protection : Ne pas se supprimer soi-même
     if (req.user && req.user.id === id) {

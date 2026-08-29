@@ -8,6 +8,8 @@ import userRoutes from "./routes/user.routes.js";
 import listRoutes from "./routes/list.routes.js";
 import prospectRoutes from "./routes/prospect.routes.js";
 import linkedinRoutes from "./routes/linkedin.routes.js";
+import campaignRoutes from "./routes/campaign.routes.js";
+import { startCampaignScheduler } from "./workers/campaign.worker.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -33,6 +35,7 @@ app.use("/api/user", userRoutes);
 app.use("/api/lists", listRoutes);
 app.use("/api/prospects", prospectRoutes);
 app.use("/api/linkedin", linkedinRoutes);
+app.use("/api/campaigns", campaignRoutes);
 
 // Global Error Handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -45,6 +48,8 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 
 app.listen(PORT, () => {
   console.log(`🚀 Bime Link API Server running on port ${PORT}`);
+  // Initialiser le planificateur de tâches de campagne
+  startCampaignScheduler();
 });
 
 export default app;

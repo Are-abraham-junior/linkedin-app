@@ -216,7 +216,7 @@ export async function bulkImportProspects(req: AuthenticatedRequest, res: Respon
 
 export async function updateProspect(req: AuthenticatedRequest, res: Response) {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const userId = req.user!.id;
 
     const existing = await prisma.prospect.findFirst({
@@ -241,7 +241,7 @@ export async function updateProspect(req: AuthenticatedRequest, res: Response) {
 
 export async function deleteProspect(req: AuthenticatedRequest, res: Response) {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const userId = req.user!.id;
 
     const existing = await prisma.prospect.findFirst({

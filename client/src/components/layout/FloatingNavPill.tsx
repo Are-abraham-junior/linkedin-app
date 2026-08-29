@@ -118,6 +118,17 @@ export const FloatingNavPill: React.FC<FloatingNavPillProps> = ({
           </button>
 
           <button
+            onClick={() => onSelectTab("campaigns")}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 ${
+              currentTab === "campaigns"
+                ? "bg-[#592eff] text-white shadow-sm"
+                : "text-[#353241] hover:text-[#592eff]"
+            }`}
+          >
+            <Send className="w-3.5 h-3.5" /> Campagnes
+          </button>
+
+          <button
             onClick={() => onSelectTab("prospects")}
             className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 ${
               currentTab === "prospects"

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import * as XLSX from "xlsx";
 import { apiRequest } from "../../services/api";
 import {
@@ -11,6 +11,7 @@ import {
   ArrowRight,
   Sparkles,
   RefreshCw,
+  Folder,
 } from "lucide-react";
 
 interface ExcelImportModalProps {
@@ -28,9 +29,28 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
   defaultListId,
   onSuccess,
 }) => {
-  const [selectedListId, setSelectedListId] = useState<string>(
-    defaultListId || (lists.length > 0 ? lists[0].id : "")
-  );
+  // Obtenir un ID de liste initial valide (jamais "ALL" ou "DO_NOT_CONTACT")
+  const getValidListId = () => {
+    if (defaultListId && defaultListId !== "ALL" && defaultListId !== "DO_NOT_CONTACT") {
+      const match = lists.find((l) => l.id === defaultListId);
+      if (match) return match.id;
+    }
+    if (lists && lists.length > 0) return lists[0].id;
+    return "";
+  };
+
+  const [selectedListId, setSelectedListId] = useState<string>(getValidListId());
+
+  // Synchronisation dynamique : dès que le modal s'ouvre ou que les listes changent
+  useEffect(() => {
+    if (isOpen) {
+      const valid = getValidListId();
+      if (valid && (!selectedListId || !lists.some((l) => l.id === selectedListId))) {
+        setSelectedListId(valid);
+      }
+    }
+  }, [isOpen, defaultListId, lists]);
+
   const [file, setFile] = useState<File | null>(null);
   const [parsedRows, setParsedRows] = useState<any[]>([]);
   const [rawHeaders, setRawHeaders] = useState<string[]>([]);
@@ -67,6 +87,12 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
     setError(null);
     const uploadedFile = e.target.files?.[0];
     if (!uploadedFile) return;
+
+    // S'assurer qu'un ID de liste cible valide est bien actif
+    if (!selectedListId || !lists.some((l) => l.id === selectedListId)) {
+      const valid = getValidListId();
+      if (valid) setSelectedListId(valid);
+    }
 
     setFile(uploadedFile);
     const reader = new FileReader();
@@ -144,9 +170,18 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
   };
 
   const handleConfirmImport = async () => {
-    if (!selectedListId) {
+    const targetListId =
+      selectedListId ||
+      (defaultListId && defaultListId !== "ALL" && defaultListId !== "DO_NOT_CONTACT" ? defaultListId : "") ||
+      (lists.length > 0 ? lists[0].id : "");
+
+    if (!targetListId) {
       setError("Veuillez sélectionner une liste de destination.");
       return;
+    }
+
+    if (selectedListId !== targetListId) {
+      setSelectedListId(targetListId);
     }
 
     if (!mapping.linkedinUrl && !mapping.firstName) {
@@ -193,7 +228,7 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
       }>("/prospects/bulk", {
         method: "POST",
         body: JSON.stringify({
-          listId: selectedListId,
+          listId: targetListId,
           prospects: prospectsToImport,
         }),
       });
@@ -247,13 +282,23 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
         {step === "UPLOAD" && (
           <div className="space-y-6">
             <div>
-              <label className="block text-xs font-bold text-[#21164c] uppercase tracking-wider mb-2">
-                1. Choisir la Liste de destination
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-xs font-bold text-[#21164c] uppercase tracking-wider">
+                  1. Choisir la Liste de destination
+                </label>
+                {lists.length > 0 && (
+                  <span className="text-[11px] text-[#592eff] font-semibold">
+                    {lists.length} liste(s) disponible(s)
+                  </span>
+                )}
+              </div>
               <select
-                value={selectedListId}
-                onChange={(e) => setSelectedListId(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-[#e0e0db] bg-white text-xs text-[#353241] font-semibold focus:outline-none focus:border-[#592eff]"
+                value={selectedListId || (lists.length > 0 ? lists[0].id : "")}
+                onChange={(e) => {
+                  setSelectedListId(e.target.value);
+                  setError(null);
+                }}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-[#e0e0db] bg-white text-xs text-[#353241] font-semibold focus:outline-none focus:border-[#592eff] shadow-2xs cursor-pointer"
               >
                 {lists.map((l) => (
                   <option key={l.id} value={l.id}>
@@ -287,19 +332,43 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
 
         {/* STEP 2: MAPPING & PREVIEW */}
         {step === "MAPPING" && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-bold text-[#21164c]">
-                  {parsedRows.length} lignes détectées dans <span className="text-[#592eff] font-bold">{file?.name}</span>
-                </p>
-                <p className="text-[11px] text-[#5f5f69]">
-                  Vérifiez la correspondance des colonnes avant l'importation.
-                </p>
+          <div className="space-y-5">
+            {/* Target List Selector & File Summary Bar */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-[#592eff]/5 border border-[#592eff]/20">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-[#592eff]/10 text-[#592eff] flex items-center justify-center shrink-0">
+                  <Folder className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold text-[#5f5f69] uppercase tracking-wide">
+                      Liste de destination :
+                    </span>
+                    <select
+                      value={selectedListId || (lists.length > 0 ? lists[0].id : "")}
+                      onChange={(e) => {
+                        setSelectedListId(e.target.value);
+                        setError(null);
+                      }}
+                      className="px-2.5 py-1 rounded-xl border border-[#592eff]/30 bg-white text-xs font-bold text-[#21164c] focus:outline-none focus:border-[#592eff] shadow-2xs cursor-pointer"
+                    >
+                      {lists.map((l) => (
+                        <option key={l.id} value={l.id}>
+                          📁 {l.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <p className="text-[11px] text-[#5f5f69] mt-0.5">
+                    {parsedRows.length} lignes détectées dans <span className="font-semibold text-[#21164c]">{file?.name}</span>
+                  </p>
+                </div>
               </div>
+
               <button
+                type="button"
                 onClick={() => setStep("UPLOAD")}
-                className="text-xs text-[#592eff] hover:underline font-semibold"
+                className="text-xs text-[#592eff] hover:underline font-semibold shrink-0 self-start sm:self-center"
               >
                 Changer de fichier
               </button>

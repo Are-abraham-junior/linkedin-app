@@ -16,7 +16,11 @@ import {
   ChevronRight,
 } from "lucide-react";
 
-export const MainDashboard: React.FC = () => {
+interface MainDashboardProps {
+  onStartCampaign?: () => void;
+}
+
+export const MainDashboard: React.FC<MainDashboardProps> = ({ onStartCampaign }) => {
   const { user } = useAuth();
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -38,15 +42,15 @@ export const MainDashboard: React.FC = () => {
   }, []);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-8 py-8 space-y-8 animate-in fade-in duration-300">
-      {/* Top Welcome Bar */}
+    <div className="max-w-[1640px] mx-auto px-4 sm:px-6 py-6 space-y-6">
+      {/* Header Profile + Action Section */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold text-[#21164c] tracking-tight">
-            Bonjour {user?.name?.split(" ")[0] || "Jean-Regis"},
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#21164c] tracking-tight">
+            Bonjour, {user?.name || "Cher utilisateur"} 👋
           </h1>
-          <p className="text-sm text-[#5f5f69] mt-1">
-            Voici les performances de vos campagnes de prospection LinkedIn en cours.
+          <p className="text-xs text-[#5f5f69] mt-1">
+            Voici un aperçu de vos performances de prospection LinkedIn en temps réel.
           </p>
         </div>
 
@@ -56,7 +60,10 @@ export const MainDashboard: React.FC = () => {
             <option>7 derniers jours</option>
             <option>Ce mois-ci</option>
           </select>
-          <button className="py-2.5 px-5 rounded-xl bg-[#592eff] hover:bg-[#4d25e0] text-white text-xs font-bold shadow-md shadow-[#592eff]/25 flex items-center gap-2 transition-all transform active:scale-95">
+          <button
+            onClick={onStartCampaign}
+            className="py-2.5 px-5 rounded-xl bg-[#592eff] hover:bg-[#4d25e0] text-white text-xs font-bold shadow-md shadow-[#592eff]/25 flex items-center gap-2 transition-all transform active:scale-95 cursor-pointer"
+          >
             <Send className="w-3.5 h-3.5" /> Démarrer une campagne
           </button>
         </div>
