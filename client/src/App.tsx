@@ -41,7 +41,13 @@ export const App: React.FC = () => {
     : currentTab;
 
   return (
-    <div className="min-h-screen bg-[#f8f9fc] text-[#353241] flex flex-col">
+    <div
+      className={`text-[#353241] flex flex-col ${
+        activeTab === "prospects"
+          ? "h-screen overflow-hidden bg-[#f8f9fc]"
+          : "min-h-screen bg-[#f8f9fc]"
+      }`}
+    >
       {/* Floating Adora Navigation Bar */}
       <FloatingNavPill
         currentTab={activeTab}
@@ -50,7 +56,13 @@ export const App: React.FC = () => {
       />
 
       {/* Main View Area */}
-      <main className="flex-1 pb-16">
+      <main
+        className={`flex-1 ${
+          activeTab === "prospects"
+            ? "min-h-0 overflow-hidden flex flex-col"
+            : "pb-16"
+        }`}
+      >
         {activeTab === "admin-dashboard" && isSuperAdmin && (
           <AdminDashboard onNavigateToUsers={() => setCurrentTab("admin-users")} />
         )}

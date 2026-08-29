@@ -43,8 +43,13 @@ export async function getProspects(req: AuthenticatedRequest, res: Response) {
       },
     };
 
-    if (listId && typeof listId === "string" && listId !== "ALL") {
-      where.listId = listId;
+    if (listId === "DO_NOT_CONTACT") {
+      where.doNotContact = true;
+    } else {
+      where.doNotContact = false;
+      if (listId && typeof listId === "string" && listId !== "ALL") {
+        where.listId = listId;
+      }
     }
 
     if (search && typeof search === "string" && search.trim()) {
@@ -70,7 +75,7 @@ export async function getProspects(req: AuthenticatedRequest, res: Response) {
       where.tags = { has: tag.trim() };
     }
 
-    const [total, prospects] = await Promise.all([
+    const [total, prospects, doNotContactCount] = await Promise.all([
       prisma.prospect.count({ where }),
       prisma.prospect.findMany({
         where,
@@ -86,6 +91,12 @@ export async function getProspects(req: AuthenticatedRequest, res: Response) {
               campaign: { select: { id: true, name: true, status: true } },
             },
           },
+        },
+      }),
+      prisma.prospect.count({
+        where: {
+          list: { userId },
+          doNotContact: true,
         },
       }),
     ]);
@@ -113,6 +124,7 @@ export async function getProspects(req: AuthenticatedRequest, res: Response) {
     res.json({
       success: true,
       total,
+      doNotContactCount,
       page: pageNum,
       limit: take,
       totalPages: Math.ceil(total / take),
