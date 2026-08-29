@@ -1,0 +1,77 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Colors - Adora Design Tokens */
+  --color-electric-violet: #592eff;
+  --color-midnight-plum: #21164c;
+  --color-obsidian-charcoal: #353241;
+  --color-slate-smoke: #5f5f69;
+  --color-pearl-mist: #e0e0db;
+  --color-soft-concrete: #eeeeee;
+  --color-pure-white: #ffffff;
+  --color-sky-tint: #bcf2ff;
+  --color-lime-spritz: #dfff9d;
+  --color-cotton-candy: #ffaae6;
+  --color-neon-cyan: #2ed6ff;
+  --color-lime-pop: #a2ea13;
+  --color-magenta-pulse: #f843c2;
+
+  /* Typography */
+  --font-plus-jakarta-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+body {
+  font-family: var(--font-plus-jakarta-sans);
+  background-color: #f8f9fc;
+  color: var(--color-obsidian-charcoal);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #d8d8d4;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #b0b0a8;
+}
+
+/* Adora Pill & Glass Elements */
+.adora-nav-pill {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid #e0e0db;
+  border-radius: 40px;
+  box-shadow: 0 4px 20px rgba(33, 22, 76, 0.04);
+}
+
+.adora-card {
+  background: #ffffff;
+  border: 1px solid #e0e0db;
+  border-radius: 32px;
+  box-shadow: 0 2px 10px rgba(33, 22, 76, 0.02);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.adora-card:hover {
+  border-color: #d0d0c8;
+}
+
+.badge-tag {
+  border-radius: 200px;
+  padding: 4px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

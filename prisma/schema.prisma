@@ -1,0 +1,229 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  USER
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING_INVITE
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+enum ProspectStepStatus {
+  PENDING
+  WAITING_CONDITION
+  WAITING_DELAY
+  IN_PROGRESS
+  REPLIED
+  COMPLETED
+  FAILED
+}
+
+enum ActionType {
+  INVITATION
+  MESSAGE
+  VISIT_PROFILE
+  DELAY
+}
+
+model Organization {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  plan        String   @default("ENTERPRISE")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       User[]
+}
+
+model User {
+  id               String            @id @default(uuid())
+  email            String            @unique
+  passwordHash     String?
+  name             String?
+  avatarUrl        String?
+  role             Role              @default(USER)
+  status           UserStatus        @default(ACTIVE)
+  organizationId   String?
+  organization     Organization?     @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  
+  maxDailyInvites  Int               @default(30)
+  maxDailyMsg      Int               @default(70)
+
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  accounts         LinkedInAccount[]
+  prospectLists    ProspectList[]
+  campaigns        Campaign[]
+  messageTemplates MessageTemplate[]
+}
+
+model LinkedInAccount {
+  id               String            @id @default(uuid())
+  userId           String
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  unipileAccountId String            @unique
+  accountName      String?
+  profilePicture   String?
+  headline         String?
+  status           String            @default("CONNECTED")
+  dailyInvitesSent Int               @default(0)
+  dailyMsgSent     Int               @default(0)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  campaigns        Campaign[]
+  actionQueues     ActionQueue[]
+}
+
+model ProspectList {
+  id          String        @id @default(uuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  color       String?       @default("#592eff")
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  prospects   Prospect[]
+}
+
+model Prospect {
+  id                String            @id @default(uuid())
+  listId            String
+  list              ProspectList      @relation(fields: [listId], references: [id], onDelete: Cascade)
+  linkedinUrl       String
+  providerProfileId String?
+  firstName         String
+  lastName          String
+  headline          String?
+  company           String?
+  location          String?
+  email             String?
+  phone             String?
+  avatarUrl         String?
+  connectionStatus  String            @default("NOT_CONNECTED")
+  tags              String[]          @default([])
+  doNotContact      Boolean           @default(false)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  campaignStates    ProspectCampaignState[]
+  conversations     Conversation[]
+}
+
+model Campaign {
+  id                String            @id @default(uuid())
+  userId            String
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId         String?
+  linkedInAccount   LinkedInAccount?  @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  name              String
+  status            CampaignStatus    @default(DRAFT)
+  type              String            @default("INVITATION_AND_MESSAGES")
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  steps             CampaignStep[]
+  prospectStates    ProspectCampaignState[]
+}
+
+model CampaignStep {
+  id          String        @id @default(uuid())
+  campaignId  String
+  campaign    Campaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  stepOrder   Int
+  actionType  ActionType
+  delayDays   Int           @default(0)
+  messageText String?
+  createdAt   DateTime      @default(now())
+
+  prospectStates ProspectCampaignState[]
+}
+
+model ProspectCampaignState {
+  id             String             @id @default(uuid())
+  campaignId     String
+  campaign       Campaign           @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  prospectId     String
+  prospect       Prospect           @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+  currentStepId  String?
+  currentStep    CampaignStep?      @relation(fields: [currentStepId], references: [id], onDelete: SetNull)
+  status         ProspectStepStatus @default(PENDING)
+  nextExecutionAt DateTime?
+  lastActionAt   DateTime?
+  errorLog       String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@unique([campaignId, prospectId])
+}
+
+model ActionQueue {
+  id             String          @id @default(uuid())
+  accountId      String
+  linkedInAccount LinkedInAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  prospectId     String
+  campaignId     String
+  actionType     ActionType
+  payload        Json
+  scheduledFor   DateTime
+  status         String          @default("QUEUED")
+  executedAt     DateTime?
+  errorMessage   String?
+  createdAt      DateTime        @default(now())
+}
+
+model Conversation {
+  id                String       @id @default(uuid())
+  prospectId        String
+  prospect          Prospect     @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+  unipileChatId     String?      @unique
+  lastMessageText   String?
+  lastMessageAt     DateTime?
+  unreadCount       Int          @default(0)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  messages          Message[]
+}
+
+model Message {
+  id                String       @id @default(uuid())
+  conversationId    String
+  conversation      Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  unipileMessageId  String?      @unique
+  senderType        String
+  text              String
+  sentAt            DateTime     @default(now())
+}
+
+model MessageTemplate {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  content   String
+  createdAt DateTime @default(now())
+}

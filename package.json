@@ -1,0 +1,47 @@
+{
+  "name": "linkedin-app",
+  "version": "1.0.0",
+  "description": "Bime Link - LinkedIn Automation Platform",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -n \"API,CLIENT\" -c \"magenta,cyan\" \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "tsx watch server/src/index.ts",
+    "dev:client": "npm --prefix client run dev",
+    "server": "tsx server/src/index.ts",
+    "build:client": "npm --prefix client run build",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma db push",
+    "prisma:seed": "prisma db seed",
+    "verify": "tsx scripts/verify-prisma.ts",
+    "backfill": "tsx scripts/backfill_companies.js"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/morgan": "^1.9.10",
+    "@types/node": "^26.4.0",
+    "@types/pg": "^8.23.1",
+    "concurrently": "^9.1.2",
+    "prisma": "^6.4.1",
+    "tsx": "^4.23.12",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^6.4.1",
+    "@prisma/client": "^6.4.1",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "morgan": "^1.12.0",
+    "pg": "^8.23.0",
+    "zod": "^4.4.3"
+  }
+}
