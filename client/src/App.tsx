@@ -8,6 +8,7 @@ import { UserManagement } from "./components/admin/UserManagement";
 import { MainDashboard } from "./components/dashboard/MainDashboard";
 import { ProspectsView } from "./components/prospects/ProspectsView";
 import { CampaignsView } from "./components/campaigns/CampaignsView";
+import { InboxView } from "./components/inbox/InboxView";
 import { ProfileModal } from "./components/profile/ProfileModal";
 
 export const App: React.FC = () => {
@@ -44,7 +45,7 @@ export const App: React.FC = () => {
   return (
     <div
       className={`text-[#353241] flex flex-col ${
-        activeTab === "prospects" || activeTab === "campaigns"
+        activeTab === "prospects" || activeTab === "campaigns" || activeTab === "inbox"
           ? "h-screen overflow-hidden bg-[#f8f9fc]"
           : "min-h-screen bg-[#f8f9fc]"
       }`}
@@ -59,7 +60,7 @@ export const App: React.FC = () => {
       {/* Main View Area */}
       <main
         className={`flex-1 ${
-          activeTab === "prospects" || activeTab === "campaigns"
+          activeTab === "prospects" || activeTab === "campaigns" || activeTab === "inbox"
             ? "min-h-0 overflow-hidden flex flex-col"
             : "pb-16"
         }`}
@@ -82,6 +83,10 @@ export const App: React.FC = () => {
 
         {activeTab === "prospects" && (
           <ProspectsView onStartCampaign={() => setCurrentTab("campaigns")} />
+        )}
+
+        {activeTab === "inbox" && (
+          <InboxView />
         )}
       </main>
 

@@ -9,6 +9,8 @@ import listRoutes from "./routes/list.routes.js";
 import prospectRoutes from "./routes/prospect.routes.js";
 import linkedinRoutes from "./routes/linkedin.routes.js";
 import campaignRoutes from "./routes/campaign.routes.js";
+import inboxRoutes from "./routes/inbox.routes.js";
+import { handleUnipileWebhook } from "./controllers/webhook.controller.js";
 import { startCampaignScheduler } from "./workers/campaign.worker.js";
 
 const app = express();
@@ -36,6 +38,8 @@ app.use("/api/lists", listRoutes);
 app.use("/api/prospects", prospectRoutes);
 app.use("/api/linkedin", linkedinRoutes);
 app.use("/api/campaigns", campaignRoutes);
+app.use("/api/inbox", inboxRoutes);
+app.post("/api/webhooks/unipile", handleUnipileWebhook);
 
 // Global Error Handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

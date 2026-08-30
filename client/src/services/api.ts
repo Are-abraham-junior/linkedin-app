@@ -21,7 +21,15 @@ export async function apiRequest<T = any>(
       headers,
     });
 
-    const data = await res.json();
+    const rawText = await res.text();
+    let data: any = {};
+    if (rawText) {
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        data = { error: rawText };
+      }
+    }
 
     if (!res.ok) {
       return {

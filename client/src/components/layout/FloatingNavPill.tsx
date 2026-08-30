@@ -119,7 +119,7 @@ export const FloatingNavPill: React.FC<FloatingNavPillProps> = ({
 
           <button
             onClick={() => onSelectTab("campaigns")}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 ${
+            className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
               currentTab === "campaigns"
                 ? "bg-[#592eff] text-white shadow-sm"
                 : "text-[#353241] hover:text-[#592eff]"
@@ -130,13 +130,24 @@ export const FloatingNavPill: React.FC<FloatingNavPillProps> = ({
 
           <button
             onClick={() => onSelectTab("prospects")}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 ${
+            className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
               currentTab === "prospects"
                 ? "bg-[#592eff] text-white shadow-sm"
                 : "text-[#353241] hover:text-[#592eff]"
             }`}
           >
             <Contact className="w-3.5 h-3.5" /> Prospects
+          </button>
+
+          <button
+            onClick={() => onSelectTab("inbox")}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              currentTab === "inbox"
+                ? "bg-[#592eff] text-white shadow-sm"
+                : "text-[#353241] hover:text-[#592eff]"
+            }`}
+          >
+            <MessageSquare className="w-3.5 h-3.5" /> Messagerie
           </button>
         </nav>
 

@@ -391,4 +391,147 @@ export class UnipileService {
       return { success: false, error: err.message };
     }
   }
+
+  /**
+   * Récupère la liste des conversations (chats) LinkedIn
+   * Doc Unipile : GET /api/v1/chats?account_id=...&limit=...
+   */
+  static async getChats(params: {
+    accountId?: string;
+    limit?: number;
+    cursor?: string;
+    unread?: boolean;
+  }): Promise<{ success: boolean; items: any[]; cursor?: string; error?: string }> {
+    const accountId = params.accountId || UNIPILE_ACCOUNT_ID;
+    try {
+      const limit = params.limit || 50;
+      let url = `${BASE_URL}/api/v1/chats?account_id=${accountId}&limit=${limit}`;
+      if (params.cursor) url += `&cursor=${params.cursor}`;
+      if (params.unread) url += `&unread=true`;
+
+      const res = await fetch(url, {
+        method: "GET",
+        headers: this.getHeaders(),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        return { success: false, items: [], error: errText || res.statusText };
+      }
+
+      const data: any = await res.json();
+      return {
+        success: true,
+        items: data.items || [],
+        cursor: data.cursor,
+      };
+    } catch (err: any) {
+      return { success: false, items: [], error: err.message };
+    }
+  }
+
+  /**
+   * Récupère l'historique des messages d'une conversation
+   * Doc Unipile : GET /api/v1/chats/{chat_id}/messages?limit=...
+   */
+  static async getChatMessages(params: {
+    chatId: string;
+    limit?: number;
+    cursor?: string;
+  }): Promise<{ success: boolean; items: any[]; cursor?: string; error?: string }> {
+    try {
+      const limit = params.limit || 50;
+      let url = `${BASE_URL}/api/v1/chats/${params.chatId}/messages?limit=${limit}`;
+      if (params.cursor) url += `&cursor=${params.cursor}`;
+
+      const res = await fetch(url, {
+        method: "GET",
+        headers: this.getHeaders(),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        return { success: false, items: [], error: errText || res.statusText };
+      }
+
+      const data: any = await res.json();
+      return {
+        success: true,
+        items: data.items || [],
+        cursor: data.cursor,
+      };
+    } catch (err: any) {
+      return { success: false, items: [], error: err.message };
+    }
+  }
+
+  /**
+   * Envoie un message dans une conversation existante
+   * Doc Unipile : POST /api/v1/chats/{chat_id}/messages
+   */
+  static async sendChatMessage(params: {
+    chatId: string;
+    text: string;
+  }): Promise<{ success: boolean; messageId?: string; error?: string }> {
+    try {
+      const url = `${BASE_URL}/api/v1/chats/${params.chatId}/messages`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: this.getHeaders(),
+        body: JSON.stringify({
+          text: params.text,
+        }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        return { success: false, error: errText || res.statusText };
+      }
+
+      const data: any = await res.json();
+      return {
+        success: true,
+        messageId: data.id || data.message_id,
+      };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * Démarre une nouvelle conversation avec un destinataire
+   * Doc Unipile : POST /api/v1/chats
+   */
+  static async startChat(params: {
+    accountId?: string;
+    attendeeId: string;
+    text: string;
+  }): Promise<{ success: boolean; chatId?: string; error?: string }> {
+    const accountId = params.accountId || UNIPILE_ACCOUNT_ID;
+    try {
+      const url = `${BASE_URL}/api/v1/chats`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: this.getHeaders(),
+        body: JSON.stringify({
+          account_id: accountId,
+          attendees_ids: [params.attendeeId],
+          text: params.text,
+        }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        return { success: false, error: errText || res.statusText };
+      }
+
+      const data: any = await res.json();
+      return {
+        success: true,
+        chatId: data.id || data.chat_id,
+      };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  }
 }

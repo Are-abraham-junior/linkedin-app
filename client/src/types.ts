@@ -93,3 +93,39 @@ export interface Campaign {
   stats: CampaignStats;
 }
 
+export interface ChatMessage {
+  id: string;
+  unipileMessageId?: string;
+  senderType: "USER" | "PROSPECT";
+  text: string;
+  sentAt: string;
+}
+
+export interface InboxConversation {
+  id: string;
+  unipileChatId?: string;
+  lastMessageText?: string;
+  lastMessageAt?: string;
+  unreadCount: number;
+  createdAt: string;
+  updatedAt: string;
+  prospect: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    headline?: string;
+    company?: string;
+    avatarUrl?: string;
+    linkedinUrl: string;
+    connectionStatus: string;
+    tags?: string[];
+    campaignState?: {
+      campaignId: string;
+      campaignName: string;
+      status: ProspectStepStatus;
+      currentStepOrder?: number;
+    } | null;
+  };
+}
+
+
