@@ -9,6 +9,7 @@
     "dev:server": "tsx watch server/src/index.ts",
     "dev:client": "npm --prefix client run dev",
     "server": "tsx server/src/index.ts",
+    "build:server": "tsc",
     "build:client": "npm --prefix client run build",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma db push",
