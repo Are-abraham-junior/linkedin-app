@@ -15,15 +15,16 @@ import { startCampaignScheduler } from "./workers/campaign.worker.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const FRONTEND_URL = process.env.FRONTEND_URL || "https://bimlink.croixance.net";
 
 app.use(
   cors({
-    origin: "*",
+    origin: [FRONTEND_URL, "http://localhost:3000"],
     credentials: true,
   })
 );
 app.use(express.json());
-app.use(morgan("dev"));
+app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 
 // Health check
 app.get("/api/health", (req, res) => {
@@ -54,6 +55,18 @@ app.listen(PORT, () => {
   console.log(`🚀 Bime Link API Server running on port ${PORT}`);
   // Initialiser le planificateur de tâches de campagne
   startCampaignScheduler();
+
+  // Self-ping pour garder le processus actif (Passenger met en veille après inactivité)
+  if (process.env.NODE_ENV === "production" && process.env.SELF_PING_URL) {
+    setInterval(async () => {
+      try {
+        await fetch(process.env.SELF_PING_URL!);
+      } catch {
+        // Ignorer les erreurs de ping
+      }
+    }, 4 * 60 * 1000); // Ping toutes les 4 minutes
+    console.log(`🏓 Self-ping activé vers ${process.env.SELF_PING_URL}`);
+  }
 });
 
 export default app;
