@@ -239,7 +239,7 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
             </div>
             <div>
               <h2 className="text-xl font-bold text-[#21164c]">Recherche de Profils LinkedIn</h2>
-              <p className="text-xs text-[#5f5f69]">API Unipile • Extraction directe de profils</p>
+              
             </div>
           </div>
 

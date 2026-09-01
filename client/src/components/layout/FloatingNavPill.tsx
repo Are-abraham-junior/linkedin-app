@@ -149,6 +149,19 @@ export const FloatingNavPill: React.FC<FloatingNavPillProps> = ({
           >
             <MessageSquare className="w-3.5 h-3.5" /> Messagerie
           </button>
+
+          {!isSuperAdmin && (
+            <button
+              onClick={() => onSelectTab("team")}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                currentTab === "team"
+                  ? "bg-[#592eff] text-white shadow-sm"
+                  : "text-[#353241] hover:text-[#592eff]"
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" /> Équipe
+            </button>
+          )}
         </nav>
 
         {/* User Pill & Profile Dropdown */}

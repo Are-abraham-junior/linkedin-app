@@ -7,6 +7,7 @@ import {
   deleteProspect,
   bulkDeleteProspects,
   bulkMoveProspects,
+  syncProspectsStatus,
 } from "../controllers/prospect.controller.js";
 
 const router = Router();
@@ -17,6 +18,7 @@ router.get("/", getProspects);
 router.post("/bulk", bulkImportProspects);
 router.post("/bulk-delete", bulkDeleteProspects);
 router.post("/bulk-move", bulkMoveProspects);
+router.post("/sync-status", syncProspectsStatus);
 router.put("/:id", updateProspect);
 router.delete("/:id", deleteProspect);
 

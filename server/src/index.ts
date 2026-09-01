@@ -10,6 +10,7 @@ import prospectRoutes from "./routes/prospect.routes.js";
 import linkedinRoutes from "./routes/linkedin.routes.js";
 import campaignRoutes from "./routes/campaign.routes.js";
 import inboxRoutes from "./routes/inbox.routes.js";
+import teamRoutes from "./routes/team.routes.js";
 import { handleUnipileWebhook } from "./controllers/webhook.controller.js";
 import { startCampaignScheduler } from "./workers/campaign.worker.js";
 
@@ -19,7 +20,7 @@ const FRONTEND_URL = process.env.FRONTEND_URL || "https://bimlink.croixance.net"
 
 app.use(
   cors({
-    origin: [FRONTEND_URL, "http://localhost:3000"],
+    origin: [FRONTEND_URL, "http://localhost:3000", "http://localhost:5173"],
     credentials: true,
   })
 );
@@ -40,6 +41,7 @@ app.use("/api/prospects", prospectRoutes);
 app.use("/api/linkedin", linkedinRoutes);
 app.use("/api/campaigns", campaignRoutes);
 app.use("/api/inbox", inboxRoutes);
+app.use("/api/team", teamRoutes);
 app.post("/api/webhooks/unipile", handleUnipileWebhook);
 
 // Global Error Handler

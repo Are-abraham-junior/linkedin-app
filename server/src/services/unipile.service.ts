@@ -2,9 +2,9 @@ import "dotenv/config";
 
 import { extractCompanyFromHeadline } from "../utils/companyExtractor.js";
 
-const UNIPILE_DSN = process.env.UNIPILE_DSN || "https://api16.unipile.com:14623";
-const UNIPILE_API_KEY = process.env.UNIPILE_API_KEY || "";
-const UNIPILE_ACCOUNT_ID = process.env.UNIPILE_ACCOUNT_ID || "";
+const UNIPILE_DSN = process.env.UNIPILE_DSN || "https://api43.unipile.com:17317";
+const UNIPILE_API_KEY = process.env.UNIPILE_API_KEY || "YSlLiQEj.nWSRIuxNb2mkDrVAzWcyNXP38jcr4+tFt9OpgGykHI8=";
+const UNIPILE_ACCOUNT_ID = process.env.UNIPILE_ACCOUNT_ID || "UggI_yNeQaS9DlwkjlWWlQ";
 
 const BASE_URL = UNIPILE_DSN.replace(/\/$/, "");
 
@@ -29,6 +29,127 @@ export class UnipileService {
       "Content-Type": "application/json",
       "Accept": "application/json",
     };
+  }
+
+  /**
+   * Connecte un compte LinkedIn via Unipile Custom Auth.
+   * Retourne { account_id, status } ou { status: "CHECKPOINT", checkpoint: {...} }
+   */
+  static async connectLinkedInAccount(linkedinEmail: string, linkedinPassword: string): Promise<{
+    success: boolean;
+    accountId?: string;
+    status?: string;
+    checkpoint?: any;
+    error?: string;
+  }> {
+    try {
+      const res = await fetch(`${BASE_URL}/api/v1/accounts`, {
+        method: "POST",
+        headers: this.getHeaders(),
+        body: JSON.stringify({
+          provider: "LINKEDIN",
+          username: linkedinEmail,
+          password: linkedinPassword,
+        }),
+      });
+
+      const data: any = await res.json();
+
+      if (!res.ok) {
+        console.error("[Unipile] connectLinkedInAccount error:", res.status, data);
+        return { success: false, error: data?.message || "Identifiants LinkedIn incorrects." };
+      }
+
+      // Checkpoint = LinkedIn demande une vérification supplémentaire (2FA, etc.)
+      if (data?.object === "AccountCheckpoint" || data?.status === "CHECKPOINT") {
+        return { success: false, status: "CHECKPOINT", checkpoint: data };
+      }
+
+      const accountId = data?.account_id || data?.id;
+      if (!accountId) {
+        return { success: false, error: "Impossible de récupérer l'identifiant du compte." };
+      }
+
+      return { success: true, accountId, status: data?.status || "CONNECTED" };
+    } catch (err: any) {
+      console.error("[Unipile] connectLinkedInAccount exception:", err.message);
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * Récupère le profil du compte LinkedIn connecté (nom, photo, headline, provider_id)
+   */
+  static async getConnectedAccountProfile(accountId: string): Promise<{
+    success: boolean;
+    profile?: {
+      accountId: string;
+      name: string;
+      firstName: string;
+      lastName: string;
+      avatarUrl?: string;
+      headline?: string;
+      linkedinProfileId?: string;
+    };
+    error?: string;
+  }> {
+    try {
+      // 1. Tenter l'endpoint /api/v1/users/me pour obtenir la photo haute résolution et l'occupation
+      const meRes = await fetch(`${BASE_URL}/api/v1/users/me?account_id=${accountId}`, {
+        headers: this.getHeaders(),
+      });
+
+      if (meRes.ok) {
+        const meData: any = await meRes.json();
+        const firstName = meData?.first_name || "";
+        const lastName = meData?.last_name || "";
+        const name = `${firstName} ${lastName}`.trim() || meData?.public_identifier || meData?.email || "";
+
+        return {
+          success: true,
+          profile: {
+            accountId,
+            name,
+            firstName,
+            lastName,
+            avatarUrl: meData?.profile_picture_url || meData?.profile_picture || undefined,
+            headline: meData?.occupation || meData?.headline || undefined,
+            linkedinProfileId: meData?.provider_id || meData?.entity_urn || undefined,
+          },
+        };
+      }
+
+      // 2. Fallback sur /api/v1/accounts/:id si /users/me échoue
+      const res = await fetch(`${BASE_URL}/api/v1/accounts/${accountId}`, {
+        headers: this.getHeaders(),
+      });
+
+      if (!res.ok) {
+        return { success: false, error: `Impossible de récupérer le profil (${res.status})` };
+      }
+
+      const data: any = await res.json();
+      const name = data?.name || data?.username || "";
+      const parts = name.split(" ");
+      const firstName = parts[0] || "";
+      const lastName = parts.slice(1).join(" ") || "";
+
+      return {
+        success: true,
+        profile: {
+          accountId,
+          name,
+          firstName,
+          lastName,
+          avatarUrl: data?.profile_picture_url || data?.profile_picture || data?.avatar_url || undefined,
+          headline: data?.headline || data?.occupation || undefined,
+          linkedinProfileId: data?.provider_id || data?.identifier || undefined,
+        },
+      };
+    } catch (err: any) {
+      console.error("[Unipile] getConnectedAccountProfile exception:", err.message);
+      return { success: false, error: err.message };
+    }
   }
 
   /**
@@ -144,12 +265,7 @@ export class UnipileService {
             linkedinUrl = `https://www.linkedin.com/in/${linkedinUrl}`;
           }
 
-          let connectionStatus: "NOT_CONNECTED" | "PENDING" | "CONNECTED" = "NOT_CONNECTED";
-          if (item.network_distance === "DISTANCE_1") {
-            connectionStatus = "CONNECTED";
-          } else if (item.pending_invitation === true) {
-            connectionStatus = "PENDING";
-          }
+          const connectionStatus = UnipileService.parseLinkedInConnectionStatus(item);
 
           let companyName = "";
           if (item.current_positions && item.current_positions.length > 0) {
@@ -532,6 +648,104 @@ export class UnipileService {
       };
     } catch (err: any) {
       return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * Analyse toutes les variantes de statut de relation renvoyées par les APIs Unipile / LinkedIn
+   * (DISTANCE_1, FIRST_DEGREE, is_relationship: true, 1st, FIRST, etc.)
+   */
+  static parseLinkedInConnectionStatus(item: any): "CONNECTED" | "PENDING" | "NOT_CONNECTED" {
+    if (!item) return "NOT_CONNECTED";
+
+    if (item.is_relationship === true || item.is_self === true) {
+      return "CONNECTED";
+    }
+
+    const dist = String(
+      item.network_distance || item.networkDistance || item.distance || ""
+    ).toUpperCase();
+
+    if (
+      dist === "DISTANCE_1" ||
+      dist === "FIRST_DEGREE" ||
+      dist === "FIRST" ||
+      dist === "1ST" ||
+      dist === "SELF" ||
+      dist === "1"
+    ) {
+      return "CONNECTED";
+    }
+
+    if (
+      item.pending_invitation === true ||
+      dist === "PENDING" ||
+      dist === "INVITATION_SENT" ||
+      dist === "OUTGOING_REQUEST"
+    ) {
+      return "PENDING";
+    }
+
+    return "NOT_CONNECTED";
+  }
+
+  /**
+   * Récupère le profil complet d'un prospect sur LinkedIn via Unipile (avec statut de connexion réel)
+   */
+  static async getProfileDetailsAndStatus(identifierOrUrl: string, accountId: string = UNIPILE_ACCOUNT_ID): Promise<{
+    success: boolean;
+    connectionStatus: "CONNECTED" | "PENDING" | "NOT_CONNECTED";
+    profile?: {
+      providerProfileId?: string;
+      firstName?: string;
+      lastName?: string;
+      fullName?: string;
+      avatarUrl?: string;
+      headline?: string;
+      company?: string;
+      location?: string;
+      email?: string;
+    };
+  }> {
+    try {
+      // Nettoyer l'identifiant (extraire 'gnakourijl' depuis 'https://www.linkedin.com/in/gnakourijl/')
+      let identifier = identifierOrUrl.trim();
+      if (identifier.includes("linkedin.com/in/")) {
+        identifier = identifier.split("linkedin.com/in/")[1].split("/")[0].split("?")[0];
+      }
+
+      const res = await fetch(`${BASE_URL}/api/v1/users/${identifier}?account_id=${accountId}`, {
+        headers: this.getHeaders(),
+      });
+
+      if (!res.ok) {
+        return { success: false, connectionStatus: "NOT_CONNECTED" };
+      }
+
+      const data: any = await res.json();
+      const connectionStatus = this.parseLinkedInConnectionStatus(data);
+
+      const email = data?.contact_info?.emails?.[0] || data?.email || undefined;
+      const company = data?.experience?.[0]?.company_name || data?.company || undefined;
+
+      return {
+        success: true,
+        connectionStatus,
+        profile: {
+          providerProfileId: data?.provider_id || data?.member_urn || identifier,
+          firstName: data?.first_name?.trim(),
+          lastName: data?.last_name?.trim(),
+          fullName: `${data?.first_name || ""} ${data?.last_name || ""}`.trim(),
+          avatarUrl: data?.profile_picture_url_large || data?.profile_picture_url || undefined,
+          headline: data?.headline || data?.occupation || undefined,
+          company,
+          location: data?.location || undefined,
+          email,
+        },
+      };
+    } catch (err: any) {
+      console.error("[Unipile] getProfileDetailsAndStatus error:", err.message);
+      return { success: false, connectionStatus: "NOT_CONNECTED" };
     }
   }
 }

@@ -118,6 +118,7 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [hasEmailFilter, setHasEmailFilter] = useState(false);
   const [campaignFilter, setCampaignFilter] = useState<"ALL" | "WITH_CAMPAIGN" | "NO_CAMPAIGN">("ALL");
+  const [isSyncingStatus, setIsSyncingStatus] = useState(false);
 
   // Modals & Drawers
   const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
@@ -450,6 +451,29 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
       fetchLists();
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handleSyncStatus = async () => {
+    setIsSyncingStatus(true);
+    try {
+      const payload: any = {};
+      if (selectedIds.size > 0) {
+        payload.prospectIds = Array.from(selectedIds);
+      } else if (selectedListId && selectedListId !== "ALL" && selectedListId !== "DO_NOT_CONTACT") {
+        payload.listId = selectedListId;
+      }
+
+      await apiRequest("/prospects/sync-status", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      await Promise.all([fetchProspects(), fetchLists()]);
+    } catch (e) {
+      console.error("Erreur lors de la synchronisation des statuts", e);
+    } finally {
+      setIsSyncingStatus(false);
     }
   };
 
@@ -958,14 +982,15 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                 <Download className="w-3 h-3" />
               </button>
 
-              {/* Refresh Chip */}
+              {/* Refresh & Sync Chip */}
               <button
                 type="button"
-                onClick={fetchProspects}
-                className="p-1.5 rounded-xl border border-[#e0e0db] bg-white hover:bg-[#f5f5f7] text-[#5f5f69] shrink-0 transition-colors"
-                title="Actualiser les données"
+                onClick={handleSyncStatus}
+                disabled={isSyncingStatus || loading}
+                className="p-1.5 rounded-xl border border-[#e0e0db] bg-white hover:bg-[#f5f5f7] text-[#5f5f69] shrink-0 transition-colors disabled:opacity-50"
+                title="Synchroniser le statut de connexion LinkedIn réel depuis Unipile"
               >
-                <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin text-[#592eff]" : ""}`} />
+                <RefreshCw className={`w-3 h-3 ${isSyncingStatus || loading ? "animate-spin text-[#592eff]" : ""}`} />
               </button>
             </div>
           </div>

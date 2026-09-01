@@ -13,6 +13,11 @@ enum Role {
   USER
 }
 
+enum OrgRole {
+  OWNER
+  MEMBER
+}
+
 enum UserStatus {
   ACTIVE
   SUSPENDED
@@ -54,6 +59,7 @@ model Organization {
   updatedAt   DateTime @updatedAt
 
   users       User[]
+  invitations TeamInvitation[]
 }
 
 model User {
@@ -63,10 +69,15 @@ model User {
   name             String?
   avatarUrl        String?
   role             Role              @default(USER)
+  orgRole          OrgRole           @default(MEMBER)
   status           UserStatus        @default(ACTIVE)
   organizationId   String?
   organization     Organization?     @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  
+
+  // LinkedIn identity (populated on LinkedIn login)
+  linkedinEmail    String?           @unique
+  linkedinProfileId String?
+
   maxDailyInvites  Int               @default(30)
   maxDailyMsg      Int               @default(70)
 
@@ -77,6 +88,22 @@ model User {
   prospectLists    ProspectList[]
   campaigns        Campaign[]
   messageTemplates MessageTemplate[]
+  sentInvitations  TeamInvitation[]  @relation("InvitedBy")
+}
+
+model TeamInvitation {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String
+  token          String       @unique @default(uuid())
+  status         String       @default("PENDING") // PENDING | ACCEPTED | EXPIRED
+  invitedById    String
+  invitedBy      User         @relation("InvitedBy", fields: [invitedById], references: [id], onDelete: Cascade)
+  expiresAt      DateTime
+  createdAt      DateTime     @default(now())
+
+  @@unique([organizationId, email])
 }
 
 model LinkedInAccount {

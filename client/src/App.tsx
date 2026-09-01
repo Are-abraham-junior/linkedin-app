@@ -1,10 +1,12 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "./context/AuthContext";
 import { SetupAdmin } from "./components/auth/SetupAdmin";
 import { Login } from "./components/auth/Login";
+import { JoinPage } from "./components/auth/JoinPage";
 import { FloatingNavPill } from "./components/layout/FloatingNavPill";
 import { AdminDashboard } from "./components/admin/AdminDashboard";
 import { UserManagement } from "./components/admin/UserManagement";
+import { TeamPage } from "./components/admin/TeamPage";
 import { MainDashboard } from "./components/dashboard/MainDashboard";
 import { ProspectsView } from "./components/prospects/ProspectsView";
 import { CampaignsView } from "./components/campaigns/CampaignsView";
@@ -16,6 +18,18 @@ export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<string>("admin-dashboard");
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
 
+  // Detect /join?token=... URL and show JoinPage before auth
+  const [joinToken, setJoinToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("token");
+    const isJoinPath = window.location.pathname === "/join" || window.location.hash === "#/join";
+    if (token && (isJoinPath || window.location.search.includes("token="))) {
+      setJoinToken(token);
+    }
+  }, []);
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[#f8f9fc] flex items-center justify-center">
@@ -25,6 +39,11 @@ export const App: React.FC = () => {
         </div>
       </div>
     );
+  }
+
+  // Show join page if invitation token in URL (even if not logged in)
+  if (joinToken && !user) {
+    return <JoinPage token={joinToken} />;
   }
 
   // Si aucun Super Admin n'est présent dans la base, afficher l'assistant d'initialisation
@@ -87,6 +106,10 @@ export const App: React.FC = () => {
 
         {activeTab === "inbox" && (
           <InboxView />
+        )}
+
+        {activeTab === "team" && (
+          <TeamPage />
         )}
       </main>
 

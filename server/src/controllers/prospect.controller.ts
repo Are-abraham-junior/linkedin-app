@@ -3,6 +3,7 @@ import { prisma } from "../../../lib/prisma.js";
 import { z } from "zod";
 import { AuthenticatedRequest } from "../middlewares/auth.middleware.js";
 import { extractCompanyFromHeadline } from "../utils/companyExtractor.js";
+import { UnipileService } from "../services/unipile.service.js";
 
 const ProspectItemSchema = z.object({
   firstName: z.string().min(1, "Le prénom est requis"),
@@ -315,6 +316,89 @@ export async function bulkMoveProspects(req: AuthenticatedRequest, res: Response
     });
 
     res.json({ success: true, message: `${ids.length} prospect(s) déplacé(s) vers ${targetList.name}.` });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+/**
+ * POST /api/prospects/sync-status
+ * Interroge l'API Unipile pour vérifier le statut réel de connexion LinkedIn
+ * (CONNECTED, PENDING, NOT_CONNECTED) des prospects et mettre à jour la base.
+ */
+export async function syncProspectsStatus(req: AuthenticatedRequest, res: Response) {
+  try {
+    const userId = req.user!.id;
+    const { prospectIds, listId } = req.body || {};
+
+    // Récupérer le compte LinkedIn actif de l'utilisateur
+    const linkedInAcc = await prisma.linkedInAccount.findFirst({
+      where: {
+        userId,
+        status: "CONNECTED",
+        OR: [{ accountName: { not: null } }, { profilePicture: { not: null } }],
+      },
+      orderBy: { updatedAt: "desc" },
+    }) || await prisma.linkedInAccount.findFirst({
+      where: { userId, status: "CONNECTED" },
+      orderBy: { updatedAt: "desc" },
+    });
+
+    const unipileAccountId = linkedInAcc?.unipileAccountId || undefined;
+
+    const where: any = { list: { userId } };
+
+    if (Array.isArray(prospectIds) && prospectIds.length > 0) {
+      where.id = { in: prospectIds };
+    } else if (listId && listId !== "ALL" && listId !== "DO_NOT_CONTACT") {
+      where.listId = listId;
+    }
+
+    const prospects = await prisma.prospect.findMany({ where });
+
+    if (prospects.length === 0) {
+      res.json({ success: true, updatedCount: 0, message: "Aucun prospect à synchroniser." });
+      return;
+    }
+
+    let updatedCount = 0;
+
+    for (const p of prospects) {
+      const identifier = p.providerProfileId || p.linkedinUrl;
+      if (!identifier) continue;
+
+      const result = await UnipileService.getProfileDetailsAndStatus(identifier, unipileAccountId);
+
+      const updateData: any = {
+        connectionStatus: result.connectionStatus,
+      };
+
+      if (result.profile?.avatarUrl && (!p.avatarUrl || p.avatarUrl.includes("ui-avatars.com"))) {
+        updateData.avatarUrl = result.profile.avatarUrl;
+      }
+      if (result.profile?.email && !p.email) {
+        updateData.email = result.profile.email;
+      }
+      if (result.profile?.company && (!p.company || p.company === "—")) {
+        updateData.company = result.profile.company;
+      }
+      if (result.profile?.headline && (!p.headline || p.headline === "Professionnel")) {
+        updateData.headline = result.profile.headline;
+      }
+
+      await prisma.prospect.update({
+        where: { id: p.id },
+        data: updateData,
+      });
+
+      updatedCount++;
+    }
+
+    res.json({
+      success: true,
+      updatedCount,
+      message: `${updatedCount} prospect(s) synchronisé(s) avec succès.`,
+    });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
