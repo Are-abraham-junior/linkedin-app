@@ -15,6 +15,54 @@ function personalizeMessage(template: string, prospect: any): string {
 }
 
 /**
+ * Résout le provider_id LinkedIn (ACo...) à partir de l'URL LinkedIn du prospect.
+ * Si le providerProfileId existe déjà, le retourne directement.
+ * Sinon, interroge Unipile pour le récupérer et le sauvegarde en base.
+ */
+async function resolveProviderId(prospect: any, accountId: string): Promise<string | null> {
+  // Si on a déjà un provider_id LinkedIn valide (commence par ACo)
+  if (prospect.providerProfileId && prospect.providerProfileId.startsWith("ACo")) {
+    return prospect.providerProfileId;
+  }
+
+  // Extraire le slug LinkedIn depuis l'URL
+  const linkedinUrl = prospect.linkedinUrl || "";
+  let slug = "";
+  if (linkedinUrl.includes("linkedin.com/in/")) {
+    slug = linkedinUrl.split("linkedin.com/in/")[1].split("/")[0].split("?")[0];
+  }
+
+  if (!slug) {
+    console.warn(`[CampaignWorker] Impossible de résoudre le provider_id pour ${prospect.firstName} ${prospect.lastName}: pas d'URL LinkedIn valide`);
+    return null;
+  }
+
+  try {
+    const result = await UnipileService.getProfile({
+      accountId,
+      identifier: slug,
+    });
+
+    if (result.success && result.profile?.provider_id) {
+      const providerId = result.profile.provider_id;
+      console.log(`[CampaignWorker] Provider ID résolu pour ${prospect.firstName} ${prospect.lastName}: ${providerId}`);
+
+      // Sauvegarder en base pour les prochaines fois
+      await prisma.prospect.update({
+        where: { id: prospect.id },
+        data: { providerProfileId: providerId },
+      });
+
+      return providerId;
+    }
+  } catch (err: any) {
+    console.error(`[CampaignWorker] Erreur résolution provider_id pour ${slug}:`, err.message);
+  }
+
+  return null;
+}
+
+/**
  * Vérifie si l'heure actuelle est dans les heures ouvrées (ex: 08:00 - 20:00)
  */
 function isWithinWorkingHours(): boolean {
@@ -110,7 +158,15 @@ export async function processActionQueue(): Promise<void> {
         if (action.actionType === "INVITATION") {
           const rawMessage = payload.messageText || "";
           const personalized = personalizeMessage(rawMessage, prospect);
-          const targetIdentifier = prospect.providerProfileId || prospect.linkedinUrl;
+          const targetIdentifier = await resolveProviderId(prospect, account.unipileAccountId);
+
+          if (!targetIdentifier) {
+            await prisma.actionQueue.update({
+              where: { id: action.id },
+              data: { status: "FAILED", executedAt: new Date(), errorMessage: "Impossible de résoudre le provider_id LinkedIn" },
+            });
+            continue;
+          }
 
           const result = await UnipileService.sendInvitation({
             accountId: account.unipileAccountId,
@@ -166,7 +222,15 @@ export async function processActionQueue(): Promise<void> {
         } else if (action.actionType === "MESSAGE") {
           const rawMessage = payload.messageText || "";
           const personalized = personalizeMessage(rawMessage, prospect);
-          const attendeeId = prospect.providerProfileId || prospect.id;
+          const attendeeId = await resolveProviderId(prospect, account.unipileAccountId);
+
+          if (!attendeeId) {
+            await prisma.actionQueue.update({
+              where: { id: action.id },
+              data: { status: "FAILED", executedAt: new Date(), errorMessage: "Impossible de résoudre le provider_id LinkedIn" },
+            });
+            continue;
+          }
 
           const result = await UnipileService.sendMessage({
             accountId: account.unipileAccountId,

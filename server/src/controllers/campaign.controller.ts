@@ -8,6 +8,7 @@ const CreateCampaignSchema = z.object({
   name: z.string().min(1, "Le nom de la campagne est requis"),
   type: z.string().default("INVITATION_AND_MESSAGES"),
   listIds: z.array(z.string()).default([]),
+  selectedProspectIds: z.array(z.string()).optional(),
   steps: z.array(
     z.object({
       stepOrder: z.number(),
@@ -278,21 +279,55 @@ export async function createCampaign(req: AuthenticatedRequest, res: Response) {
       });
     }
 
-    // Récupérer les prospects des listes sélectionnées (s'il y en a)
+    // Récupérer et filtrer les prospects des listes sélectionnées selon les règles d'éligibilité
     let prospectsEnrolled = 0;
     if (body.listIds && body.listIds.length > 0) {
-      const prospects = await prisma.prospect.findMany({
+      const step1 = campaign.steps[0];
+      const firstActionType = step1?.actionType || "INVITATION";
+
+      // Récupérer les IDs de prospects déjà engagés dans une campagne active ou en attente
+      const activeStates = await prisma.prospectCampaignState.findMany({
         where: {
-          listId: { in: body.listIds },
-          doNotContact: false,
+          status: { in: ["PENDING", "IN_PROGRESS", "WAITING_DELAY", "WAITING_CONDITION"] },
         },
+        select: { prospectId: true },
+      });
+      const busyProspectIds = new Set(activeStates.map((s) => s.prospectId));
+
+      const prospectWhere: any = {
+        listId: { in: body.listIds },
+        doNotContact: false,
+      };
+
+      // Si sélection manuelle d'IDs spécifique
+      if (body.selectedProspectIds && body.selectedProspectIds.length > 0) {
+        prospectWhere.id = { in: body.selectedProspectIds };
+      }
+
+      const candidateProspects = await prisma.prospect.findMany({
+        where: prospectWhere,
       });
 
-      const step1 = campaign.steps[0];
+      // Filtrer les candidats selon les règles strictes d'éligibilité
+      const eligibleProspects = candidateProspects.filter((p) => {
+        // 1. Exclure si déjà dans une campagne active
+        if (busyProspectIds.has(p.id)) return false;
+
+        // 2. Règles selon le type d'action initiale
+        if (firstActionType === "MESSAGE") {
+          // Campagne de message direct -> DOIT être déjà connecté
+          return p.connectionStatus === "CONNECTED";
+        } else if (firstActionType === "INVITATION" || firstActionType === "VISIT_PROFILE" || firstActionType === "FOLLOW") {
+          // Campagne d'invitation/visite -> NE DOIT PAS être déjà connecté
+          return p.connectionStatus !== "CONNECTED";
+        }
+        return true;
+      });
+
       const now = new Date();
 
-      if (prospects.length > 0 && step1) {
-        const statesData = prospects.map((p, index) => {
+      if (eligibleProspects.length > 0 && step1) {
+        const statesData = eligibleProspects.map((p, index) => {
           const scheduledTime = new Date(now.getTime() + (index * 90 + Math.floor(Math.random() * 60)) * 1000);
           return {
             campaignId: campaign.id,
@@ -308,11 +343,11 @@ export async function createCampaign(req: AuthenticatedRequest, res: Response) {
           skipDuplicates: true,
         });
 
-        prospectsEnrolled = prospects.length;
+        prospectsEnrolled = eligibleProspects.length;
 
         // Si démarrage immédiat et compte présent, programmer dans ActionQueue
         if (body.startImmediately && account) {
-          const queueEntries = prospects.map((p, index) => {
+          const queueEntries = eligibleProspects.map((p, index) => {
             const scheduledTime = new Date(now.getTime() + (index * 90 + Math.floor(Math.random() * 60)) * 1000);
             return {
               accountId: account.id,

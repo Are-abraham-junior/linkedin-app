@@ -243,6 +243,13 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Étape 2 : Chargement des prospects de la liste et mode de sélection (Style Waalaxy)
+  const [listProspects, setListProspects] = useState<any[]>([]);
+  const [loadingProspects, setLoadingProspects] = useState<boolean>(false);
+  const [selectionMode, setSelectionMode] = useState<"ALL" | "CUSTOM">("ALL");
+  const [customSelectedIds, setCustomSelectedIds] = useState<string[]>([]);
+  const [prospectSearchTerm, setProspectSearchTerm] = useState<string>("");
+
   // Sauvegarde brouillon
   const [draftCampaignId, setDraftCampaignId] = useState<string | null>(null);
   const [savingDraft, setSavingDraft] = useState<boolean>(false);
@@ -276,6 +283,29 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
     }
   }, [isOpen]);
 
+  // Récupérer les prospects de la liste active sélectionnée à l'étape 2
+  useEffect(() => {
+    const fetchProspectsForList = async () => {
+      if (isOpen && currentStep === 2 && selectedListIds.length > 0) {
+        setLoadingProspects(true);
+        try {
+          const res = await apiRequest<{ prospects: any[] }>(`/prospects?listId=${selectedListIds[0]}&limit=500`);
+          if (res.success && Array.isArray(res.prospects)) {
+            setListProspects(res.prospects);
+          } else {
+            setListProspects([]);
+          }
+        } catch (e) {
+          console.error("Erreur chargement prospects de la liste:", e);
+          setListProspects([]);
+        } finally {
+          setLoadingProspects(false);
+        }
+      }
+    };
+    fetchProspectsForList();
+  }, [isOpen, currentStep, selectedListIds]);
+
   // Initialiser les étapes à partir du template choisi
   useEffect(() => {
     const tmpl = TEMPLATES.find((t) => t.id === selectedTemplateId) || TEMPLATES[0];
@@ -295,9 +325,69 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
 
   if (!isOpen) return null;
 
-  const totalEligibleProspects = availableLists
-    .filter((l) => selectedListIds.includes(l.id))
-    .reduce((sum, l) => sum + (l.prospectsCount || 0), 0);
+  // Analyse d'éligibilité en temps réel selon le modèle de séquence choisi
+  const currentTemplate = TEMPLATES.find((t) => t.id === selectedTemplateId) || TEMPLATES[0];
+  const firstActionType = configuredSteps[0]?.actionType || currentTemplate.steps[0]?.actionType || "INVITATION";
+
+  const analyzedProspects = listProspects.map((p) => {
+    // 1. Déjà dans une campagne active ou en attente
+    const busy = p.campaignStates && Array.isArray(p.campaignStates) && p.campaignStates.some((s: any) =>
+      ["PENDING", "IN_PROGRESS", "WAITING_DELAY", "WAITING_CONDITION"].includes(s.status)
+    );
+
+    // 2. Statut LinkedIn conforme
+    let connectionMismatch = false;
+    if (firstActionType === "MESSAGE") {
+      connectionMismatch = p.connectionStatus !== "CONNECTED";
+    } else if (firstActionType === "INVITATION" || firstActionType === "VISIT" || firstActionType === "VISIT_PROFILE" || firstActionType === "FOLLOW") {
+      connectionMismatch = p.connectionStatus === "CONNECTED";
+    }
+
+    const doNotContact = Boolean(p.doNotContact);
+    const isEligible = !busy && !connectionMismatch && !doNotContact;
+
+    let exclusionReason = "";
+    if (busy) exclusionReason = "Déjà en campagne";
+    else if (connectionMismatch) exclusionReason = firstActionType === "MESSAGE" ? "Non connecté" : "Déjà connecté";
+    else if (doNotContact) exclusionReason = "Ne pas contacter";
+
+    return {
+      ...p,
+      busy,
+      connectionMismatch,
+      doNotContact,
+      isEligible,
+      exclusionReason,
+    };
+  });
+
+  const eligibleProspects = analyzedProspects.filter((p) => p.isEligible);
+  const totalListCount = listProspects.length;
+  const eligibleCount = eligibleProspects.length;
+  const busyCount = analyzedProspects.filter((p) => p.busy).length;
+  const mismatchCount = analyzedProspects.filter((p) => !p.busy && p.connectionMismatch).length;
+  const dncCount = analyzedProspects.filter((p) => !p.busy && !p.connectionMismatch && p.doNotContact).length;
+
+  const totalEligibleProspects =
+    selectionMode === "ALL"
+      ? eligibleCount
+      : customSelectedIds.length;
+
+  const filteredCustomProspects = analyzedProspects.filter((p) => {
+    if (!prospectSearchTerm.trim()) return true;
+    const q = prospectSearchTerm.toLowerCase();
+    return (
+      (p.firstName || "").toLowerCase().includes(q) ||
+      (p.lastName || "").toLowerCase().includes(q) ||
+      (p.company || "").toLowerCase().includes(q) ||
+      (p.headline || "").toLowerCase().includes(q)
+    );
+  });
+
+  const filteredLists = availableLists.filter((l) => {
+    if (!listSearchFilter.trim()) return true;
+    return l.name.toLowerCase().includes(listSearchFilter.toLowerCase());
+  });
 
   const handleInsertVariable = (variable: string) => {
     const updated = [...configuredSteps];
@@ -387,6 +477,7 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
           name: campaignName.trim() || `Brouillon - ${tmpl.title}`,
           type: selectedTemplateId,
           listIds: selectedListIds,
+          selectedProspectIds: selectionMode === "CUSTOM" ? customSelectedIds : undefined,
           steps: configuredSteps,
           startImmediately: false,
         }),
@@ -432,6 +523,7 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
           name: campaignName.trim(),
           type: selectedTemplateId,
           listIds: selectedListIds,
+          selectedProspectIds: selectionMode === "CUSTOM" ? customSelectedIds : undefined,
           steps: configuredSteps,
           startImmediately,
         }),
@@ -450,9 +542,6 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
     }
   };
 
-  const filteredLists = availableLists.filter((l) =>
-    l.name.toLowerCase().includes(listSearchFilter.toLowerCase())
-  );
 
   const getActionTypeLabel = (actionType: ActionType) => {
     switch (actionType) {
@@ -642,190 +731,462 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
 
           {/* STEP 2: Audience Cible & Sélection/Création de Liste */}
           {currentStep === 2 && (
-            <div className="space-y-6">
-              {/* En-tête de l'étape avec CTA de création */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-bold text-[#21164c] mb-1">
-                    Sélectionnez votre liste de prospects
-                  </h3>
-                  <p className="text-xs text-[#5f5f69]">
-                    Choisissez une liste existante ou créez-en une nouvelle pour cette campagne.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setShowCreateListForm(!showCreateListForm)}
-                  className="px-3.5 py-2 rounded-xl bg-[#592eff]/10 hover:bg-[#592eff]/20 text-[#592eff] text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 border border-[#592eff]/20 cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>{showCreateListForm ? "Masquer formulaire" : "Créer une nouvelle liste"}</span>
-                </button>
-              </div>
-
-              {/* Formulaire de création rapide de liste (Inline) */}
-              {showCreateListForm && (
-                <div className="p-5 rounded-2xl bg-gradient-to-br from-[#fafafd] to-[#f4f3fe] border-2 border-[#592eff]/30 shadow-sm space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <FolderPlus className="w-4 h-4 text-[#592eff]" />
-                      <span className="text-xs font-bold text-[#21164c] uppercase tracking-wider">
-                        Nouvelle liste de prospects
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setShowCreateListForm(false)}
-                      className="text-xs text-[#5f5f69] hover:text-[#21164c] cursor-pointer"
-                    >
-                      Annuler
-                    </button>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Colonne Principale (Sélecteur & Choix de prospects) */}
+              <div className="lg:col-span-2 space-y-6">
+                {/* En-tête de l'étape avec CTA de création */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-[#21164c] mb-1">
+                      Sélectionnez votre liste de prospects
+                    </h3>
+                    <p className="text-xs text-[#5f5f69]">
+                      Choisissez une liste existante ou créez-en une nouvelle pour cette campagne.
+                    </p>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="sm:col-span-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateListForm(!showCreateListForm)}
+                    className="px-3.5 py-2 rounded-xl bg-[#592eff]/10 hover:bg-[#592eff]/20 text-[#592eff] text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 border border-[#592eff]/20 cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>{showCreateListForm ? "Masquer formulaire" : "Créer une nouvelle liste"}</span>
+                  </button>
+                </div>
+
+                {/* Formulaire de création rapide de liste (Inline) */}
+                {showCreateListForm && (
+                  <div className="p-5 rounded-2xl bg-gradient-to-br from-[#fafafd] to-[#f4f3fe] border-2 border-[#592eff]/30 shadow-sm space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <FolderPlus className="w-4 h-4 text-[#592eff]" />
+                        <span className="text-xs font-bold text-[#21164c] uppercase tracking-wider">
+                          Nouvelle liste de prospects
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowCreateListForm(false)}
+                        className="text-xs text-[#5f5f69] hover:text-[#21164c] cursor-pointer"
+                      >
+                        Annuler
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="sm:col-span-2">
+                        <input
+                          type="text"
+                          value={newListName}
+                          onChange={(e) => setNewListName(e.target.value)}
+                          placeholder="Nom de la liste (ex: Directeurs Commerciaux Paris)"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-[#e0e0db] text-xs text-[#21164c] focus:outline-none focus:border-[#592eff] bg-white font-medium"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 p-1.5 bg-white border border-[#e0e0db] rounded-xl flex-1 justify-around">
+                          {PRESET_COLORS.map((col) => (
+                            <button
+                              key={col}
+                              type="button"
+                              onClick={() => setNewListColor(col)}
+                              className={`w-5 h-5 rounded-full transition-transform cursor-pointer ${
+                                newListColor === col ? "scale-125 ring-2 ring-[#21164c]/20" : "opacity-80"
+                              }`}
+                              style={{ backgroundColor: col }}
+                            />
+                          ))}
+                        </div>
+                        <button
+                          type="button"
+                          disabled={creatingList}
+                          onClick={handleCreateListSubmit}
+                          className="px-4 py-2.5 rounded-xl bg-[#592eff] hover:bg-[#4d25e0] text-white text-xs font-bold transition-all shadow-sm disabled:opacity-50 shrink-0 cursor-pointer"
+                        >
+                          {creatingList ? "Création..." : "Ajouter"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Cas A : Aucune liste trouvée */}
+                {availableLists.length === 0 && !showCreateListForm ? (
+                  <div className="text-center py-10 px-6 border-2 border-dashed border-[#592eff]/30 rounded-3xl bg-[#fafafd]">
+                    <div className="w-12 h-12 rounded-2xl bg-[#592eff]/10 text-[#592eff] flex items-center justify-center mx-auto mb-3">
+                      <FolderPlus className="w-6 h-6" />
+                    </div>
+                    <h4 className="text-sm font-bold text-[#21164c] mb-1">
+                      Vous n'avez pas encore de liste de prospects
+                    </h4>
+                    <p className="text-xs text-[#5f5f69] max-w-md mx-auto mb-5 leading-relaxed">
+                      Créez votre première liste directement ici pour cette campagne.
+                    </p>
+
+                    <div className="max-w-md mx-auto flex items-center gap-2 p-2 bg-white rounded-2xl border border-[#e0e0db] shadow-sm">
                       <input
                         type="text"
                         value={newListName}
                         onChange={(e) => setNewListName(e.target.value)}
-                        placeholder="Nom de la liste (ex: Directeurs Commerciaux Paris)"
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-[#e0e0db] text-xs text-[#21164c] focus:outline-none focus:border-[#592eff] bg-white font-medium"
+                        placeholder="Nom de votre liste (ex: Prospects LinkedIn 2026)"
+                        className="flex-1 px-3 py-2 text-xs text-[#21164c] focus:outline-none font-medium"
                       />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-1.5 p-1.5 bg-white border border-[#e0e0db] rounded-xl flex-1 justify-around">
-                        {PRESET_COLORS.map((col) => (
-                          <button
-                            key={col}
-                            type="button"
-                            onClick={() => setNewListColor(col)}
-                            className={`w-5 h-5 rounded-full transition-transform cursor-pointer ${
-                              newListColor === col ? "scale-125 ring-2 ring-[#21164c]/20" : "opacity-80"
-                            }`}
-                            style={{ backgroundColor: col }}
-                          />
-                        ))}
-                      </div>
                       <button
                         type="button"
                         disabled={creatingList}
                         onClick={handleCreateListSubmit}
-                        className="px-4 py-2.5 rounded-xl bg-[#592eff] hover:bg-[#4d25e0] text-white text-xs font-bold transition-all shadow-sm disabled:opacity-50 shrink-0 cursor-pointer"
+                        className="px-4 py-2 rounded-xl bg-[#592eff] hover:bg-[#4d25e0] text-white text-xs font-bold transition-all shadow-sm disabled:opacity-50 shrink-0 cursor-pointer"
                       >
-                        {creatingList ? "Création..." : "Ajouter"}
+                        {creatingList ? "Création..." : "Créer la liste"}
                       </button>
                     </div>
                   </div>
-                </div>
-              )}
+                ) : (
+                  /* Cas B : Listes existantes */
+                  <div className="space-y-4">
+                    {availableLists.length > 4 && (
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 text-[#5f5f69] absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          value={listSearchFilter}
+                          onChange={(e) => setListSearchFilter(e.target.value)}
+                          placeholder="Rechercher une liste..."
+                          className="w-full pl-8 pr-3 py-2 rounded-xl border border-[#e0e0db] text-xs text-[#21164c] focus:outline-none focus:border-[#592eff]"
+                        />
+                      </div>
+                    )}
 
-              {/* Cas A : Aucune liste trouvée -> État d'accueil pour création immédiate */}
-              {availableLists.length === 0 && !showCreateListForm ? (
-                <div className="text-center py-10 px-6 border-2 border-dashed border-[#592eff]/30 rounded-3xl bg-[#fafafd]">
-                  <div className="w-12 h-12 rounded-2xl bg-[#592eff]/10 text-[#592eff] flex items-center justify-center mx-auto mb-3">
-                    <FolderPlus className="w-6 h-6" />
-                  </div>
-                  <h4 className="text-sm font-bold text-[#21164c] mb-1">
-                    Vous n'avez pas encore de liste de prospects
-                  </h4>
-                  <p className="text-xs text-[#5f5f69] max-w-md mx-auto mb-5 leading-relaxed">
-                    Créez votre première liste directement ici. Vous pourrez y ajouter des prospects depuis l'onglet Prospects ou importer un fichier Excel/CSV par la suite.
-                  </p>
-
-                  <div className="max-w-md mx-auto flex items-center gap-2 p-2 bg-white rounded-2xl border border-[#e0e0db] shadow-sm">
-                    <input
-                      type="text"
-                      value={newListName}
-                      onChange={(e) => setNewListName(e.target.value)}
-                      placeholder="Nom de votre liste (ex: Prospects LinkedIn 2026)"
-                      className="flex-1 px-3 py-2 text-xs text-[#21164c] focus:outline-none font-medium"
-                    />
-                    <button
-                      type="button"
-                      disabled={creatingList}
-                      onClick={handleCreateListSubmit}
-                      className="px-4 py-2 rounded-xl bg-[#592eff] hover:bg-[#4d25e0] text-white text-xs font-bold transition-all shadow-sm disabled:opacity-50 shrink-0 cursor-pointer"
-                    >
-                      {creatingList ? "Création..." : "Créer la liste"}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                /* Cas B : Listes existantes */
-                <div className="space-y-4">
-                  {availableLists.length > 4 && (
-                    <div className="relative">
-                      <Search className="w-3.5 h-3.5 text-[#5f5f69] absolute left-3 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="text"
-                        value={listSearchFilter}
-                        onChange={(e) => setListSearchFilter(e.target.value)}
-                        placeholder="Rechercher une liste..."
-                        className="w-full pl-8 pr-3 py-2 rounded-xl border border-[#e0e0db] text-xs text-[#21164c] focus:outline-none focus:border-[#592eff]"
-                      />
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 max-h-[300px] overflow-y-auto custom-scrollbar p-1">
-                    {filteredLists.map((list) => {
-                      const isChecked = selectedListIds.includes(list.id);
-                      return (
-                        <div
-                          key={list.id}
-                          onClick={() => toggleListSelection(list.id)}
-                          className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-center justify-between ${
-                            isChecked
-                              ? "border-[#592eff] bg-[#592eff]/[0.03] shadow-sm"
-                              : "border-[#e0e0db] hover:border-[#592eff]/30 bg-white"
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div
-                              className="w-3.5 h-3.5 rounded-full shrink-0 shadow-xs"
-                              style={{ backgroundColor: list.color || "#592eff" }}
-                            />
-                            <div>
-                              <p className="text-xs font-bold text-[#21164c]">{list.name}</p>
-                              <p className="text-[11px] text-[#5f5f69]">
-                                {list.prospectsCount || 0} prospect(s) qualifié(s)
-                              </p>
-                            </div>
-                          </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[180px] overflow-y-auto custom-scrollbar p-1">
+                      {filteredLists.map((list) => {
+                        const isChecked = selectedListIds.includes(list.id);
+                        return (
                           <div
-                            className={`w-5 h-5 rounded-md flex items-center justify-center transition-colors ${
-                              isChecked ? "bg-[#592eff] text-white" : "border border-[#e0e0db]"
+                            key={list.id}
+                            onClick={() => toggleListSelection(list.id)}
+                            className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex items-center justify-between ${
+                              isChecked
+                                ? "border-[#592eff] bg-[#592eff]/[0.03] shadow-sm"
+                                : "border-[#e0e0db] hover:border-[#592eff]/30 bg-white"
                             }`}
                           >
-                            {isChecked && <Check className="w-3.5 h-3.5" />}
+                            <div className="flex items-center gap-3">
+                              <div
+                                className="w-3 h-3 rounded-full shrink-0 shadow-xs"
+                                style={{ backgroundColor: list.color || "#592eff" }}
+                              />
+                              <div>
+                                <p className="text-xs font-bold text-[#21164c]">{list.name}</p>
+                                <p className="text-[11px] text-[#5f5f69]">
+                                  {list.prospectsCount || 0} prospect(s) au total
+                                </p>
+                              </div>
+                            </div>
+                            <div
+                              className={`w-5 h-5 rounded-md flex items-center justify-center transition-colors ${
+                                isChecked ? "bg-[#592eff] text-white" : "border border-[#e0e0db]"
+                              }`}
+                            >
+                              {isChecked && <Check className="w-3.5 h-3.5" />}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Section Question Waalaxy & Choix des Prospects */}
+                {selectedListIds.length > 0 && (
+                  <div className="p-6 rounded-3xl bg-white border border-[#e0e0db] shadow-xs space-y-5 animate-in fade-in duration-200">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold shrink-0">
+                        <Users className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-extrabold text-[#21164c]">
+                          Voulez-vous ajouter tous les prospects de cette liste ?
+                        </h4>
+                        <p className="text-xs text-[#5f5f69] mt-0.5 leading-relaxed">
+                          Vous pouvez choisir de sélectionner tous les prospects de votre liste qui remplissent les conditions pour cette campagne ou certains d'entre eux.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Cartes d'Option : Oui (Tous) vs Non (Je sélectionne) */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setSelectionMode("ALL")}
+                        className={`p-4 rounded-2xl border-2 transition-all text-left flex items-center justify-between cursor-pointer ${
+                          selectionMode === "ALL"
+                            ? "border-[#592eff] bg-[#592eff]/[0.04] shadow-sm ring-2 ring-[#592eff]/20"
+                            : "border-[#e0e0db] hover:border-[#592eff]/30 bg-white"
+                        }`}
+                      >
+                        <div>
+                          <p className="text-xs font-extrabold text-[#21164c]">
+                            Oui, ajouter tous les prospects ({eligibleCount})
+                          </p>
+                          <p className="text-[11px] text-[#5f5f69] mt-0.5">
+                            Engage tous les contacts qualifiés
+                          </p>
+                        </div>
+                        {selectionMode === "ALL" && (
+                          <CheckCircle2 className="w-5 h-5 text-[#592eff] shrink-0" />
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectionMode("CUSTOM");
+                          if (customSelectedIds.length === 0) {
+                            setCustomSelectedIds(eligibleProspects.map((p) => p.id));
+                          }
+                        }}
+                        className={`p-4 rounded-2xl border-2 transition-all text-left flex items-center justify-between cursor-pointer ${
+                          selectionMode === "CUSTOM"
+                            ? "border-[#592eff] bg-[#592eff]/[0.04] shadow-sm ring-2 ring-[#592eff]/20"
+                            : "border-[#e0e0db] hover:border-[#592eff]/30 bg-white"
+                        }`}
+                      >
+                        <div>
+                          <p className="text-xs font-extrabold text-[#21164c]">
+                            Non, je sélectionne ({customSelectedIds.length})
+                          </p>
+                          <p className="text-[11px] text-[#5f5f69] mt-0.5">
+                            Choisissez au cas par cas
+                          </p>
+                        </div>
+                        {selectionMode === "CUSTOM" && (
+                          <CheckCircle2 className="w-5 h-5 text-[#592eff] shrink-0" />
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Mode Sélecteur Personnalisé ("Non, je sélectionne") */}
+                    {selectionMode === "CUSTOM" && (
+                      <div className="pt-4 border-t border-[#f0f0ed] space-y-3 animate-in fade-in duration-200">
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
+                          <div className="relative flex-1 w-full">
+                            <Search className="w-3.5 h-3.5 text-[#5f5f69] absolute left-3 top-1/2 -translate-y-1/2" />
+                            <input
+                              type="text"
+                              value={prospectSearchTerm}
+                              onChange={(e) => setProspectSearchTerm(e.target.value)}
+                              placeholder="Rechercher un prospect par nom, poste..."
+                              className="w-full pl-8 pr-3 py-2 rounded-xl border border-[#e0e0db] text-xs text-[#21164c] focus:outline-none focus:border-[#592eff]"
+                            />
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setCustomSelectedIds(eligibleProspects.map((p) => p.id))}
+                              className="px-3 py-1.5 rounded-xl border border-[#e0e0db] hover:border-[#592eff] text-[11px] font-bold text-[#592eff] bg-white transition-colors cursor-pointer"
+                            >
+                              Tout cocher éligibles
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setCustomSelectedIds([])}
+                              className="px-3 py-1.5 rounded-xl border border-[#e0e0db] hover:bg-slate-50 text-[11px] font-semibold text-[#5f5f69] bg-white transition-colors cursor-pointer"
+                            >
+                              Décocher tout
+                            </button>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
 
-              {/* Résumé de l'audience */}
-              <div className="space-y-2">
+                        {/* Liste des prospects éligibles avec filtres et cases à cocher */}
+                        <div className="max-h-[260px] overflow-y-auto custom-scrollbar border border-[#e0e0db] rounded-2xl divide-y divide-[#e0e0db]/60 bg-white">
+                          {loadingProspects ? (
+                            <div className="p-6 text-center text-xs text-[#5f5f69]">
+                              Chargement des prospects de la liste...
+                            </div>
+                          ) : filteredCustomProspects.length === 0 ? (
+                            <div className="p-6 text-center text-xs text-[#5f5f69]">
+                              Aucun prospect trouvé.
+                            </div>
+                          ) : (
+                            filteredCustomProspects.map((p) => {
+                              const isChecked = customSelectedIds.includes(p.id);
+                              return (
+                                <div
+                                  key={p.id}
+                                  onClick={() => {
+                                    if (!p.isEligible) return;
+                                    if (isChecked) {
+                                      setCustomSelectedIds(customSelectedIds.filter((id) => id !== p.id));
+                                    } else {
+                                      setCustomSelectedIds([...customSelectedIds, p.id]);
+                                    }
+                                  }}
+                                  className={`p-3 flex items-center justify-between gap-3 transition-colors ${
+                                    !p.isEligible
+                                      ? "bg-slate-50/70 opacity-60 cursor-not-allowed"
+                                      : isChecked
+                                      ? "bg-[#592eff]/[0.03] cursor-pointer"
+                                      : "hover:bg-slate-50 cursor-pointer"
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-3 min-w-0">
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      disabled={!p.isEligible}
+                                      onChange={() => {}}
+                                      className="w-4 h-4 rounded text-[#592eff] border-[#e0e0db] focus:ring-[#592eff]"
+                                    />
+                                    <img
+                                      src={
+                                        p.avatarUrl ||
+                                        `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                                          p.firstName + " " + p.lastName
+                                        )}&background=592eff&color=fff`
+                                      }
+                                      alt={p.firstName}
+                                      className="w-7 h-7 rounded-full object-cover shrink-0"
+                                    />
+                                    <div className="min-w-0">
+                                      <p className="font-bold text-xs text-[#21164c] truncate">
+                                        {p.firstName} {p.lastName}
+                                      </p>
+                                      <p className="text-[10px] text-[#5f5f69] truncate">
+                                        {p.headline || p.company || "Prospect LinkedIn"}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  <div className="shrink-0 flex items-center gap-2">
+                                    <span
+                                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                        p.connectionStatus === "CONNECTED"
+                                          ? "bg-emerald-100 text-emerald-700"
+                                          : p.connectionStatus === "PENDING"
+                                          ? "bg-amber-100 text-amber-700"
+                                          : "bg-slate-100 text-slate-600"
+                                      }`}
+                                    >
+                                      {p.connectionStatus === "CONNECTED"
+                                        ? "Connecté"
+                                        : p.connectionStatus === "PENDING"
+                                        ? "En attente"
+                                        : "Non connecté"}
+                                    </span>
+
+                                    {p.isEligible ? (
+                                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 text-[10px] font-extrabold">
+                                        Éligible ✓
+                                      </span>
+                                    ) : (
+                                      <span
+                                        className="px-2 py-0.5 rounded-full bg-red-500/10 text-red-600 text-[10px] font-semibold"
+                                        title={p.exclusionReason}
+                                      >
+                                        {p.exclusionReason}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Résumé du total retenu */}
                 <div className="p-4 rounded-2xl bg-[#fafafd] border border-[#e0e0db] flex items-center justify-between">
                   <div className="flex items-center gap-2 text-xs text-[#21164c] font-bold">
                     <Users className="w-4 h-4 text-[#592eff]" />
-                    <span>Total prospects éligibles dans cette campagne :</span>
+                    <span>Total prospects engagés dans cette campagne :</span>
                   </div>
-                  <span className="text-sm font-extrabold text-[#592eff] px-3 py-1 bg-[#592eff]/10 rounded-full">
+                  <span className="text-sm font-extrabold text-[#592eff] px-3.5 py-1 bg-[#592eff]/10 rounded-full">
                     {totalEligibleProspects} prospect(s)
                   </span>
                 </div>
+              </div>
 
-                {selectedListIds.length > 0 && totalEligibleProspects === 0 && (
-                  <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200/60 p-3 rounded-xl flex items-center gap-2">
-                    <Info className="w-4 h-4 shrink-0 text-amber-600" />
-                    <span>
-                      La liste sélectionnée ne contient aucun prospect pour l'instant. Vous pourrez finaliser la configuration de la campagne maintenant et y importer vos prospects ultérieurement.
+              {/* Colonne Latérale Droite (Carte "ASTUCE" - Style Waalaxy) */}
+              <div className="lg:col-span-1 space-y-4 self-start">
+                <div className="p-6 rounded-3xl bg-amber-500/[0.06] border border-amber-500/20 space-y-4 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <span className="px-2.5 py-1 rounded-lg bg-amber-500 text-white font-extrabold text-[10px] uppercase tracking-wider">
+                      ASTUCE
                     </span>
-                  </p>
-                )}
+                    <Sparkles className="w-4 h-4 text-amber-600" />
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-extrabold text-[#21164c] leading-snug">
+                      Quels prospects peuvent entrer dans ma campagne ?
+                    </h4>
+                    <p className="text-xs text-[#5f5f69] mt-1.5 leading-relaxed">
+                      Vous utilisez la séquence <strong className="text-[#21164c]">"{currentTemplate.title}"</strong>. Vous ne pourrez sélectionner que les prospects répondant aux conditions suivantes :
+                    </p>
+                  </div>
+
+                  {/* Conditions de la séquence */}
+                  <div className="space-y-2.5 pt-3 border-t border-amber-500/15 text-xs">
+                    <div className="flex items-start gap-2 text-[#21164c]">
+                      <span className="shrink-0 text-amber-600 font-bold">✈️</span>
+                      <span className="leading-snug">Ne pas être déjà engagé dans une autre campagne active</span>
+                    </div>
+
+                    <div className="flex items-start gap-2 text-[#21164c]">
+                      <span className="shrink-0 text-amber-600 font-bold">
+                        {firstActionType === "MESSAGE" ? "💬" : "❌"}
+                      </span>
+                      <span className="leading-snug">
+                        {firstActionType === "MESSAGE"
+                          ? "Être déjà connecté avec vous sur LinkedIn"
+                          : "Ne pas être déjà connecté avec vous sur LinkedIn"}
+                      </span>
+                    </div>
+
+                    <div className="flex items-start gap-2 text-[#21164c]">
+                      <span className="shrink-0 text-amber-600 font-bold">🚫</span>
+                      <span className="leading-snug">Ne pas figurer dans la liste "Ne pas contacter"</span>
+                    </div>
+                  </div>
+
+                  {/* Bilan Chiffré des Éligibilités */}
+                  <div className="p-4 rounded-2xl bg-white border border-amber-500/20 space-y-2 text-xs">
+                    <div className="flex justify-between items-center font-bold text-[#21164c]">
+                      <span>Total prospects dans la liste :</span>
+                      <span className="px-2 py-0.5 rounded-md bg-slate-100 font-extrabold">{totalListCount}</span>
+                    </div>
+
+                    <div className="flex justify-between items-center text-emerald-700 font-extrabold">
+                      <span>🟢 Éligibles pour cette campagne :</span>
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-100 font-black">{eligibleCount}</span>
+                    </div>
+
+                    {busyCount > 0 && (
+                      <div className="flex justify-between items-center text-slate-500 text-[11px]">
+                        <span>• Déjà engagé en campagne :</span>
+                        <span className="font-bold">{busyCount}</span>
+                      </div>
+                    )}
+
+                    {mismatchCount > 0 && (
+                      <div className="flex justify-between items-center text-slate-500 text-[11px]">
+                        <span>• Statut LinkedIn non conforme :</span>
+                        <span className="font-bold">{mismatchCount}</span>
+                      </div>
+                    )}
+
+                    {dncCount > 0 && (
+                      <div className="flex justify-between items-center text-slate-500 text-[11px]">
+                        <span>• En liste "Ne pas contacter" :</span>
+                        <span className="font-bold">{dncCount}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           )}
