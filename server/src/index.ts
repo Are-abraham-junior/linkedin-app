@@ -15,6 +15,9 @@ import queueRoutes from "./routes/queue.routes.js";
 import { handleUnipileWebhook } from "./controllers/webhook.controller.js";
 import { startCampaignScheduler } from "./workers/campaign.worker.js";
 
+import path from "path";
+import fs from "fs";
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 const FRONTEND_URL = process.env.FRONTEND_URL || "https://bimlink.croixance.net";
@@ -45,6 +48,18 @@ app.use("/api/inbox", inboxRoutes);
 app.use("/api/team", teamRoutes);
 app.use("/api/queue", queueRoutes);
 app.post("/api/webhooks/unipile", handleUnipileWebhook);
+
+// Serve static client assets and SPA fallback (Production / Render)
+const clientDistPath = path.resolve(process.cwd(), "client/dist");
+if (fs.existsSync(clientDistPath)) {
+  app.use(express.static(clientDistPath));
+  app.use((req, res, next) => {
+    if (req.method === "GET" && !req.path.startsWith("/api")) {
+      return res.sendFile(path.join(clientDistPath, "index.html"));
+    }
+    next();
+  });
+}
 
 // Global Error Handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
