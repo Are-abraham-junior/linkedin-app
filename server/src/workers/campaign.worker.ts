@@ -62,12 +62,43 @@ async function resolveProviderId(prospect: any, accountId: string): Promise<stri
   return null;
 }
 
+const DAY_MAP: Record<number, string> = {
+  0: "SUN",
+  1: "MON",
+  2: "TUE",
+  3: "WED",
+  4: "THU",
+  5: "FRI",
+  6: "SAT",
+};
+
 /**
- * Vérifie si l'heure actuelle est dans les heures ouvrées (ex: 08:00 - 20:00)
+ * Vérifie si l'heure actuelle est dans les jours et heures ouvrées configurés par l'utilisateur
  */
-function isWithinWorkingHours(): boolean {
-  const hour = new Date().getHours();
-  return hour >= 8 && hour < 20;
+function isUserInWorkingHours(user: any): boolean {
+  if (!user) return true;
+
+  const now = new Date();
+  const currentDay = DAY_MAP[now.getDay()];
+  const workingDays: string[] = user.workingDays?.length
+    ? user.workingDays
+    : ["MON", "TUE", "WED", "THU", "FRI"];
+
+  // Vérifier si le jour actuel est actif
+  if (!workingDays.includes(currentDay)) {
+    return false;
+  }
+
+  // Vérifier la plage horaire
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+  const [startH, startM] = (user.workingHoursStart || "08:00").split(":").map(Number);
+  const [endH, endM] = (user.workingHoursEnd || "19:00").split(":").map(Number);
+
+  const startTotal = (startH || 8) * 60 + (startM || 0);
+  const endTotal = (endH || 19) * 60 + (endM || 0);
+
+  return currentMinutes >= startTotal && currentMinutes <= endTotal;
 }
 
 let isRunning = false;
@@ -108,6 +139,19 @@ export async function processActionQueue(): Promise<void> {
 
     for (const action of pendingActions) {
       try {
+        const account = action.linkedInAccount;
+        const user = account.user;
+
+        // Vérifier si nous sommes dans les horaires d'activité autorisés par l'utilisateur
+        if (!isUserInWorkingHours(user)) {
+          // Reprogrammer pour la prochaine fenêtre (décaler de 30 minutes)
+          const nextCheck = new Date(now.getTime() + 30 * 60 * 1000);
+          await prisma.actionQueue.update({
+            where: { id: action.id },
+            data: { scheduledFor: nextCheck },
+          });
+          continue;
+        }
         // Vérifier si la campagne est toujours active
         const campaign = await prisma.campaign.findUnique({
           where: { id: action.campaignId },
@@ -118,9 +162,8 @@ export async function processActionQueue(): Promise<void> {
         }
 
         // Vérifier les quotas du compte LinkedIn
-        const account = action.linkedInAccount;
-        const maxDailyInvites = account.user?.maxDailyInvites || 30;
-        const maxDailyMsg = account.user?.maxDailyMsg || 70;
+        const maxDailyInvites = user?.maxDailyInvites || 30;
+        const maxDailyMsg = user?.maxDailyMsg || 70;
 
         if (action.actionType === "INVITATION" && account.dailyInvitesSent >= maxDailyInvites) {
           console.warn(`[CampaignWorker] Quota d'invitations journalières atteint (${maxDailyInvites}) pour le compte ${account.id}. Action différée.`);
@@ -314,7 +357,7 @@ export async function processActionQueue(): Promise<void> {
             });
           }
         } else if (action.actionType === "VISIT_PROFILE" || (action.actionType as string) === "VISIT") {
-          const targetIdentifier = prospect.providerProfileId || prospect.linkedinUrl;
+          const targetIdentifier = (await resolveProviderId(prospect, account.unipileAccountId)) || prospect.linkedinUrl;
           const result = await UnipileService.visitProfile({
             accountId: account.unipileAccountId,
             identifier: targetIdentifier,
@@ -389,7 +432,7 @@ export async function processActionQueue(): Promise<void> {
             });
           }
         } else if (action.actionType === "FOLLOW") {
-          const targetIdentifier = prospect.providerProfileId || prospect.linkedinUrl;
+          const targetIdentifier = (await resolveProviderId(prospect, account.unipileAccountId)) || prospect.linkedinUrl;
           const result = await UnipileService.followProfile({
             accountId: account.unipileAccountId,
             providerId: targetIdentifier,

@@ -17,6 +17,7 @@ router.get("/", getCampaigns);
 router.get("/:id", getCampaignDetails);
 router.post("/", createCampaign);
 router.put("/:id", updateCampaign);
+router.patch("/:id", updateCampaign);
 router.patch("/:id/toggle-status", toggleCampaignStatus);
 router.delete("/:id", deleteCampaign);
 

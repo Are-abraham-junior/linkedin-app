@@ -414,7 +414,12 @@ export class UnipileService {
   }): Promise<{ success: boolean; profile?: any; error?: string }> {
     const accountId = params.accountId || UNIPILE_ACCOUNT_ID;
     try {
-      const url = `${BASE_URL}/api/v1/users/${encodeURIComponent(params.identifier)}?account_id=${accountId}`;
+      let identifier = (params.identifier || "").trim();
+      if (identifier.includes("linkedin.com/in/")) {
+        identifier = identifier.split("linkedin.com/in/")[1].split("/")[0].split("?")[0];
+      }
+
+      const url = `${BASE_URL}/api/v1/users/${encodeURIComponent(identifier)}?account_id=${accountId}`;
       const res = await fetch(url, {
         method: "GET",
         headers: this.getHeaders(),

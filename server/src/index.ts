@@ -11,6 +11,7 @@ import linkedinRoutes from "./routes/linkedin.routes.js";
 import campaignRoutes from "./routes/campaign.routes.js";
 import inboxRoutes from "./routes/inbox.routes.js";
 import teamRoutes from "./routes/team.routes.js";
+import queueRoutes from "./routes/queue.routes.js";
 import { handleUnipileWebhook } from "./controllers/webhook.controller.js";
 import { startCampaignScheduler } from "./workers/campaign.worker.js";
 
@@ -42,6 +43,7 @@ app.use("/api/linkedin", linkedinRoutes);
 app.use("/api/campaigns", campaignRoutes);
 app.use("/api/inbox", inboxRoutes);
 app.use("/api/team", teamRoutes);
+app.use("/api/queue", queueRoutes);
 app.post("/api/webhooks/unipile", handleUnipileWebhook);
 
 // Global Error Handler

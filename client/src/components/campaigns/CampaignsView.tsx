@@ -21,8 +21,10 @@ import { Campaign, CampaignStatus } from "../../types";
 import { apiRequest } from "../../services/api";
 import { CampaignWizardModal } from "./CampaignWizardModal";
 import { CampaignDetailModal } from "./CampaignDetailModal";
+import { QueueView } from "./QueueView";
 
 export const CampaignsView: React.FC = () => {
+  const [subTab, setSubTab] = useState<"CAMPAIGNS" | "QUEUE">("CAMPAIGNS");
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [filterStatus, setFilterStatus] = useState<string>("ALL");
@@ -118,31 +120,70 @@ export const CampaignsView: React.FC = () => {
   });
 
   return (
-    <div className="flex flex-col h-full min-h-0 bg-[#fbfbfe] overflow-y-auto custom-scrollbar p-6 sm:p-8 space-y-7">
-      {/* Header View */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl font-black text-[#21164c] tracking-tight">
-              Campagnes de prospection
-            </h1>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-[#592eff]/10 text-[#592eff] border border-[#592eff]/20">
+    <div className="flex flex-col h-full min-h-0 bg-[#fbfbfe] overflow-y-auto custom-scrollbar">
+      {/* Sub-navigation Header Tabs */}
+      <div className="px-6 sm:px-8 pt-6 pb-2 border-b border-[#e0e0db]/60 bg-white sticky top-0 z-10 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2 bg-[#f5f5f7] p-1 rounded-2xl">
+          <button
+            onClick={() => setSubTab("CAMPAIGNS")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+              subTab === "CAMPAIGNS"
+                ? "bg-white text-[#21164c] shadow-sm"
+                : "text-[#5f5f69] hover:text-[#21164c]"
+            }`}
+          >
+            <Rocket className="w-3.5 h-3.5 text-[#592eff]" />
+            <span>Mes Campagnes</span>
+            <span className="bg-[#592eff]/10 text-[#592eff] text-[10px] px-2 py-0.5 rounded-full font-bold">
               {totalCampaigns}
             </span>
-          </div>
-          <p className="text-xs text-[#5f5f69] mt-1">
-            Gérez vos séquences d'invitations et de relances automatisées sur LinkedIn
-          </p>
+          </button>
+
+          <button
+            onClick={() => setSubTab("QUEUE")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+              subTab === "QUEUE"
+                ? "bg-white text-[#21164c] shadow-sm"
+                : "text-[#5f5f69] hover:text-[#21164c]"
+            }`}
+          >
+            <Clock className="w-3.5 h-3.5 text-[#2ed6ff]" />
+            <span>File d'attente</span>
+          </button>
         </div>
 
-        <button
-          onClick={() => setIsWizardOpen(true)}
-          className="px-5 py-2.5 rounded-full bg-[#592eff] hover:bg-[#4d25e0] text-white text-xs font-bold shadow-md shadow-[#592eff]/30 transition-all hover:scale-[1.02] flex items-center justify-center gap-2"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Nouvelle campagne</span>
-        </button>
+        {subTab === "CAMPAIGNS" && (
+          <button
+            onClick={() => setIsWizardOpen(true)}
+            className="px-4 py-2 rounded-xl bg-[#592eff] hover:bg-[#4d25e0] text-white text-xs font-bold shadow-md shadow-[#592eff]/25 transition-all hover:scale-[1.02] flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Nouvelle campagne</span>
+          </button>
+        )}
       </div>
+
+      {/* Main Content View */}
+      {subTab === "QUEUE" ? (
+        <QueueView />
+      ) : (
+        <div className="p-6 sm:p-8 space-y-7">
+          {/* Header View */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2.5">
+                <h1 className="text-2xl font-black text-[#21164c] tracking-tight">
+                  Campagnes de prospection
+                </h1>
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-[#592eff]/10 text-[#592eff] border border-[#592eff]/20">
+                  {totalCampaigns}
+                </span>
+              </div>
+              <p className="text-xs text-[#5f5f69] mt-1">
+                Gérez vos séquences d'invitations et de relances automatisées sur LinkedIn
+              </p>
+            </div>
+          </div>
 
       {/* Cartes de KPIs Globales */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -351,12 +392,13 @@ export const CampaignsView: React.FC = () => {
                   </span>
                   <div className="flex items-center gap-1 text-[11px] font-bold text-[#592eff] group-hover:translate-x-0.5 transition-transform">
                     <span>Entonnoir</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
                   </div>
                 </div>
               </div>
             );
           })}
+        </div>
+      )}
         </div>
       )}
 

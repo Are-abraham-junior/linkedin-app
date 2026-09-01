@@ -444,6 +444,7 @@ export async function updateCampaign(req: AuthenticatedRequest, res: Response) {
       return;
     }
 
+    // Mettre à jour les informations de base de la campagne
     const updated = await prisma.campaign.update({
       where: { id },
       data: {
@@ -452,10 +453,112 @@ export async function updateCampaign(req: AuthenticatedRequest, res: Response) {
       },
     });
 
+    // Mettre à jour les étapes si fournies
+    if (body.steps && Array.isArray(body.steps)) {
+      for (const stepInput of body.steps) {
+        let stepId = stepInput.id;
+
+        // Si l'id n'est pas fourni, trouver l'étape par ordre
+        if (!stepId) {
+          const existingStep = await prisma.campaignStep.findFirst({
+            where: {
+              campaignId: id,
+              stepOrder: stepInput.stepOrder,
+            },
+          });
+          if (existingStep) {
+            stepId = existingStep.id;
+          }
+        }
+
+        if (stepId) {
+          // 1. Mettre à jour l'étape dans CampaignStep
+          await prisma.campaignStep.update({
+            where: { id: stepId },
+            data: {
+              delayDays: stepInput.delayDays !== undefined ? stepInput.delayDays : undefined,
+              messageText: stepInput.messageText !== undefined ? stepInput.messageText : undefined,
+            },
+          });
+
+          // 2. Synchroniser les actions en file d'attente (ActionQueue)
+          const queuedActions = await prisma.actionQueue.findMany({
+            where: {
+              campaignId: id,
+              status: "QUEUED",
+            },
+          });
+
+          for (const action of queuedActions) {
+            const payload: any = action.payload || {};
+            if (payload.stepId === stepId) {
+              const dataToUpdate: any = {};
+
+              // Mettre à jour le texte du message si modifié
+              if (stepInput.messageText !== undefined) {
+                payload.messageText = stepInput.messageText;
+                dataToUpdate.payload = payload;
+              }
+
+              // Mettre à jour la date d'exécution (scheduledFor) si le délai a été modifié
+              if (stepInput.delayDays !== undefined) {
+                const now = new Date();
+                let newScheduled: Date;
+
+                if (stepInput.delayDays === 0) {
+                  newScheduled = now;
+                } else {
+                  const state = await prisma.prospectCampaignState.findUnique({
+                    where: {
+                      campaignId_prospectId: {
+                        campaignId: id,
+                        prospectId: action.prospectId,
+                      },
+                    },
+                  });
+                  const baseTime = state?.lastActionAt || action.createdAt || now;
+                  const targetTime = new Date(baseTime.getTime() + stepInput.delayDays * 24 * 60 * 60 * 1000);
+                  newScheduled = targetTime.getTime() < now.getTime() ? now : targetTime;
+                }
+
+                dataToUpdate.scheduledFor = newScheduled;
+
+                // Mettre à jour également prospectCampaignState.nextExecutionAt
+                await prisma.prospectCampaignState.updateMany({
+                  where: {
+                    campaignId: id,
+                    prospectId: action.prospectId,
+                  },
+                  data: {
+                    nextExecutionAt: newScheduled,
+                  },
+                });
+              }
+
+              if (Object.keys(dataToUpdate).length > 0) {
+                await prisma.actionQueue.update({
+                  where: { id: action.id },
+                  data: dataToUpdate,
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Récupérer la campagne complète avec étapes ordonnées
+    const fullCampaign = await prisma.campaign.findUnique({
+      where: { id },
+      include: {
+        steps: { orderBy: { stepOrder: "asc" } },
+      },
+    });
+
     res.json({
       success: true,
-      message: "Campagne mise à jour avec succès.",
-      campaign: updated,
+      message: "Campagne et séquence mises à jour avec succès.",
+      campaign: fullCampaign || updated,
     });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
