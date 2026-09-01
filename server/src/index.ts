@@ -24,7 +24,7 @@ const FRONTEND_URL = process.env.FRONTEND_URL || "https://bimlink.croixance.net"
 
 app.use(
   cors({
-    origin: [FRONTEND_URL, "http://localhost:3000", "http://localhost:5173"],
+    origin: true,
     credentials: true,
   })
 );
