@@ -203,16 +203,16 @@ export async function deleteQueueItem(req: AuthenticatedRequest, res: Response):
       return;
     }
 
-    const { id } = req.params;
+    const id = req.params.id as string;
 
     const action = await prisma.actionQueue.findUnique({
       where: { id },
       include: {
-        linkedInAccount: true,
+        campaign: true,
       },
     });
 
-    if (!action || action.linkedInAccount.userId !== req.user.id) {
+    if (!action || action.campaign.userId !== req.user.id) {
       res.status(404).json({ success: false, error: "Action introuvable ou non autorisée" });
       return;
     }
@@ -251,16 +251,16 @@ export async function retryQueueItem(req: AuthenticatedRequest, res: Response): 
       return;
     }
 
-    const { id } = req.params;
+    const id = req.params.id as string;
 
     const action = await prisma.actionQueue.findUnique({
       where: { id },
       include: {
-        linkedInAccount: true,
+        campaign: true,
       },
     });
 
-    if (!action || action.linkedInAccount.userId !== req.user.id) {
+    if (!action || action.campaign.userId !== req.user.id) {
       res.status(404).json({ success: false, error: "Action introuvable ou non autorisée" });
       return;
     }

@@ -2,8 +2,12 @@ import { Router } from "express";
 import { requireAuth } from "../middlewares/auth.middleware.js";
 import {
   getConversations,
+  syncAllConversations,
   getMessages,
   sendMessage,
+  startNewConversation,
+  markAsRead,
+  updateProspectDetails,
 } from "../controllers/inbox.controller.js";
 
 const router = Router();
@@ -11,7 +15,11 @@ const router = Router();
 router.use(requireAuth);
 
 router.get("/conversations", getConversations);
+router.post("/sync", syncAllConversations);
+router.post("/conversations/new", startNewConversation);
 router.get("/conversations/:id/messages", getMessages);
 router.post("/messages/send", sendMessage);
+router.patch("/conversations/:id/read", markAsRead);
+router.patch("/prospects/:id", updateProspectDetails);
 
 export default router;

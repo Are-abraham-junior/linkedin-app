@@ -522,13 +522,17 @@ export class UnipileService {
     limit?: number;
     cursor?: string;
     unread?: boolean;
+    before?: string;
+    after?: string;
   }): Promise<{ success: boolean; items: any[]; cursor?: string; error?: string }> {
     const accountId = params.accountId || UNIPILE_ACCOUNT_ID;
     try {
       const limit = params.limit || 50;
       let url = `${BASE_URL}/api/v1/chats?account_id=${accountId}&limit=${limit}`;
-      if (params.cursor) url += `&cursor=${params.cursor}`;
+      if (params.cursor) url += `&cursor=${encodeURIComponent(params.cursor)}`;
       if (params.unread) url += `&unread=true`;
+      if (params.before) url += `&before=${encodeURIComponent(params.before)}`;
+      if (params.after) url += `&after=${encodeURIComponent(params.after)}`;
 
       const res = await fetch(url, {
         method: "GET",
@@ -552,6 +556,32 @@ export class UnipileService {
   }
 
   /**
+   * Récupère les participants d'une conversation
+   * Doc Unipile : GET /api/v1/chats/{chat_id}/attendees
+   */
+  static async getChatAttendees(chatId: string): Promise<{ success: boolean; items: any[]; error?: string }> {
+    try {
+      const url = `${BASE_URL}/api/v1/chats/${chatId}/attendees`;
+      const res = await fetch(url, {
+        method: "GET",
+        headers: this.getHeaders(),
+      });
+
+      if (!res.ok) {
+        return { success: false, items: [] };
+      }
+
+      const data: any = await res.json();
+      return {
+        success: true,
+        items: data.items || data || [],
+      };
+    } catch (err: any) {
+      return { success: false, items: [], error: err.message };
+    }
+  }
+
+  /**
    * Récupère l'historique des messages d'une conversation
    * Doc Unipile : GET /api/v1/chats/{chat_id}/messages?limit=...
    */
@@ -563,7 +593,7 @@ export class UnipileService {
     try {
       const limit = params.limit || 50;
       let url = `${BASE_URL}/api/v1/chats/${params.chatId}/messages?limit=${limit}`;
-      if (params.cursor) url += `&cursor=${params.cursor}`;
+      if (params.cursor) url += `&cursor=${encodeURIComponent(params.cursor)}`;
 
       const res = await fetch(url, {
         method: "GET",
@@ -593,15 +623,21 @@ export class UnipileService {
   static async sendChatMessage(params: {
     chatId: string;
     text: string;
+    attachments?: any[];
   }): Promise<{ success: boolean; messageId?: string; error?: string }> {
     try {
       const url = `${BASE_URL}/api/v1/chats/${params.chatId}/messages`;
+      const body: any = {
+        text: params.text,
+      };
+      if (params.attachments && params.attachments.length > 0) {
+        body.attachments = params.attachments;
+      }
+
       const res = await fetch(url, {
         method: "POST",
         headers: this.getHeaders(),
-        body: JSON.stringify({
-          text: params.text,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!res.ok) {
@@ -614,6 +650,30 @@ export class UnipileService {
         success: true,
         messageId: data.id || data.message_id,
       };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * Marque une conversation comme lue sur LinkedIn
+   * Doc Unipile : PATCH /api/v1/chats/{chat_id}
+   */
+  static async markChatAsRead(chatId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const url = `${BASE_URL}/api/v1/chats/${chatId}`;
+      const res = await fetch(url, {
+        method: "PATCH",
+        headers: this.getHeaders(),
+        body: JSON.stringify({
+          unread: false,
+        }),
+      });
+
+      if (!res.ok) {
+        return { success: false };
+      }
+      return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message };
     }

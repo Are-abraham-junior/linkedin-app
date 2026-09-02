@@ -99,6 +99,41 @@ export interface ChatMessage {
   senderType: "USER" | "PROSPECT";
   text: string;
   sentAt: string;
+  status?: "sending" | "sent" | "delivered" | "read";
+  attachments?: Array<{
+    id?: string;
+    file_name?: string;
+    file_type?: string;
+    url?: string;
+    size?: number;
+  }>;
+}
+
+export interface InboxProspect {
+  id: string;
+  firstName: string;
+  lastName: string;
+  headline?: string;
+  company?: string;
+  location?: string;
+  email?: string;
+  phone?: string;
+  avatarUrl?: string;
+  linkedinUrl: string;
+  connectionStatus: "CONNECTED" | "PENDING" | "NOT_CONNECTED" | string;
+  tags?: string[];
+  doNotContact?: boolean;
+  list?: {
+    id: string;
+    name: string;
+    color?: string;
+  };
+  campaignState?: {
+    campaignId: string;
+    campaignName: string;
+    status: ProspectStepStatus;
+    currentStepOrder?: number;
+  } | null;
 }
 
 export interface InboxConversation {
@@ -109,23 +144,24 @@ export interface InboxConversation {
   unreadCount: number;
   createdAt: string;
   updatedAt: string;
-  prospect: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    headline?: string;
-    company?: string;
-    avatarUrl?: string;
-    linkedinUrl: string;
-    connectionStatus: string;
-    tags?: string[];
-    campaignState?: {
-      campaignId: string;
-      campaignName: string;
-      status: ProspectStepStatus;
-      currentStepOrder?: number;
-    } | null;
-  };
+  prospect: InboxProspect;
 }
 
-
+export interface ProspectItem {
+  id: string;
+  listId: string;
+  firstName: string;
+  lastName: string;
+  headline?: string;
+  company?: string;
+  location?: string;
+  email?: string;
+  phone?: string;
+  avatarUrl?: string;
+  linkedinUrl: string;
+  connectionStatus: string;
+  tags: string[];
+  doNotContact: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
