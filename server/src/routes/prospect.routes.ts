@@ -8,6 +8,8 @@ import {
   bulkDeleteProspects,
   bulkMoveProspects,
   syncProspectsStatus,
+  checkProspectCollision,
+  transferProspects,
 } from "../controllers/prospect.controller.js";
 
 const router = Router();
@@ -16,6 +18,8 @@ router.use(requireAuth);
 
 router.get("/", getProspects);
 router.post("/bulk", bulkImportProspects);
+router.post("/check-collision", checkProspectCollision);
+router.post("/transfer", transferProspects);
 router.post("/bulk-delete", bulkDeleteProspects);
 router.post("/bulk-move", bulkMoveProspects);
 router.post("/sync-status", syncProspectsStatus);

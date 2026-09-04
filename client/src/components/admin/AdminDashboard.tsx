@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 import { apiRequest } from "../../services/api";
 import { PlatformMetrics } from "../../types";
 import {
@@ -12,32 +14,74 @@ import {
   AlertTriangle,
   ArrowUpRight,
   TrendingUp,
-  UserPlus,
   RefreshCw,
   Sparkles,
+  Trash2,
 } from "lucide-react";
+import { ConfirmModal } from "../common/ConfirmModal";
 
 interface AdminDashboardProps {
   onNavigateToUsers: () => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateToUsers }) => {
+  const navigate = useNavigate();
+  const { setImpersonatedOrg } = useAuth();
   const [metrics, setMetrics] = useState<PlatformMetrics | null>(null);
   const [recentUsers, setRecentUsers] = useState<any[]>([]);
+  const [organizations, setOrganizations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [orgToDelete, setOrgToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [isDeletingOrg, setIsDeletingOrg] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const fetchMetrics = async () => {
     setLoading(true);
     try {
-      const res = await apiRequest("/admin/metrics");
-      if (res.success && res.metrics) {
-        setMetrics(res.metrics);
-        setRecentUsers(res.recentUsers || []);
+      const [resMetrics, resOrgs] = await Promise.all([
+        apiRequest<{ metrics: PlatformMetrics; recentUsers: any[] }>("/admin/metrics"),
+        apiRequest<{ organizations: any[] }>("/admin/organizations"),
+      ]);
+
+      if (resMetrics.success && resMetrics.metrics) {
+        setMetrics(resMetrics.metrics);
+        setRecentUsers(resMetrics.recentUsers || []);
+      }
+      if (resOrgs.success && resOrgs.organizations) {
+        setOrganizations(resOrgs.organizations);
       }
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleOpenDeleteModal = (id: string, name: string) => {
+    setDeleteError(null);
+    setOrgToDelete({ id, name });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!orgToDelete) return;
+    setIsDeletingOrg(true);
+    setDeleteError(null);
+
+    try {
+      const res = await apiRequest(`/admin/organizations/${orgToDelete.id}`, { method: "DELETE" });
+      if (res.success) {
+        setOrganizations((prev) => prev.filter((org) => org.id !== orgToDelete.id));
+        setOrgToDelete(null);
+        fetchMetrics();
+      } else {
+        setDeleteError(res.error || "Impossible de supprimer cet espace.");
+      }
+    } catch (e: any) {
+      console.error(e);
+      setDeleteError(e?.message || "Une erreur inattendue s'est produite.");
+    } finally {
+      setIsDeletingOrg(false);
     }
   };
 
@@ -154,6 +198,87 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateToUser
             <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Synchronisation active
           </div>
         </div>
+      </div>
+
+      {/* Espaces de Travail & Immersion Super-Admin */}
+      <div className="adora-card p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-base font-bold text-[#21164c] flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-[#592eff]" />
+              Espaces Entreprises & Immersion Super-Admin
+            </h3>
+            <p className="text-xs text-[#5f5f69] mt-0.5">
+              Entrez dans n'importe quel espace en 1 clic pour gérer ses membres, campagnes et prospects comme le propriétaire.
+            </p>
+          </div>
+        </div>
+
+        {organizations.length === 0 ? (
+          <p className="text-xs text-[#5f5f69] italic py-4">Aucune organisation enregistrée pour le moment.</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {organizations.map((org) => (
+              <div
+                key={org.id}
+                className="p-4 rounded-2xl bg-[#f8f9fc] border border-[#e0e0db] hover:border-[#592eff]/40 transition-all flex flex-col justify-between group shadow-xs"
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-9 h-9 rounded-xl bg-white border border-[#e0e0db] flex items-center justify-center font-extrabold text-[#592eff] text-xs shadow-xs">
+                        {org.name.slice(0, 2).toUpperCase()}
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-[#21164c] text-sm group-hover:text-[#592eff] transition-colors">
+                          {org.name}
+                        </h4>
+                        <p className="text-[11px] text-[#5f5f69]">
+                          {org.createdAt
+                            ? `Créé le ${new Date(org.createdAt).toLocaleDateString("fr-FR", {
+                                day: "2-digit",
+                                month: "short",
+                                year: "numeric",
+                              })}`
+                            : "Espace actif"}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#592eff]/10 text-[#592eff]">
+                      {org.plan || "PRO"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-[#5f5f69] mt-3">
+                    <span className="flex items-center gap-1 font-semibold text-[#21164c]">
+                      <Users className="w-3.5 h-3.5 text-[#592eff]" />
+                      {org._count?.users || 0} membre(s)
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-[#e0e0db]/60 flex items-center justify-between gap-2">
+                  <button
+                    onClick={() => handleOpenDeleteModal(org.id, org.name)}
+                    className="p-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 transition-colors flex items-center justify-center cursor-pointer shadow-xs active:scale-95"
+                    title="Supprimer l'espace"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setImpersonatedOrg({ id: org.id, name: org.name, slug: org.slug });
+                      navigate("/dashboard");
+                    }}
+                    className="flex-1 py-2 px-3 rounded-xl bg-white hover:bg-[#592eff] text-[#21164c] hover:text-white font-bold text-xs border border-[#e0e0db] hover:border-[#592eff] transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-[0.98]"
+                  >
+                    <span>Entrer dans l'espace</span>
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Main Content Grid */}
@@ -294,6 +419,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateToUser
           </div>
         </div>
       </div>
+
+      {/* Modal Adora de Confirmation de Suppression */}
+      <ConfirmModal
+        isOpen={Boolean(orgToDelete)}
+        onClose={() => {
+          if (!isDeletingOrg) {
+            setOrgToDelete(null);
+            setDeleteError(null);
+          }
+        }}
+        onConfirm={handleConfirmDelete}
+        title="Supprimer l'espace de travail"
+        description="Cette opération supprimera définitivement l'organisation sélectionnée ainsi que l'ensemble de ses données associées."
+        itemName={orgToDelete?.name}
+        itemType="Espace Entreprise"
+        variant="danger"
+        confirmText="Supprimer définitivement"
+        cancelText="Conserver l'espace"
+        isLoading={isDeletingOrg}
+        warningMessage={
+          deleteError ||
+          "Cette action est irréversible. Les campagnes, listes de prospects et historiques de cet espace seront définitivement effacés."
+        }
+      />
     </div>
   );
 };

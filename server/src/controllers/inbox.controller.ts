@@ -3,19 +3,33 @@ import { prisma } from "../../../lib/prisma.js";
 import { AuthenticatedRequest } from "../middlewares/auth.middleware.js";
 import { UnipileService } from "../services/unipile.service.js";
 
+// Caches mémoire pour éviter le spam réseau vers l'API Unipile et les temps de réponse de 15s
+const lastSyncByUser = new Map<string, number>();
+const syncInFlight = new Set<string>();
+const lastMessagesSyncByChat = new Map<string, number>();
+
 /**
- * Récupère l'account_id Unipile actif de l'utilisateur
+ * Récupère l'account_id Unipile actif strictement lié à l'utilisateur connecté
  */
-async function getValidLinkedInAccountId(userId: string): Promise<string> {
-  const account = await prisma.linkedInAccount.findFirst({
-    where: {
-      userId,
-      status: "CONNECTED",
-      accountName: { not: null },
-    },
-    orderBy: { updatedAt: "desc" },
-  });
-  return account?.unipileAccountId || process.env.UNIPILE_ACCOUNT_ID || "FxLKTO1HTWuSk4ibfehPAg";
+async function getValidLinkedInAccountId(userId: string): Promise<string | null> {
+  try {
+    const account = await prisma.linkedInAccount.findFirst({
+      where: {
+        userId,
+        status: "CONNECTED",
+        unipileAccountId: { not: "" },
+      },
+      orderBy: { updatedAt: "desc" },
+    });
+
+    if (account?.unipileAccountId) {
+      return account.unipileAccountId;
+    }
+  } catch (dbErr) {
+    console.warn("[Inbox] Erreur lecture BDD linkedInAccount:", dbErr);
+  }
+
+  return null;
 }
 
 /**
@@ -61,22 +75,32 @@ export async function handleProspectReply(prospectId: string, text?: string) {
 }
 
 /**
- * Synchronise les discussions Unipile pour un utilisateur donné
+ * Synchronise les discussions Unipile pour un utilisateur donné avec throttling
  */
-async function syncUserChatsWithUnipile(userId: string, limit: number = 50) {
-  const unipileAccountId = await getValidLinkedInAccountId(userId);
-  if (!unipileAccountId) {
-    return { synced: 0 };
+async function syncUserChatsWithUnipile(userId: string, limit: number = 50, force: boolean = false) {
+  const now = Date.now();
+  const lastSync = lastSyncByUser.get(userId) || 0;
+
+  // Throttling : si synchronisé il y a moins de 60s ou déjà en cours, servir la BDD immédiatement
+  if (!force && (now - lastSync < 60_000 || syncInFlight.has(userId))) {
+    return { synced: 0, cached: true };
   }
 
-  const unipileChats = await UnipileService.getChats({
-    accountId: unipileAccountId,
-    limit,
-  });
+  syncInFlight.add(userId);
+  try {
+    const unipileAccountId = await getValidLinkedInAccountId(userId);
+    if (!unipileAccountId) {
+      return { synced: 0 };
+    }
 
-  if (!unipileChats.success || !Array.isArray(unipileChats.items)) {
-    return { synced: 0, error: unipileChats.error };
-  }
+    const unipileChats = await UnipileService.getChats({
+      accountId: unipileAccountId,
+      limit,
+    });
+
+    if (!unipileChats.success || !Array.isArray(unipileChats.items)) {
+      return { synced: 0, error: unipileChats.error };
+    }
 
   // Liste par défaut "Messagerie LinkedIn"
   let defaultList = await prisma.prospectList.findFirst({
@@ -218,7 +242,11 @@ async function syncUserChatsWithUnipile(userId: string, limit: number = 50) {
     count++;
   }
 
-  return { synced: count };
+    lastSyncByUser.set(userId, Date.now());
+    return { synced: count };
+  } finally {
+    syncInFlight.delete(userId);
+  }
 }
 
 /**
@@ -230,7 +258,44 @@ export async function getConversations(req: AuthenticatedRequest, res: Response)
     const userId = req.user!.id;
     const { status, search } = req.query as { status?: string; search?: string };
 
-    // Synchronisation automatique douce
+    // 1. Vérifier si l'utilisateur possède un compte LinkedIn connecté actif
+    const activeLinkedIn = await getValidLinkedInAccountId(userId);
+
+    if (!activeLinkedIn) {
+      // Nettoyer les fausses conversations orphelines créées par l'ancien fallback
+      const fakeLists = await prisma.prospectList.findMany({
+        where: { userId, name: "Messagerie LinkedIn" },
+        select: { id: true },
+      });
+      if (fakeLists.length > 0) {
+        const listIds = fakeLists.map((l) => l.id);
+        const orphanProspects = await prisma.prospect.findMany({
+          where: { listId: { in: listIds } },
+          select: { id: true },
+        });
+        if (orphanProspects.length > 0) {
+          const prospectIds = orphanProspects.map((p) => p.id);
+          await prisma.message.deleteMany({
+            where: { conversation: { prospectId: { in: prospectIds } } },
+          });
+          await prisma.conversation.deleteMany({
+            where: { prospectId: { in: prospectIds } },
+          });
+          await prisma.prospect.deleteMany({
+            where: { id: { in: prospectIds } },
+          });
+        }
+      }
+
+      res.json({
+        success: true,
+        conversations: [],
+        totalUnread: 0,
+      });
+      return;
+    }
+
+    // Synchronisation automatique douce Unipile
     try {
       await syncUserChatsWithUnipile(userId, 30);
     } catch (syncErr) {
@@ -349,7 +414,7 @@ export async function getConversations(req: AuthenticatedRequest, res: Response)
 export async function syncAllConversations(req: AuthenticatedRequest, res: Response) {
   try {
     const userId = req.user!.id;
-    const syncRes = await syncUserChatsWithUnipile(userId, 100);
+    const syncRes = await syncUserChatsWithUnipile(userId, 100, true);
 
     res.json({
       success: true,
@@ -368,6 +433,7 @@ export async function syncAllConversations(req: AuthenticatedRequest, res: Respo
  */
 export async function getMessages(req: AuthenticatedRequest, res: Response) {
   try {
+    const userId = req.user!.id;
     const id = req.params.id as string;
 
     const conversation = await prisma.conversation.findFirst({
@@ -394,13 +460,48 @@ export async function getMessages(req: AuthenticatedRequest, res: Response) {
       return;
     }
 
-    // 1. Synchroniser les messages frais depuis Unipile si chatId présent
-    if (conversation.unipileChatId) {
+    const accountId = await getValidLinkedInAccountId(userId);
+    let activeChatId = conversation.unipileChatId;
+
+    // 1. Synchroniser les messages frais depuis Unipile (avec cache de 15 secondes pour éviter le blocage)
+    const lastMsgSync = activeChatId ? lastMessagesSyncByChat.get(activeChatId) || 0 : 0;
+    const shouldSyncMessages = Date.now() - lastMsgSync > 15_000;
+
+    if (activeChatId && shouldSyncMessages) {
+      lastMessagesSyncByChat.set(activeChatId, Date.now());
       try {
-        const unipileMessages = await UnipileService.getChatMessages({
-          chatId: conversation.unipileChatId,
+        let unipileMessages = await UnipileService.getChatMessages({
+          chatId: activeChatId,
           limit: 50,
         });
+
+        // Si 404 (chat ID expiré / nouveau compte), tenter de retrouver le nouveau chat ID
+        if (!unipileMessages.success && unipileMessages.error?.includes("404")) {
+          const attendeeId = conversation.prospect.providerProfileId;
+          if (attendeeId) {
+            const chatsList = await UnipileService.getChats({ accountId: accountId || undefined, limit: 50 });
+            if (chatsList.success && Array.isArray(chatsList.items)) {
+              const matchChat = chatsList.items.find(
+                (c: any) =>
+                  c.attendee_provider_id === attendeeId ||
+                  c.provider_id === attendeeId ||
+                  (c.attendees && c.attendees.some((a: any) => a.provider_id === attendeeId))
+              );
+              if (matchChat?.id) {
+                const newChatId: string = matchChat.id;
+                activeChatId = newChatId;
+                await prisma.conversation.update({
+                  where: { id: conversation.id },
+                  data: { unipileChatId: newChatId },
+                });
+                unipileMessages = await UnipileService.getChatMessages({
+                  chatId: newChatId,
+                  limit: 50,
+                });
+              }
+            }
+          }
+        }
 
         if (unipileMessages.success && Array.isArray(unipileMessages.items)) {
           for (const m of unipileMessages.items) {
@@ -443,8 +544,8 @@ export async function getMessages(req: AuthenticatedRequest, res: Response) {
       data: { unreadCount: 0 },
     });
 
-    if (conversation.unipileChatId) {
-      UnipileService.markChatAsRead(conversation.unipileChatId).catch(() => {});
+    if (activeChatId) {
+      UnipileService.markChatAsRead(activeChatId).catch(() => {});
     }
 
     // 3. Récupérer les messages ordonnés chronologiquement
@@ -457,7 +558,7 @@ export async function getMessages(req: AuthenticatedRequest, res: Response) {
       success: true,
       conversation: {
         id: conversation.id,
-        unipileChatId: conversation.unipileChatId,
+        unipileChatId: activeChatId,
         lastMessageText: conversation.lastMessageText,
         lastMessageAt: conversation.lastMessageAt,
         unreadCount: 0,
@@ -479,7 +580,7 @@ export async function getMessages(req: AuthenticatedRequest, res: Response) {
 
 /**
  * POST /api/inbox/messages/send
- * Envoie un message dans une conversation et garantit la livraison LinkedIn
+ * Envoie un message dans une conversation avec mécanisme d'auto-réparation et garantie de livraison LinkedIn
  */
 export async function sendMessage(req: AuthenticatedRequest, res: Response) {
   try {
@@ -506,71 +607,98 @@ export async function sendMessage(req: AuthenticatedRequest, res: Response) {
     }
 
     const accountId = await getValidLinkedInAccountId(userId);
-    let targetChatId = conversation.unipileChatId;
-
-    // 1. Si pas de chat ID Unipile, tenter de le trouver ou d'initier le chat
-    if (!targetChatId) {
-      const attendeeId = conversation.prospect.providerProfileId;
-      if (attendeeId) {
-        const chatsList = await UnipileService.getChats({ accountId, limit: 50 });
-        if (chatsList.success && Array.isArray(chatsList.items)) {
-          const matchChat = chatsList.items.find(
-            (c: any) => c.attendee_provider_id === attendeeId || c.provider_id === attendeeId
-          );
-          if (matchChat?.id) {
-            targetChatId = matchChat.id;
-          }
-        }
-
-        if (!targetChatId) {
-          const startRes = await UnipileService.startChat({
-            accountId,
-            attendeeId,
-            text: text.trim(),
-          });
-          if (startRes.success && startRes.chatId) {
-            targetChatId = startRes.chatId;
-          } else {
-            res.status(500).json({
-              success: false,
-              error: startRes.error || "Impossible d'initier la conversation avec ce contact sur LinkedIn.",
-            });
-            return;
-          }
-        }
-      }
-    }
-
-    if (!targetChatId) {
+    if (!accountId) {
       res.status(400).json({
         success: false,
-        error: "Identifiant LinkedIn du prospect introuvable pour l'envoi du message.",
+        error: "Veuillez connecter votre compte LinkedIn pour envoyer des messages.",
       });
       return;
     }
+    let targetChatId = conversation.unipileChatId;
+    let sendRes: any = null;
 
-    // Sauvegarder l'id Unipile dans la conversation
-    await prisma.conversation.update({
-      where: { id: conversation.id },
-      data: { unipileChatId: targetChatId },
-    });
+    // 1. Si nous avons un targetChatId existant, tenter l'envoi direct
+    if (targetChatId) {
+      sendRes = await UnipileService.sendChatMessage({
+        chatId: targetChatId,
+        text: text.trim(),
+        attachments,
+      });
+    }
 
-    // 2. Envoyer le message sur LinkedIn via Unipile
-    const sendRes = await UnipileService.sendChatMessage({
-      chatId: targetChatId,
-      text: text.trim(),
-      attachments,
-    });
+    // 2. Si pas de targetChatId OU si l'envoi a retourné 404 (chat introuvable / expiré sur Unipile)
+    if (!targetChatId || (!sendRes?.success && sendRes?.error?.includes("404"))) {
+      console.log(`[Inbox] Chat ID ${targetChatId} introuvable ou invalide. Auto-résolution sur le compte Unipile ${accountId}...`);
 
-    if (!sendRes.success) {
+      const attendeeId = conversation.prospect.providerProfileId || conversation.prospect.linkedinUrl;
+
+      if (!attendeeId) {
+        res.status(400).json({
+          success: false,
+          error: "Identifiant LinkedIn du prospect introuvable pour l'envoi du message.",
+        });
+        return;
+      }
+
+      // Rechercher dans la liste des chats du compte actif
+      let foundChatId: string | null = null;
+      const chatsList = await UnipileService.getChats({ accountId, limit: 50 });
+      if (chatsList.success && Array.isArray(chatsList.items)) {
+        const matchChat = chatsList.items.find(
+          (c: any) =>
+            c.attendee_provider_id === attendeeId ||
+            c.provider_id === attendeeId ||
+            (c.attendees && c.attendees.some((a: any) => a.provider_id === attendeeId))
+        );
+        if (matchChat?.id) {
+          foundChatId = matchChat.id;
+        }
+      }
+
+      // Si non trouvé, créer / initier le chat
+      if (!foundChatId) {
+        const startRes = await UnipileService.startChat({
+          accountId,
+          attendeeId,
+          text: text.trim(),
+        });
+
+        if (startRes.success && startRes.chatId) {
+          foundChatId = startRes.chatId;
+        } else {
+          res.status(500).json({
+            success: false,
+            error: startRes.error || "Impossible d'initier la conversation avec ce contact sur LinkedIn.",
+          });
+          return;
+        }
+      }
+
+      targetChatId = foundChatId;
+
+      // Mettre à jour le chat ID valide en BDD
+      await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { unipileChatId: targetChatId },
+      });
+
+      // Envoyer le message sur le nouveau chat ID
+      sendRes = await UnipileService.sendChatMessage({
+        chatId: targetChatId,
+        text: text.trim(),
+        attachments,
+      });
+    }
+
+    if (!sendRes || !sendRes.success) {
       res.status(500).json({
         success: false,
-        error: sendRes.error || "Erreur lors de l'envoi du message sur LinkedIn.",
+        error: sendRes?.error || "Erreur lors de l'envoi du message sur LinkedIn.",
       });
       return;
     }
 
-    // 3. Persister le message confirmé en base de données locale
+    // 3. Persister le message confirmé en base locale
     const now = new Date();
     const createdMessage = await prisma.message.create({
       data: {
@@ -611,6 +739,15 @@ export async function startNewConversation(req: AuthenticatedRequest, res: Respo
     const userId = req.user!.id;
     const { prospectId, linkedinUrl, text } = req.body;
 
+    const accountId = await getValidLinkedInAccountId(userId);
+    if (!accountId) {
+      res.status(400).json({
+        success: false,
+        error: "Veuillez connecter votre compte LinkedIn pour initier une discussion.",
+      });
+      return;
+    }
+
     if (!text || !text.trim()) {
       res.status(400).json({ success: false, error: "Le texte du message est requis." });
       return;
@@ -631,7 +768,6 @@ export async function startNewConversation(req: AuthenticatedRequest, res: Respo
         });
       }
 
-      const accountId = await getValidLinkedInAccountId(userId);
       const profileData = await UnipileService.getProfileDetailsAndStatus(linkedinUrl, accountId);
 
       const p = profileData.profile;
@@ -662,7 +798,6 @@ export async function startNewConversation(req: AuthenticatedRequest, res: Respo
       where: { prospectId: prospect.id },
     });
 
-    const accountId = await getValidLinkedInAccountId(userId);
     const attendeeId = prospect.providerProfileId || prospect.linkedinUrl;
 
     const startRes = await UnipileService.startChat({

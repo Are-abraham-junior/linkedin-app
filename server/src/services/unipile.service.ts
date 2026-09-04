@@ -32,6 +32,34 @@ export class UnipileService {
   }
 
   /**
+   * Récupère la liste de tous les comptes connectés sur Unipile
+   */
+  static async getAllAccounts(): Promise<{
+    success: boolean;
+    items?: Array<{
+      id: string;
+      name: string;
+      type: string;
+      created_at: string;
+      sources: Array<{ id: string; status: string }>;
+    }>;
+    error?: string;
+  }> {
+    try {
+      const res = await fetch(`${BASE_URL}/api/v1/accounts`, {
+        headers: this.getHeaders(),
+      });
+      if (!res.ok) {
+        return { success: false, error: `Status ${res.status}` };
+      }
+      const data: any = await res.json();
+      return { success: true, items: data.items || [] };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
    * Connecte un compte LinkedIn via Unipile Custom Auth.
    * Retourne { account_id, status } ou { status: "CHECKPOINT", checkpoint: {...} }
    */

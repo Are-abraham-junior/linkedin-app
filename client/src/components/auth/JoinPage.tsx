@@ -13,9 +13,10 @@ interface InvitationInfo {
 
 interface JoinPageProps {
   token: string;
+  onJoined?: () => void;
 }
 
-export const JoinPage: React.FC<JoinPageProps> = ({ token }) => {
+export const JoinPage: React.FC<JoinPageProps> = ({ token, onJoined }) => {
   const { login } = useAuth();
   const [invitationInfo, setInvitationInfo] = useState<InvitationInfo | null>(null);
   const [invitationError, setInvitationError] = useState<string | null>(null);
@@ -250,9 +251,7 @@ export const JoinPage: React.FC<JoinPageProps> = ({ token }) => {
           )}
         </div>
 
-        <p className="text-center text-white/60 text-xs mt-6">
-          © 2026 Bime Link · Powered by Unipile
-        </p>
+        
       </div>
     </div>
   );

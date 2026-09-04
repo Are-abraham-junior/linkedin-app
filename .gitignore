@@ -29,3 +29,5 @@ DESIGN (2).md
 Thumbs.db
 .vscode/
 .idea/
+.agents/
+*AGENTS.md

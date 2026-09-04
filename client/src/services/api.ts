@@ -9,6 +9,7 @@ export async function apiRequest<T = any>(
   options: ApiOptions = {}
 ): Promise<{ success: boolean; data?: T; error?: string; [key: string]: any }> {
   const token = localStorage.getItem("bime_token");
+  const savedOrg = localStorage.getItem("bime_impersonated_org");
 
   const headers: HeadersInit = {
     ...(options.headers || {}),
@@ -16,6 +17,17 @@ export async function apiRequest<T = any>(
 
   if (token) {
     (headers as Record<string, string>)["Authorization"] = `Bearer ${token}`;
+  }
+
+  if (savedOrg) {
+    try {
+      const org = JSON.parse(savedOrg);
+      if (org && org.id) {
+        (headers as Record<string, string>)["x-impersonate-org"] = org.id;
+      }
+    } catch (e) {
+      // parse error, ignore
+    }
   }
 
   // Serialize body if it's an object, or pass directly if it's already a string or FormData

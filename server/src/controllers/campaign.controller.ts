@@ -9,6 +9,7 @@ const CreateCampaignSchema = z.object({
   type: z.string().default("INVITATION_AND_MESSAGES"),
   listIds: z.array(z.string()).default([]),
   selectedProspectIds: z.array(z.string()).optional(),
+  targetUserId: z.string().optional(),
   steps: z.array(
     z.object({
       stepOrder: z.number(),
@@ -45,11 +46,47 @@ const UpdateCampaignSchema = z.object({
  */
 export async function getCampaigns(req: AuthenticatedRequest, res: Response) {
   try {
-    const userId = req.user!.id;
+    const requestedMemberId = (req.query.memberId || req.query.userId) as string;
+    let whereClause: any = {};
+
+    if (req.user!.role === "SUPER_ADMIN" && req.user!.organizationId) {
+      if (requestedMemberId && requestedMemberId !== "ALL") {
+        whereClause = { userId: requestedMemberId, user: { organizationId: req.user!.organizationId } };
+      } else {
+        whereClause = { user: { organizationId: req.user!.organizationId } };
+      }
+    } else {
+      let targetUserId = req.user!.id;
+      if (requestedMemberId && requestedMemberId !== targetUserId) {
+        const caller = await prisma.user.findUnique({
+          where: { id: req.user!.id },
+          select: { role: true, orgRole: true, organizationId: true },
+        });
+
+        if (caller?.orgRole === "OWNER" && caller.organizationId) {
+          const member = await prisma.user.findFirst({
+            where: { id: requestedMemberId, organizationId: caller.organizationId },
+          });
+          if (member) {
+            targetUserId = requestedMemberId;
+          }
+        }
+      }
+      whereClause = { userId: targetUserId };
+    }
 
     const campaigns = await prisma.campaign.findMany({
-      where: { userId },
+      where: whereClause,
       include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatarUrl: true,
+            orgRole: true,
+          },
+        },
         steps: { orderBy: { stepOrder: "asc" } },
         prospectStates: {
           select: { status: true },
@@ -58,14 +95,14 @@ export async function getCampaigns(req: AuthenticatedRequest, res: Response) {
       orderBy: { createdAt: "desc" },
     });
 
-    const formatted = campaigns.map((c) => {
+    const formatted = campaigns.map((c: any) => {
       const states = c.prospectStates || [];
       const total = states.length;
-      const accepted = states.filter((s) =>
+      const accepted = states.filter((s: any) =>
         ["IN_PROGRESS", "WAITING_DELAY", "REPLIED", "COMPLETED"].includes(s.status)
       ).length;
-      const replied = states.filter((s) => s.status === "REPLIED").length;
-      const completed = states.filter((s) => s.status === "COMPLETED").length;
+      const replied = states.filter((s: any) => s.status === "REPLIED").length;
+      const completed = states.filter((s: any) => s.status === "COMPLETED").length;
 
       return {
         id: c.id,
@@ -76,6 +113,14 @@ export async function getCampaigns(req: AuthenticatedRequest, res: Response) {
         updatedAt: c.updatedAt,
         stepsCount: c.steps.length,
         steps: c.steps,
+        author: c.user
+          ? {
+              id: c.user.id,
+              name: c.user.name || c.user.email,
+              avatarUrl: c.user.avatarUrl,
+              orgRole: c.user.orgRole,
+            }
+          : null,
         stats: {
           totalProspects: total,
           acceptedCount: accepted,
@@ -102,8 +147,15 @@ export async function getCampaignDetails(req: AuthenticatedRequest, res: Respons
     const id = req.params.id as string;
     const userId = req.user!.id;
 
+    let whereClause: any = { id };
+    if (req.user!.role === "SUPER_ADMIN" && req.user!.organizationId) {
+      whereClause.user = { organizationId: req.user!.organizationId };
+    } else {
+      whereClause.userId = userId;
+    }
+
     const campaign = await prisma.campaign.findFirst({
-      where: { id, userId },
+      where: whereClause,
       include: {
         steps: {
           orderBy: { stepOrder: "asc" },
@@ -204,6 +256,28 @@ export async function createCampaign(req: AuthenticatedRequest, res: Response) {
     const userId = req.user!.id;
     const body = CreateCampaignSchema.parse(req.body);
 
+    let targetOwnerId = userId;
+    if (req.user!.role === "SUPER_ADMIN" && req.user!.ownerId) {
+      targetOwnerId = req.user!.ownerId; // Auto-attribution à l'Owner de l'espace supervisé
+    }
+
+    if (body.targetUserId && body.targetUserId !== targetOwnerId) {
+      const caller = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { role: true, orgRole: true, organizationId: true },
+      });
+      if (caller?.role === "SUPER_ADMIN") {
+        targetOwnerId = body.targetUserId;
+      } else if (caller?.orgRole === "OWNER" && caller.organizationId) {
+        const member = await prisma.user.findFirst({
+          where: { id: body.targetUserId, organizationId: caller.organizationId },
+        });
+        if (member) {
+          targetOwnerId = body.targetUserId;
+        }
+      }
+    }
+
     if (body.startImmediately && (!body.listIds || body.listIds.length === 0)) {
       res.status(400).json({
         success: false,
@@ -214,7 +288,7 @@ export async function createCampaign(req: AuthenticatedRequest, res: Response) {
 
     // Récupérer le compte LinkedIn de l'utilisateur ou le compte par défaut
     const account = await prisma.linkedInAccount.findFirst({
-      where: { userId },
+      where: { userId: targetOwnerId },
     });
 
     const campaignStatus = body.startImmediately ? "ACTIVE" : "DRAFT";
@@ -224,7 +298,7 @@ export async function createCampaign(req: AuthenticatedRequest, res: Response) {
     if (body.id) {
       // Mise à jour d'un brouillon existant
       const existing = await prisma.campaign.findFirst({
-        where: { id: body.id, userId },
+        where: { id: body.id, userId: targetOwnerId },
       });
 
       if (existing) {
@@ -259,7 +333,7 @@ export async function createCampaign(req: AuthenticatedRequest, res: Response) {
       // Nouvelle création
       campaign = await prisma.campaign.create({
         data: {
-          userId,
+          userId: targetOwnerId,
           accountId: account?.id || null,
           name: body.name.trim(),
           type: body.type,
@@ -577,8 +651,15 @@ export async function deleteCampaign(req: AuthenticatedRequest, res: Response) {
     const id = req.params.id as string;
     const userId = req.user!.id;
 
+    let whereClause: any = { id };
+    if (req.user!.role === "SUPER_ADMIN" && req.user!.organizationId) {
+      whereClause.user = { organizationId: req.user!.organizationId };
+    } else {
+      whereClause.userId = userId;
+    }
+
     const existing = await prisma.campaign.findFirst({
-      where: { id, userId },
+      where: whereClause,
     });
 
     if (!existing) {

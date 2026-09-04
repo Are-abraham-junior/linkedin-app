@@ -12,6 +12,7 @@ import {
   Sparkles,
   RefreshCw,
   Folder,
+  ShieldCheck,
 } from "lucide-react";
 
 interface ExcelImportModalProps {
@@ -60,6 +61,8 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
   const [importResult, setImportResult] = useState<{
     createdCount: number;
     duplicateCount: number;
+    teamCollisionsCount?: number;
+    teamCollisions?: Array<{ linkedinUrl: string; ownerName: string }>;
   } | null>(null);
 
   // Column mapping states
@@ -224,6 +227,8 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
       const res = await apiRequest<{
         createdCount: number;
         duplicateCount: number;
+        teamCollisionsCount?: number;
+        teamCollisions?: Array<{ linkedinUrl: string; ownerName: string }>;
         message: string;
       }>("/prospects/bulk", {
         method: "POST",
@@ -237,6 +242,8 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
         setImportResult({
           createdCount: res.createdCount,
           duplicateCount: res.duplicateCount,
+          teamCollisionsCount: res.teamCollisionsCount || 0,
+          teamCollisions: res.teamCollisions || [],
         });
         setStep("SUCCESS");
         onSuccess();
@@ -532,6 +539,18 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
                 <span> ({importResult.duplicateCount} doublon(s) déjà existants ignorés).</span>
               )}
             </p>
+
+            {Boolean(importResult.teamCollisionsCount && importResult.teamCollisionsCount > 0) && (
+              <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs text-left space-y-1 max-w-md mx-auto">
+                <p className="font-bold flex items-center gap-1.5 text-amber-950">
+                  <ShieldCheck className="w-4 h-4 text-amber-700 shrink-0" />
+                  Anti-collision d'équipe ({importResult.teamCollisionsCount} lead(s) protégés)
+                </p>
+                <p className="text-[11px] text-amber-800">
+                  Ces profils sont déjà suivis par un collègue dans votre espace. Aucun doublon n'a été créé afin d'éviter tout double démarchage.
+                </p>
+              </div>
+            )}
 
             <button
               onClick={onClose}
