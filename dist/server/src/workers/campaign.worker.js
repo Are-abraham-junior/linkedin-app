@@ -14,11 +14,77 @@ function personalizeMessage(template, prospect) {
         .trim();
 }
 /**
- * Vérifie si l'heure actuelle est dans les heures ouvrées (ex: 08:00 - 20:00)
+ * Résout le provider_id LinkedIn (ACo...) à partir de l'URL LinkedIn du prospect.
+ * Si le providerProfileId existe déjà, le retourne directement.
+ * Sinon, interroge Unipile pour le récupérer et le sauvegarde en base.
  */
-function isWithinWorkingHours() {
-    const hour = new Date().getHours();
-    return hour >= 8 && hour < 20;
+async function resolveProviderId(prospect, accountId) {
+    // Si on a déjà un provider_id LinkedIn valide (commence par ACo)
+    if (prospect.providerProfileId && prospect.providerProfileId.startsWith("ACo")) {
+        return prospect.providerProfileId;
+    }
+    // Extraire le slug LinkedIn depuis l'URL
+    const linkedinUrl = prospect.linkedinUrl || "";
+    let slug = "";
+    if (linkedinUrl.includes("linkedin.com/in/")) {
+        slug = linkedinUrl.split("linkedin.com/in/")[1].split("/")[0].split("?")[0];
+    }
+    if (!slug) {
+        console.warn(`[CampaignWorker] Impossible de résoudre le provider_id pour ${prospect.firstName} ${prospect.lastName}: pas d'URL LinkedIn valide`);
+        return null;
+    }
+    try {
+        const result = await UnipileService.getProfile({
+            accountId,
+            identifier: slug,
+        });
+        if (result.success && result.profile?.provider_id) {
+            const providerId = result.profile.provider_id;
+            console.log(`[CampaignWorker] Provider ID résolu pour ${prospect.firstName} ${prospect.lastName}: ${providerId}`);
+            // Sauvegarder en base pour les prochaines fois
+            await prisma.prospect.update({
+                where: { id: prospect.id },
+                data: { providerProfileId: providerId },
+            });
+            return providerId;
+        }
+    }
+    catch (err) {
+        console.error(`[CampaignWorker] Erreur résolution provider_id pour ${slug}:`, err.message);
+    }
+    return null;
+}
+const DAY_MAP = {
+    0: "SUN",
+    1: "MON",
+    2: "TUE",
+    3: "WED",
+    4: "THU",
+    5: "FRI",
+    6: "SAT",
+};
+/**
+ * Vérifie si l'heure actuelle est dans les jours et heures ouvrées configurés par l'utilisateur
+ */
+function isUserInWorkingHours(user) {
+    if (!user)
+        return true;
+    const now = new Date();
+    const currentDay = DAY_MAP[now.getDay()];
+    const workingDays = user.workingDays?.length
+        ? user.workingDays
+        : ["MON", "TUE", "WED", "THU", "FRI"];
+    // Vérifier si le jour actuel est actif
+    if (!workingDays.includes(currentDay)) {
+        return false;
+    }
+    // Vérifier la plage horaire
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const [startH, startM] = (user.workingHoursStart || "08:00").split(":").map(Number);
+    const [endH, endM] = (user.workingHoursEnd || "19:00").split(":").map(Number);
+    const startTotal = (startH || 8) * 60 + (startM || 0);
+    const endTotal = (endH || 19) * 60 + (endM || 0);
+    return currentMinutes >= startTotal && currentMinutes <= endTotal;
 }
 let isRunning = false;
 /**
@@ -53,6 +119,18 @@ export async function processActionQueue() {
         console.log(`[CampaignWorker] Traitement de ${pendingActions.length} action(s) planifiée(s)...`);
         for (const action of pendingActions) {
             try {
+                const account = action.linkedInAccount;
+                const user = account.user;
+                // Vérifier si nous sommes dans les horaires d'activité autorisés par l'utilisateur
+                if (!isUserInWorkingHours(user)) {
+                    // Reprogrammer pour la prochaine fenêtre (décaler de 30 minutes)
+                    const nextCheck = new Date(now.getTime() + 30 * 60 * 1000);
+                    await prisma.actionQueue.update({
+                        where: { id: action.id },
+                        data: { scheduledFor: nextCheck },
+                    });
+                    continue;
+                }
                 // Vérifier si la campagne est toujours active
                 const campaign = await prisma.campaign.findUnique({
                     where: { id: action.campaignId },
@@ -61,9 +139,8 @@ export async function processActionQueue() {
                     continue;
                 }
                 // Vérifier les quotas du compte LinkedIn
-                const account = action.linkedInAccount;
-                const maxDailyInvites = account.user?.maxDailyInvites || 30;
-                const maxDailyMsg = account.user?.maxDailyMsg || 70;
+                const maxDailyInvites = user?.maxDailyInvites || 30;
+                const maxDailyMsg = user?.maxDailyMsg || 70;
                 if (action.actionType === "INVITATION" && account.dailyInvitesSent >= maxDailyInvites) {
                     console.warn(`[CampaignWorker] Quota d'invitations journalières atteint (${maxDailyInvites}) pour le compte ${account.id}. Action différée.`);
                     // Reprogrammer pour demain 09:00
@@ -95,7 +172,14 @@ export async function processActionQueue() {
                 if (action.actionType === "INVITATION") {
                     const rawMessage = payload.messageText || "";
                     const personalized = personalizeMessage(rawMessage, prospect);
-                    const targetIdentifier = prospect.providerProfileId || prospect.linkedinUrl;
+                    const targetIdentifier = await resolveProviderId(prospect, account.unipileAccountId);
+                    if (!targetIdentifier) {
+                        await prisma.actionQueue.update({
+                            where: { id: action.id },
+                            data: { status: "FAILED", executedAt: new Date(), errorMessage: "Impossible de résoudre le provider_id LinkedIn" },
+                        });
+                        continue;
+                    }
                     const result = await UnipileService.sendInvitation({
                         accountId: account.unipileAccountId,
                         providerId: targetIdentifier,
@@ -146,7 +230,14 @@ export async function processActionQueue() {
                 else if (action.actionType === "MESSAGE") {
                     const rawMessage = payload.messageText || "";
                     const personalized = personalizeMessage(rawMessage, prospect);
-                    const attendeeId = prospect.providerProfileId || prospect.id;
+                    const attendeeId = await resolveProviderId(prospect, account.unipileAccountId);
+                    if (!attendeeId) {
+                        await prisma.actionQueue.update({
+                            where: { id: action.id },
+                            data: { status: "FAILED", executedAt: new Date(), errorMessage: "Impossible de résoudre le provider_id LinkedIn" },
+                        });
+                        continue;
+                    }
                     const result = await UnipileService.sendMessage({
                         accountId: account.unipileAccountId,
                         attendeeId,
@@ -224,7 +315,7 @@ export async function processActionQueue() {
                     }
                 }
                 else if (action.actionType === "VISIT_PROFILE" || action.actionType === "VISIT") {
-                    const targetIdentifier = prospect.providerProfileId || prospect.linkedinUrl;
+                    const targetIdentifier = (await resolveProviderId(prospect, account.unipileAccountId)) || prospect.linkedinUrl;
                     const result = await UnipileService.visitProfile({
                         accountId: account.unipileAccountId,
                         identifier: targetIdentifier,
@@ -295,7 +386,7 @@ export async function processActionQueue() {
                     }
                 }
                 else if (action.actionType === "FOLLOW") {
-                    const targetIdentifier = prospect.providerProfileId || prospect.linkedinUrl;
+                    const targetIdentifier = (await resolveProviderId(prospect, account.unipileAccountId)) || prospect.linkedinUrl;
                     const result = await UnipileService.followProfile({
                         accountId: account.unipileAccountId,
                         providerId: targetIdentifier,

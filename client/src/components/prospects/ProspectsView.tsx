@@ -5,6 +5,8 @@ import { ExcelImportModal } from "./ExcelImportModal";
 import { LinkedInSearchModal } from "./LinkedInSearchModal";
 import { ProspectDetailDrawer } from "./ProspectDetailDrawer";
 import { ListsSidebar } from "./ListsSidebar";
+import { useAuth } from "../../context/AuthContext";
+import { LinkedInRequiredModal } from "../common/LinkedInRequiredModal";
 import {
   Users,
   Search,
@@ -41,6 +43,8 @@ import {
   Check,
   ShieldAlert,
   Folder,
+  ArrowRightLeft,
+  ShieldCheck,
 } from "lucide-react";
 import { extractCompanyFromHeadline } from "../../utils/companyExtractor";
 
@@ -79,6 +83,7 @@ interface ProspectsViewProps {
 }
 
 export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign }) => {
+  const { user, selectedMemberId, setSelectedMemberId, openLinkedInModal } = useAuth();
   const [lists, setLists] = useState<any[]>([]);
   const [selectedListId, setSelectedListId] = useState<string>("ALL");
   const [prospects, setProspects] = useState<any[]>([]);
@@ -86,6 +91,31 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
   const [totalGlobalCount, setTotalGlobalCount] = useState(0);
   const [doNotContactCount, setDoNotContactCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [showLinkedInRequiredModal, setShowLinkedInRequiredModal] = useState(false);
+  const [requiredFeatureName, setRequiredFeatureName] = useState("");
+
+  // Team transfer states
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [teamMembers, setTeamMembers] = useState<any[]>([]);
+  const [targetMemberId, setTargetMemberId] = useState<string>("");
+  const [transferLoading, setTransferLoading] = useState(false);
+  const [transferMessage, setTransferMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user?.orgRole === "OWNER" || user?.role === "SUPER_ADMIN") {
+      apiRequest<{ members: any[] }>("/team/members")
+        .then((res) => {
+          if (res.success && res.members) {
+            setTeamMembers(res.members);
+            if (res.members.length > 0) {
+              const other = res.members.find((m) => m.id !== user.id);
+              if (other) setTargetMemberId(other.id);
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  }, [user?.id, user?.orgRole]);
 
   // Pagination state (Waalaxy style)
   const [currentPage, setCurrentPage] = useState(1);
@@ -276,7 +306,8 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
 
   const fetchLists = async () => {
     try {
-      const res = await apiRequest<{ lists: any[] }>("/lists");
+      const query = selectedMemberId && selectedMemberId !== "ALL" ? `?memberId=${selectedMemberId}` : "";
+      const res = await apiRequest<{ lists: any[] }>(`/lists${query}`);
       if (res.success && res.lists) {
         setLists(res.lists);
         // Calculate global count sum
@@ -295,6 +326,7 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
       if (selectedListId !== "ALL") query += `&listId=${selectedListId}`;
       if (statusFilter !== "ALL") query += `&connectionStatus=${statusFilter}`;
       if (hasEmailFilter) query += `&hasEmail=true`;
+      if (selectedMemberId && selectedMemberId !== "ALL") query += `&memberId=${selectedMemberId}`;
 
       const res = await apiRequest<{
         total: number;
@@ -329,16 +361,16 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
 
   useEffect(() => {
     fetchLists();
-  }, []);
+  }, [selectedMemberId]);
 
   // Reset to page 1 whenever any filter or list changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedListId, statusFilter, hasEmailFilter, campaignFilter, searchTerm]);
+  }, [selectedListId, statusFilter, hasEmailFilter, campaignFilter, searchTerm, selectedMemberId]);
 
   useEffect(() => {
     fetchProspects();
-  }, [selectedListId, statusFilter, hasEmailFilter, campaignFilter, currentPage, pageSize]);
+  }, [selectedListId, statusFilter, hasEmailFilter, campaignFilter, currentPage, pageSize, selectedMemberId]);
 
   // GSAP Stagger animation on prospects table rows
   useEffect(() => {
@@ -523,6 +555,41 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
     a.click();
   };
 
+  const handleConfirmTransfer = async () => {
+    if (!targetMemberId || selectedIds.size === 0) return;
+    setTransferLoading(true);
+    setTransferMessage(null);
+    try {
+      const res = await apiRequest<{ success: boolean; transferredCount: number; message?: string }>(
+        "/prospects/transfer",
+        {
+          method: "POST",
+          body: {
+            prospectIds: Array.from(selectedIds),
+            targetUserId: targetMemberId,
+          },
+        }
+      );
+
+      if (res.success) {
+        setTransferMessage(`${res.transferredCount || selectedIds.size} prospect(s) transféré(s) avec succès.`);
+        setSelectedIds(new Set());
+        fetchProspects();
+        fetchLists();
+        setTimeout(() => {
+          setIsTransferModalOpen(false);
+          setTransferMessage(null);
+        }, 1200);
+      } else {
+        setTransferMessage((res as any).error || "Erreur lors du transfert.");
+      }
+    } catch (e: any) {
+      setTransferMessage(e.message || "Erreur réseau lors du transfert.");
+    } finally {
+      setTransferLoading(false);
+    }
+  };
+
   // Resolve current active list details
   const activeList = lists.find((l) => l.id === selectedListId);
   const activeListTitle =
@@ -557,10 +624,15 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
               className="w-7 h-7 rounded-full object-cover border border-[#e0e0db] shrink-0 shadow-2xs"
             />
             <div className="min-w-0">
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <p className="font-bold text-[#21164c] text-xs hover:underline truncate">
                   {p.firstName} {p.lastName}
                 </p>
+                {p.list?.user?.id && p.list.user.id !== user?.id && (
+                  <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-[#592eff]/10 text-[#592eff] font-bold border border-[#592eff]/20 shrink-0">
+                    👤 {p.list.user.firstName || p.list.user.name || "Collègue"}
+                  </span>
+                )}
                 {p.linkedinUrl && (
                   <a
                     href={p.linkedinUrl}
@@ -819,6 +891,11 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
               <button
                 type="button"
                 onClick={() => {
+                  if (!user?.hasLinkedInAccount) {
+                    setRequiredFeatureName("Lancement de campagne");
+                    setShowLinkedInRequiredModal(true);
+                    return;
+                  }
                   if (onStartCampaign) {
                     onStartCampaign();
                   } else {
@@ -852,6 +929,11 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                       type="button"
                       onClick={() => {
                         setIsImportDropdownOpen(false);
+                        if (!user?.hasLinkedInAccount) {
+                          setRequiredFeatureName("Recherche de profils LinkedIn");
+                          setShowLinkedInRequiredModal(true);
+                          return;
+                        }
                         setIsSearchModalOpen(true);
                       }}
                       className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-[#0a66c2]/10 text-left transition-colors group"
@@ -959,6 +1041,28 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                 </select>
               </div>
 
+              {/* Collaborateur Filter Chip (Super Admin 360° ou Owner) */}
+              {(user?.role === "SUPER_ADMIN" || user?.orgRole === "OWNER") && teamMembers.length > 0 && (
+                <div className="relative shrink-0">
+                  <select
+                    value={selectedMemberId || "ALL"}
+                    onChange={(e) => setSelectedMemberId(e.target.value === "ALL" ? null : e.target.value)}
+                    className={`px-2.5 py-1 rounded-xl border text-[11px] font-bold focus:outline-none cursor-pointer transition-all ${
+                      selectedMemberId
+                        ? "bg-[#592eff]/10 border-[#592eff] text-[#592eff]"
+                        : "bg-white border-[#e0e0db] text-[#5f5f69] hover:bg-[#f8f9fc]"
+                    }`}
+                  >
+                    <option value="ALL">🌟 Collaborateur : Toute l'équipe (360°)</option>
+                    {teamMembers.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        👤 {m.name || m.email} {m.orgRole === "OWNER" ? "(Propriétaire)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               {/* Spacer */}
               <div className="flex-1"></div>
 
@@ -1004,6 +1108,15 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
               </div>
 
               <div className="flex items-center gap-2">
+                {teamMembers.length > 1 && (
+                  <button
+                    onClick={() => setIsTransferModalOpen(true)}
+                    className="py-1 px-2.5 rounded-lg bg-[#592eff] hover:bg-[#4d25e0] text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                    title="Transférer les prospects à un collègue"
+                  >
+                    <ArrowRightLeft className="w-3 h-3" /> Transférer
+                  </button>
+                )}
                 <button
                   onClick={handleExportCSV}
                   className="py-1 px-2.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-semibold flex items-center gap-1.5 transition-colors"
@@ -1505,6 +1618,101 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
         </div>
       )}
 
+      {/* TEAM TRANSFER MODAL */}
+      {isTransferModalOpen && (
+        <div className="fixed inset-0 bg-[#21164c]/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="adora-card bg-white w-full max-w-md p-6 shadow-2xl relative">
+            <button
+              onClick={() => {
+                setIsTransferModalOpen(false);
+                setTransferMessage(null);
+              }}
+              className="absolute right-5 top-5 p-2 rounded-full hover:bg-[#f5f5f7] text-[#5f5f69] cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 rounded-2xl bg-[#592eff]/10 text-[#592eff] flex items-center justify-center">
+                <ArrowRightLeft className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-[#21164c]">Transférer les prospects</h3>
+                <p className="text-xs text-[#5f5f69]">
+                  {selectedIds.size} prospect(s) sélectionné(s) à réassigner
+                </p>
+              </div>
+            </div>
+
+            {transferMessage && (
+              <div className={`mb-4 p-3 rounded-xl text-xs font-semibold ${
+                transferMessage.includes("succès")
+                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                  : "bg-red-50 text-red-700 border border-red-200"
+              }`}>
+                {transferMessage}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-[#21164c] uppercase tracking-wider mb-2">
+                  Collaborateur destinataire
+                </label>
+                <select
+                  value={targetMemberId}
+                  onChange={(e) => setTargetMemberId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#e0e0db] bg-white text-xs font-semibold text-[#21164c] focus:outline-none focus:border-[#592eff] cursor-pointer"
+                >
+                  {teamMembers.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name || m.email} ({m.orgRole === "OWNER" ? "Propriétaire" : "Membre"})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="p-3 rounded-xl bg-[#f8f9fc] border border-[#e0e0db] text-xs text-[#5f5f69] space-y-1">
+                <p className="font-semibold text-[#21164c] flex items-center gap-1">
+                  <ShieldCheck className="w-3.5 h-3.5 text-[#592eff]" />
+                  Anti-collision conservé
+                </p>
+                <p className="text-[11px]">
+                  Les prospects seront transférés dans une liste du collaborateur sans rupture d'historique ni risque de doublon.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#e0e0db]">
+                <button
+                  type="button"
+                  onClick={() => setIsTransferModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-[#e0e0db] text-xs font-semibold text-[#5f5f69] hover:bg-[#f5f5f7] cursor-pointer"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  disabled={transferLoading || !targetMemberId}
+                  onClick={handleConfirmTransfer}
+                  className="px-5 py-2 rounded-xl bg-[#592eff] hover:bg-[#4d25e0] text-white text-xs font-bold shadow-md shadow-[#592eff]/25 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {transferLoading ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Transfert...
+                    </>
+                  ) : (
+                    <>
+                      <span>Confirmer le transfert</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* EXCEL IMPORT MODAL */}
       <ExcelImportModal
         isOpen={isExcelModalOpen}
@@ -1545,6 +1753,14 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
         onUpdate={() => {
           fetchProspects();
         }}
+      />
+
+      {/* LINKEDIN REQUIRED MODAL */}
+      <LinkedInRequiredModal
+        isOpen={showLinkedInRequiredModal}
+        onClose={() => setShowLinkedInRequiredModal(false)}
+        onConnectLinkedIn={() => openLinkedInModal()}
+        featureName={requiredFeatureName}
       />
     </div>
   );

@@ -169,14 +169,14 @@ export const InboxView: React.FC = () => {
     scrollToBottom("auto");
   }, [messages]);
 
-  // Polling doux en arrière-plan toutes les 10 secondes pour le temps réel
+  // Polling doux en arrière-plan toutes les 30 secondes pour le temps réel
   useEffect(() => {
     const interval = setInterval(() => {
       loadConversations(true);
       if (selectedConvId) {
         loadMessages(selectedConvId, true);
       }
-    }, 10000);
+    }, 30000);
     return () => clearInterval(interval);
   }, [selectedConvId]);
 

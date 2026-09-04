@@ -19,24 +19,37 @@ import {
 } from "lucide-react";
 import { Campaign, CampaignStatus } from "../../types";
 import { apiRequest } from "../../services/api";
+import { useAuth } from "../../context/AuthContext";
 import { CampaignWizardModal } from "./CampaignWizardModal";
 import { CampaignDetailModal } from "./CampaignDetailModal";
 import { QueueView } from "./QueueView";
+import { ConfirmModal } from "../common/ConfirmModal";
+import { LinkedInRequiredModal } from "../common/LinkedInRequiredModal";
 
 export const CampaignsView: React.FC = () => {
+  const { user, openLinkedInModal, selectedMemberId, setSelectedMemberId, impersonatedOrg } = useAuth();
   const [subTab, setSubTab] = useState<"CAMPAIGNS" | "QUEUE">("CAMPAIGNS");
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [teamMembers, setTeamMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [filterStatus, setFilterStatus] = useState<string>("ALL");
-  const [isWizardOpen, setIsWizardOpen] = useState<boolean>(false);
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
-  const [isDetailOpen, setIsDetailOpen] = useState<boolean>(false);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  // Suppression Modal State
+  const [campaignToDelete, setCampaignToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [isDeletingCampaign, setIsDeletingCampaign] = useState(false);
+  const [deleteCampaignError, setDeleteCampaignError] = useState<string | null>(null);
+  const [showLinkedInRequiredModal, setShowLinkedInRequiredModal] = useState<boolean>(false);
+  const [requiredFeatureName, setRequiredFeatureName] = useState<string>("");
 
   const fetchCampaigns = async () => {
     setLoading(true);
     try {
-      const res = await apiRequest<{ campaigns: Campaign[] }>("/campaigns");
+      const query = selectedMemberId && selectedMemberId !== "ALL" ? `?memberId=${selectedMemberId}` : "";
+      const res = await apiRequest<{ campaigns: Campaign[] }>(`/campaigns${query}`);
       if (res.success && Array.isArray(res.campaigns)) {
         setCampaigns(res.campaigns);
       }
@@ -47,12 +60,45 @@ export const CampaignsView: React.FC = () => {
     }
   };
 
+  const fetchMembers = async () => {
+    try {
+      const res = await apiRequest<{ members: any[] }>("/team/members");
+      if (res.success && Array.isArray(res.members)) {
+        setTeamMembers(res.members);
+      }
+    } catch (err) {
+      console.error("Erreur récupération membres:", err);
+    }
+  };
+
   useEffect(() => {
     fetchCampaigns();
-  }, []);
+  }, [selectedMemberId]);
+
+  useEffect(() => {
+    if (user?.role === "SUPER_ADMIN" || user?.orgRole === "OWNER") {
+      fetchMembers();
+    }
+  }, [user?.role, user?.orgRole, impersonatedOrg]);
+
+  const handleOpenWizard = () => {
+    if (!user?.hasLinkedInAccount) {
+      setRequiredFeatureName("Création de campagne");
+      setShowLinkedInRequiredModal(true);
+      return;
+    }
+    setIsWizardOpen(true);
+  };
 
   const handleToggleStatus = async (campaign: Campaign, e: React.MouseEvent) => {
     e.stopPropagation();
+
+    if (!user?.hasLinkedInAccount && campaign.status !== "ACTIVE") {
+      setRequiredFeatureName("Lancement de campagne");
+      setShowLinkedInRequiredModal(true);
+      return;
+    }
+
     setTogglingId(campaign.id);
     const newStatus = campaign.status === "ACTIVE" ? "PAUSED" : "ACTIVE";
 
@@ -73,19 +119,32 @@ export const CampaignsView: React.FC = () => {
     }
   };
 
-  const handleDeleteCampaign = async (campaignId: string, e: React.MouseEvent) => {
+  const handleOpenDeleteCampaign = (campaignId: string, campaignName: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!window.confirm("Êtes-vous sûr de vouloir supprimer cette campagne ?")) return;
+    setDeleteCampaignError(null);
+    setCampaignToDelete({ id: campaignId, name: campaignName });
+  };
+
+  const handleConfirmDeleteCampaign = async () => {
+    if (!campaignToDelete) return;
+    setIsDeletingCampaign(true);
+    setDeleteCampaignError(null);
 
     try {
-      const res = await apiRequest(`/campaigns/${campaignId}`, {
+      const res = await apiRequest(`/campaigns/${campaignToDelete.id}`, {
         method: "DELETE",
       });
       if (res.success) {
-        setCampaigns((prev) => prev.filter((c) => c.id !== campaignId));
+        setCampaigns((prev) => prev.filter((c) => c.id !== campaignToDelete.id));
+        setCampaignToDelete(null);
+      } else {
+        setDeleteCampaignError(res.error || "Impossible de supprimer cette campagne.");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Erreur suppression campagne:", err);
+      setDeleteCampaignError(err?.message || "Erreur inattendue.");
+    } finally {
+      setIsDeletingCampaign(false);
     }
   };
 
@@ -154,7 +213,7 @@ export const CampaignsView: React.FC = () => {
 
         {subTab === "CAMPAIGNS" && (
           <button
-            onClick={() => setIsWizardOpen(true)}
+            onClick={handleOpenWizard}
             className="px-4 py-2 rounded-xl bg-[#592eff] hover:bg-[#4d25e0] text-white text-xs font-bold shadow-md shadow-[#592eff]/25 transition-all hover:scale-[1.02] flex items-center justify-center gap-2 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
@@ -244,27 +303,49 @@ export const CampaignsView: React.FC = () => {
         </div>
       </div>
 
-      {/* Filtres par statut (Pills) */}
-      <div className="flex items-center gap-2 border-b border-[#f0f0ed] pb-2">
-        {[
-          { key: "ALL", label: "Toutes les campagnes" },
-          { key: "ACTIVE", label: "En cours" },
-          { key: "PAUSED", label: "En pause" },
-          { key: "DRAFT", label: "Brouillons" },
-          { key: "COMPLETED", label: "Terminées" },
-        ].map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setFilterStatus(tab.key)}
-            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
-              filterStatus === tab.key
-                ? "bg-[#592eff] text-white shadow-sm shadow-[#592eff]/25"
-                : "text-[#5f5f69] hover:text-[#21164c] hover:bg-slate-100/70"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+      {/* Filtres par statut & Collaborateur (Vue 360°) */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#f0f0ed] pb-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {[
+            { key: "ALL", label: "Toutes les campagnes" },
+            { key: "ACTIVE", label: "En cours" },
+            { key: "PAUSED", label: "En pause" },
+            { key: "DRAFT", label: "Brouillons" },
+            { key: "COMPLETED", label: "Terminées" },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setFilterStatus(tab.key)}
+              className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                filterStatus === tab.key
+                  ? "bg-[#592eff] text-white shadow-sm shadow-[#592eff]/25"
+                  : "text-[#5f5f69] hover:text-[#21164c] hover:bg-slate-100/70"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Sélecteur Collaborateur (Super Admin 360° ou Owner) */}
+        {(user?.role === "SUPER_ADMIN" || user?.orgRole === "OWNER") && teamMembers.length > 0 && (
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-[#e0e0db] shadow-xs">
+            <Users className="w-3.5 h-3.5 text-[#592eff]" />
+            <span className="text-[11px] font-bold text-[#5f5f69]">Collaborateur :</span>
+            <select
+              value={selectedMemberId || "ALL"}
+              onChange={(e) => setSelectedMemberId(e.target.value === "ALL" ? null : e.target.value)}
+              className="text-xs font-bold text-[#21164c] bg-transparent border-none focus:outline-none cursor-pointer pr-1"
+            >
+              <option value="ALL">🌟 Toute l'équipe (Vue 360°)</option>
+              {teamMembers.map((m) => (
+                <option key={m.id} value={m.id}>
+                  👤 {m.name || m.email} {m.orgRole === "OWNER" ? "(Propriétaire)" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Grille des campagnes */}
@@ -282,8 +363,8 @@ export const CampaignsView: React.FC = () => {
             Créez votre première séquence automatisée d'invitations et de messages pour engager vos prospects LinkedIn.
           </p>
           <button
-            onClick={() => setIsWizardOpen(true)}
-            className="px-6 py-2.5 rounded-full bg-[#592eff] text-white text-xs font-bold shadow-md shadow-[#592eff]/25 hover:bg-[#4d25e0] transition-all"
+            onClick={handleOpenWizard}
+            className="px-6 py-2.5 rounded-full bg-[#592eff] text-white text-xs font-bold shadow-md shadow-[#592eff]/25 hover:bg-[#4d25e0] transition-all cursor-pointer"
           >
             Créer ma première campagne
           </button>
@@ -305,27 +386,36 @@ export const CampaignsView: React.FC = () => {
               >
                 <div>
                   {/* Top bar de la carte */}
-                  <div className="flex items-center justify-between mb-3">
-                    <span
-                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 ${
-                        isActive
-                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                          : isPaused
-                          ? "bg-amber-50 text-amber-700 border border-amber-200"
-                          : "bg-slate-100 text-slate-700 border border-slate-200"
-                      }`}
-                    >
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <span
-                        className={`w-1.5 h-1.5 rounded-full ${
+                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 ${
                           isActive
-                            ? "bg-emerald-500 animate-pulse"
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                             : isPaused
-                            ? "bg-amber-500"
-                            : "bg-slate-400"
+                            ? "bg-amber-50 text-amber-700 border border-amber-200"
+                            : "bg-slate-100 text-slate-700 border border-slate-200"
                         }`}
-                      />
-                      {isActive ? "En cours" : isPaused ? "En pause" : "Brouillon"}
-                    </span>
+                      >
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            isActive
+                              ? "bg-emerald-500 animate-pulse"
+                              : isPaused
+                              ? "bg-amber-500"
+                              : "bg-slate-400"
+                          }`}
+                        />
+                        {isActive ? "En cours" : isPaused ? "En pause" : "Brouillon"}
+                      </span>
+
+                      {(camp as any).author && (
+                        <span className="badge-tag bg-[#592eff]/10 text-[#592eff] text-[10px] font-bold border border-[#592eff]/20 py-0.5 px-2">
+                          <Users className="w-2.5 h-2.5" />
+                          <span>{(camp as any).author.name}</span>
+                        </span>
+                      )}
+                    </div>
 
                     <div className="flex items-center gap-1">
                       <button
@@ -345,9 +435,9 @@ export const CampaignsView: React.FC = () => {
                         )}
                       </button>
                       <button
-                        onClick={(e) => handleDeleteCampaign(camp.id, e)}
-                        className="p-1.5 rounded-xl text-[#5f5f69] hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-colors"
-                        title="Supprimer"
+                        onClick={(e) => handleOpenDeleteCampaign(camp.id, camp.name, e)}
+                        className="p-1.5 rounded-xl text-[#5f5f69] hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-colors cursor-pointer"
+                        title="Supprimer la campagne"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -418,6 +508,38 @@ export const CampaignsView: React.FC = () => {
           setSelectedCampaignId(null);
         }}
         onStatusToggled={fetchCampaigns}
+      />
+
+      {/* Modale d'avertissement LinkedIn requis */}
+      <LinkedInRequiredModal
+        isOpen={showLinkedInRequiredModal}
+        onClose={() => setShowLinkedInRequiredModal(false)}
+        onConnectLinkedIn={() => openLinkedInModal()}
+        featureName={requiredFeatureName}
+      />
+
+      {/* Modale de Confirmation de Suppression de Campagne */}
+      <ConfirmModal
+        isOpen={Boolean(campaignToDelete)}
+        onClose={() => {
+          if (!isDeletingCampaign) {
+            setCampaignToDelete(null);
+            setDeleteCampaignError(null);
+          }
+        }}
+        onConfirm={handleConfirmDeleteCampaign}
+        title="Supprimer la campagne"
+        description="Cette action arrêtera tous les envois programmés et supprimera définitivement cette campagne."
+        itemName={campaignToDelete?.name}
+        itemType="Campagne"
+        variant="danger"
+        confirmText="Supprimer la campagne"
+        cancelText="Conserver la campagne"
+        isLoading={isDeletingCampaign}
+        warningMessage={
+          deleteCampaignError ||
+          "Les prospects en cours d'exécution dans cette séquence ne recevront plus les messages prévus."
+        }
       />
     </div>
   );

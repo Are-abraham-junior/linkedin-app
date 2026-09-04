@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import { prisma } from "../../../lib/prisma.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "bime-link-super-secret-jwt-key-2026";
 
@@ -9,6 +10,9 @@ export interface AuthenticatedUser {
   role: "SUPER_ADMIN" | "USER";
   name?: string | null;
   organizationId?: string | null;
+  ownerId?: string | null;
+  isImpersonating?: boolean;
+  originalSuperAdminId?: string;
 }
 
 export interface AuthenticatedRequest extends Request {
@@ -29,7 +33,7 @@ export function generateToken(user: AuthenticatedUser): string {
   );
 }
 
-export function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction): void {
+export async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     res.status(401).json({ success: false, error: "Non authentifié. Token requis." });
@@ -40,6 +44,27 @@ export function requireAuth(req: AuthenticatedRequest, res: Response, next: Next
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as AuthenticatedUser;
+    
+    // Logique de Supervision 360° pour Super Admin
+    const impersonateOrgId = req.headers["x-impersonate-org"];
+    if (impersonateOrgId && typeof impersonateOrgId === "string" && decoded.role === "SUPER_ADMIN") {
+      const owner = await prisma.user.findFirst({
+        where: { organizationId: impersonateOrgId, orgRole: "OWNER" },
+      });
+
+      req.user = {
+        id: decoded.id, // Conserve l'identité et les droits du Super Admin
+        email: decoded.email,
+        role: "SUPER_ADMIN",
+        name: decoded.name,
+        organizationId: impersonateOrgId,
+        ownerId: owner?.id || null,
+        isImpersonating: true,
+        originalSuperAdminId: decoded.id,
+      };
+      return next();
+    }
+
     req.user = decoded;
     next();
   } catch (err) {
@@ -50,7 +75,8 @@ export function requireAuth(req: AuthenticatedRequest, res: Response, next: Next
 
 export function requireSuperAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction): void {
   requireAuth(req, res, () => {
-    if (!req.user || req.user.role !== "SUPER_ADMIN") {
+    const user = req.user as AuthenticatedUser & { originalSuperAdminId?: string };
+    if (!user || (user.role !== "SUPER_ADMIN" && !user.originalSuperAdminId)) {
       res.status(403).json({ success: false, error: "Accès refusé. Privilèges Super Admin requis." });
       return;
     }

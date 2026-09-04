@@ -1,6 +1,7 @@
 import { prisma } from "../../../lib/prisma.js";
 import { z } from "zod";
 import { extractCompanyFromHeadline } from "../utils/companyExtractor.js";
+import { UnipileService } from "../services/unipile.service.js";
 const ProspectItemSchema = z.object({
     firstName: z.string().min(1, "Le prénom est requis"),
     lastName: z.string().min(1, "Le nom est requis"),
@@ -26,14 +27,34 @@ const BulkImportSchema = z.object({
 export async function getProspects(req, res) {
     try {
         const userId = req.user.id;
-        const { listId, search, connectionStatus, hasEmail, tag, page = "1", limit = "50" } = req.query;
+        const { listId, search, connectionStatus, hasEmail, tag, page = "1", limit = "50", scope, userId: targetUserId, memberId } = req.query;
         const pageNum = parseInt(page) || 1;
         const take = parseInt(limit) || 50;
         const skip = (pageNum - 1) * take;
+        const effectiveMemberId = (memberId || targetUserId);
+        let listFilter = { userId };
+        if (req.user.role === "SUPER_ADMIN" && req.user.organizationId) {
+            if (effectiveMemberId && effectiveMemberId !== "ALL") {
+                listFilter = { userId: effectiveMemberId, user: { organizationId: req.user.organizationId } };
+            }
+            else {
+                listFilter = { user: { organizationId: req.user.organizationId } };
+            }
+        }
+        else {
+            const currentUser = await prisma.user.findUnique({
+                where: { id: userId },
+                select: { organizationId: true, orgRole: true, role: true },
+            });
+            if (scope === "team" && currentUser?.organizationId) {
+                listFilter = { user: { organizationId: currentUser.organizationId } };
+            }
+            else if (effectiveMemberId && (currentUser?.orgRole === "OWNER" || currentUser?.role === "SUPER_ADMIN")) {
+                listFilter = { userId: effectiveMemberId };
+            }
+        }
         const where = {
-            list: {
-                userId,
-            },
+            list: listFilter,
         };
         if (listId === "DO_NOT_CONTACT") {
             where.doNotContact = true;
@@ -72,7 +93,19 @@ export async function getProspects(req, res) {
                 orderBy: { createdAt: "desc" },
                 include: {
                     list: {
-                        select: { id: true, name: true, color: true },
+                        select: {
+                            id: true,
+                            name: true,
+                            color: true,
+                            user: {
+                                select: {
+                                    id: true,
+                                    name: true,
+                                    email: true,
+                                    avatarUrl: true,
+                                },
+                            },
+                        },
                     },
                     campaignStates: {
                         include: {
@@ -83,7 +116,7 @@ export async function getProspects(req, res) {
             }),
             prisma.prospect.count({
                 where: {
-                    list: { userId },
+                    list: listFilter,
                     doNotContact: true,
                 },
             }),
@@ -126,29 +159,83 @@ export async function bulkImportProspects(req, res) {
         const userId = req.user.id;
         const body = BulkImportSchema.parse(req.body);
         // Vérifier l'appartenance de la liste
+        let listWhere = { id: body.listId };
+        if (req.user.role === "SUPER_ADMIN" && req.user.organizationId) {
+            listWhere.user = { organizationId: req.user.organizationId };
+        }
+        else {
+            listWhere.userId = userId;
+        }
         const list = await prisma.prospectList.findFirst({
-            where: { id: body.listId, userId },
+            where: listWhere,
         });
         if (!list) {
             res.status(404).json({ success: false, error: "Liste cible non trouvée." });
             return;
         }
-        // Récupérer les URLs LinkedIn existantes pour éviter les doublons dans cette liste
+        const currentUser = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { organizationId: true },
+        });
+        // Récupérer les URLs LinkedIn existantes dans cette liste
         const existingProspects = await prisma.prospect.findMany({
             where: { listId: body.listId },
             select: { linkedinUrl: true },
         });
         const existingUrls = new Set(existingProspects.map((p) => p.linkedinUrl.toLowerCase().trim()));
+        // Moteur Anti-Collision d'Équipe : Récupérer les prospects de toute l'organisation
+        const teamCollisions = [];
+        const orgUrlsMap = new Map();
+        if (currentUser?.organizationId) {
+            const allOrgProspects = await prisma.prospect.findMany({
+                where: {
+                    list: {
+                        user: {
+                            organizationId: currentUser.organizationId,
+                        },
+                    },
+                },
+                select: {
+                    linkedinUrl: true,
+                    firstName: true,
+                    lastName: true,
+                    list: {
+                        select: {
+                            userId: true,
+                            user: { select: { name: true, email: true } },
+                        },
+                    },
+                },
+            });
+            for (const op of allOrgProspects) {
+                orgUrlsMap.set(op.linkedinUrl.toLowerCase().trim(), {
+                    ownerId: op.list.userId,
+                    ownerName: op.list.user.name || op.list.user.email,
+                });
+            }
+        }
         let createdCount = 0;
         let duplicateCount = 0;
         const toInsert = [];
         for (const p of body.prospects) {
             const cleanUrl = p.linkedinUrl.toLowerCase().trim();
+            // Règle d'or : Ne contactez jamais la même personne qu'un autre membre de l'équipe
+            const teamOwner = orgUrlsMap.get(cleanUrl);
+            if (teamOwner && teamOwner.ownerId !== userId) {
+                teamCollisions.push({
+                    name: `${p.firstName} ${p.lastName}`.trim(),
+                    url: cleanUrl,
+                    ownerName: teamOwner.ownerName,
+                });
+                duplicateCount++;
+                continue;
+            }
             if (existingUrls.has(cleanUrl)) {
                 duplicateCount++;
                 continue;
             }
             existingUrls.add(cleanUrl);
+            orgUrlsMap.set(cleanUrl, { ownerId: userId, ownerName: "Moi" });
             toInsert.push({
                 listId: body.listId,
                 firstName: p.firstName.trim(),
@@ -174,9 +261,11 @@ export async function bulkImportProspects(req, res) {
         }
         res.status(201).json({
             success: true,
-            message: `${createdCount} prospect(s) importé(s) avec succès. (${duplicateCount} doublon(s) ignoré(s))`,
+            message: `${createdCount} prospect(s) importé(s) avec succès.${teamCollisions.length > 0 ? ` (${teamCollisions.length} collision(s) d'équipe bloquée(s))` : duplicateCount > 0 ? ` (${duplicateCount} doublon(s) ignoré(s))` : ""}`,
             createdCount,
             duplicateCount,
+            teamCollisionsCount: teamCollisions.length,
+            teamCollisions,
             totalReceived: body.prospects.length,
         });
     }
@@ -213,8 +302,15 @@ export async function deleteProspect(req, res) {
     try {
         const id = req.params.id;
         const userId = req.user.id;
+        let prospectWhere = { id };
+        if (req.user.role === "SUPER_ADMIN" && req.user.organizationId) {
+            prospectWhere.list = { user: { organizationId: req.user.organizationId } };
+        }
+        else {
+            prospectWhere.list = { userId };
+        }
         const existing = await prisma.prospect.findFirst({
-            where: { id, list: { userId } },
+            where: prospectWhere,
         });
         if (!existing) {
             res.status(404).json({ success: false, error: "Prospect introuvable." });
@@ -235,10 +331,14 @@ export async function bulkDeleteProspects(req, res) {
             res.status(400).json({ success: false, error: "Liste d'identifiants requise." });
             return;
         }
+        let listClause = { userId };
+        if (req.user.role === "SUPER_ADMIN" && req.user.organizationId) {
+            listClause = { user: { organizationId: req.user.organizationId } };
+        }
         await prisma.prospect.deleteMany({
             where: {
                 id: { in: ids },
-                list: { userId },
+                list: listClause,
             },
         });
         res.json({ success: true, message: `${ids.length} prospect(s) supprimé(s).` });
@@ -275,6 +375,215 @@ export async function bulkMoveProspects(req, res) {
         res.json({ success: true, message: `${ids.length} prospect(s) déplacé(s) vers ${targetList.name}.` });
     }
     catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+}
+/**
+ * POST /api/prospects/sync-status
+ * Interroge l'API Unipile pour vérifier le statut réel de connexion LinkedIn
+ * (CONNECTED, PENDING, NOT_CONNECTED) des prospects et mettre à jour la base.
+ */
+export async function syncProspectsStatus(req, res) {
+    try {
+        const userId = req.user.id;
+        const { prospectIds, listId } = req.body || {};
+        // Récupérer le compte LinkedIn actif de l'utilisateur
+        const linkedInAcc = await prisma.linkedInAccount.findFirst({
+            where: {
+                userId,
+                status: "CONNECTED",
+                OR: [{ accountName: { not: null } }, { profilePicture: { not: null } }],
+            },
+            orderBy: { updatedAt: "desc" },
+        }) || await prisma.linkedInAccount.findFirst({
+            where: { userId, status: "CONNECTED" },
+            orderBy: { updatedAt: "desc" },
+        });
+        const unipileAccountId = linkedInAcc?.unipileAccountId || undefined;
+        const where = { list: { userId } };
+        if (Array.isArray(prospectIds) && prospectIds.length > 0) {
+            where.id = { in: prospectIds };
+        }
+        else if (listId && listId !== "ALL" && listId !== "DO_NOT_CONTACT") {
+            where.listId = listId;
+        }
+        const prospects = await prisma.prospect.findMany({ where });
+        if (prospects.length === 0) {
+            res.json({ success: true, updatedCount: 0, message: "Aucun prospect à synchroniser." });
+            return;
+        }
+        let updatedCount = 0;
+        for (const p of prospects) {
+            const identifier = p.providerProfileId || p.linkedinUrl;
+            if (!identifier)
+                continue;
+            const result = await UnipileService.getProfileDetailsAndStatus(identifier, unipileAccountId);
+            const updateData = {
+                connectionStatus: result.connectionStatus,
+            };
+            if (result.profile?.avatarUrl && (!p.avatarUrl || p.avatarUrl.includes("ui-avatars.com"))) {
+                updateData.avatarUrl = result.profile.avatarUrl;
+            }
+            if (result.profile?.email && !p.email) {
+                updateData.email = result.profile.email;
+            }
+            if (result.profile?.company && (!p.company || p.company === "—")) {
+                updateData.company = result.profile.company;
+            }
+            if (result.profile?.headline && (!p.headline || p.headline === "Professionnel")) {
+                updateData.headline = result.profile.headline;
+            }
+            await prisma.prospect.update({
+                where: { id: p.id },
+                data: updateData,
+            });
+            updatedCount++;
+        }
+        res.json({
+            success: true,
+            updatedCount,
+            message: `${updatedCount} prospect(s) synchronisé(s) avec succès.`,
+        });
+    }
+    catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+}
+const CollisionCheckSchema = z.object({
+    urls: z.array(z.string()).min(1, "Au moins une URL est requise"),
+});
+export async function checkProspectCollision(req, res) {
+    try {
+        const userId = req.user.id;
+        const body = CollisionCheckSchema.parse(req.body);
+        const currentUser = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { organizationId: true },
+        });
+        if (!currentUser?.organizationId) {
+            res.json({ success: true, collisionsCount: 0, collisions: [] });
+            return;
+        }
+        const cleanUrls = body.urls.map((u) => u.toLowerCase().trim());
+        // Chercher tous les prospects avec ces URLs dans la même organisation
+        const existing = await prisma.prospect.findMany({
+            where: {
+                list: {
+                    user: {
+                        organizationId: currentUser.organizationId,
+                    },
+                },
+                linkedinUrl: { in: cleanUrls },
+            },
+            include: {
+                list: {
+                    include: {
+                        user: {
+                            select: { id: true, name: true, email: true, avatarUrl: true },
+                        },
+                    },
+                },
+            },
+        });
+        const collisions = existing.map((p) => ({
+            prospectId: p.id,
+            linkedinUrl: p.linkedinUrl,
+            name: `${p.firstName} ${p.lastName}`.trim(),
+            company: p.company,
+            ownedByMe: p.list.userId === userId,
+            owner: {
+                id: p.list.user.id,
+                name: p.list.user.name,
+                email: p.list.user.email,
+                avatarUrl: p.list.user.avatarUrl,
+            },
+            listName: p.list.name,
+        }));
+        res.json({
+            success: true,
+            collisionsCount: collisions.length,
+            collisions,
+        });
+    }
+    catch (err) {
+        if (err instanceof z.ZodError) {
+            res.status(400).json({ success: false, error: err.issues?.[0]?.message || err.message });
+            return;
+        }
+        res.status(500).json({ success: false, error: err.message });
+    }
+}
+const TransferProspectsSchema = z.object({
+    prospectIds: z.array(z.string()).min(1, "Au moins un prospect requis"),
+    targetUserId: z.string().min(1, "Membre cible requis"),
+    targetListId: z.string().optional(),
+});
+export async function transferProspects(req, res) {
+    try {
+        const userId = req.user.id;
+        const body = TransferProspectsSchema.parse(req.body);
+        const currentUser = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { organizationId: true, orgRole: true, role: true },
+        });
+        if (!currentUser?.organizationId) {
+            res.status(400).json({ success: false, error: "Vous devez appartenir à un espace de travail." });
+            return;
+        }
+        if (currentUser.orgRole !== "OWNER" && currentUser.role !== "SUPER_ADMIN") {
+            res.status(403).json({ success: false, error: "Seul le propriétaire de l'espace peut réassigner des prospects entre membres." });
+            return;
+        }
+        // Vérifier que l'utilisateur cible est bien dans la même organisation
+        const targetUser = await prisma.user.findFirst({
+            where: { id: body.targetUserId, organizationId: currentUser.organizationId },
+        });
+        if (!targetUser) {
+            res.status(404).json({ success: false, error: "Membre cible introuvable dans cet espace." });
+            return;
+        }
+        // Déterminer la liste de destination
+        let targetListId = body.targetListId;
+        if (!targetListId) {
+            let defaultList = await prisma.prospectList.findFirst({
+                where: { userId: targetUser.id, name: "Prospects transférés" },
+            });
+            if (!defaultList) {
+                defaultList = await prisma.prospectList.create({
+                    data: {
+                        name: "Prospects transférés",
+                        description: "Prospects réassignés par le manager",
+                        color: "#592eff",
+                        userId: targetUser.id,
+                    },
+                });
+            }
+            targetListId = defaultList.id;
+        }
+        const updateResult = await prisma.prospect.updateMany({
+            where: {
+                id: { in: body.prospectIds },
+                list: {
+                    user: {
+                        organizationId: currentUser.organizationId,
+                    },
+                },
+            },
+            data: {
+                listId: targetListId,
+            },
+        });
+        res.json({
+            success: true,
+            transferredCount: updateResult.count,
+            message: `${updateResult.count} prospect(s) transféré(s) avec succès à ${targetUser.name || targetUser.email}.`,
+        });
+    }
+    catch (err) {
+        if (err instanceof z.ZodError) {
+            res.status(400).json({ success: false, error: err.issues?.[0]?.message || err.message });
+            return;
+        }
         res.status(500).json({ success: false, error: err.message });
     }
 }

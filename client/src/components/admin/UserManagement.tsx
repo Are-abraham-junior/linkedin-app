@@ -21,6 +21,7 @@ import {
   Send,
   Sparkles,
 } from "lucide-react";
+import { ConfirmModal } from "../common/ConfirmModal";
 
 export const UserManagement: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -35,8 +36,13 @@ export const UserManagement: React.FC = () => {
   // Modals
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+
+  // Deletion Modal
+  const [userToDelete, setUserToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [isDeletingUser, setIsDeletingUser] = useState(false);
+  const [deleteUserError, setDeleteUserError] = useState<string | null>(null);
 
   // Form states
   const [formData, setFormData] = useState({
@@ -171,20 +177,28 @@ export const UserManagement: React.FC = () => {
     }
   };
 
-  const handleDeleteUser = async (id: string, name: string | null) => {
-    if (!window.confirm(`Confirmez-vous la suppression du compte de ${name || "cet utilisateur"} ?`)) {
-      return;
-    }
+  const handleOpenDeleteUser = (id: string, name: string | null) => {
+    setDeleteUserError(null);
+    setUserToDelete({ id, name: name || "cet utilisateur" });
+  };
+
+  const handleConfirmDeleteUser = async () => {
+    if (!userToDelete) return;
+    setIsDeletingUser(true);
+    setDeleteUserError(null);
 
     try {
-      const res = await apiRequest(`/admin/users/${id}`, { method: "DELETE" });
+      const res = await apiRequest(`/admin/users/${userToDelete.id}`, { method: "DELETE" });
       if (res.success) {
+        setUserToDelete(null);
         fetchUsers();
       } else {
-        alert(res.error || "Impossible de supprimer.");
+        setDeleteUserError(res.error || "Impossible de supprimer cet utilisateur.");
       }
     } catch (err: any) {
-      alert(err.message || "Erreur.");
+      setDeleteUserError(err.message || "Une erreur inattendue s'est produite.");
+    } finally {
+      setIsDeletingUser(false);
     }
   };
 
@@ -410,7 +424,7 @@ export const UserManagement: React.FC = () => {
                         </button>
                         {u.role !== "SUPER_ADMIN" && (
                           <button
-                            onClick={() => handleDeleteUser(u.id, u.name)}
+                            onClick={() => handleOpenDeleteUser(u.id, u.name)}
                             className="p-1.5 rounded-lg border border-[#e0e0db] hover:bg-red-50 hover:border-red-200 text-[#5f5f69] hover:text-red-600 transition-colors"
                             title="Supprimer"
                           >
@@ -791,6 +805,30 @@ export const UserManagement: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Confirmation Modal for User Deletion */}
+      <ConfirmModal
+        isOpen={Boolean(userToDelete)}
+        onClose={() => {
+          if (!isDeletingUser) {
+            setUserToDelete(null);
+            setDeleteUserError(null);
+          }
+        }}
+        onConfirm={handleConfirmDeleteUser}
+        title="Supprimer l'utilisateur"
+        description="Cette action révoquera immédiatement les accès de cet utilisateur à la plateforme."
+        itemName={userToDelete?.name}
+        itemType="Utilisateur"
+        variant="danger"
+        confirmText="Supprimer définitivement"
+        cancelText="Conserver le compte"
+        isLoading={isDeletingUser}
+        warningMessage={
+          deleteUserError ||
+          "Cette action est irréversible. Les campagnes et configurations associées à ce compte seront affectées."
+        }
+      />
     </div>
   );
 };

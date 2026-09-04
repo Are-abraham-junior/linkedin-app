@@ -121,24 +121,127 @@ export async function getUserDashboardStats(req: AuthenticatedRequest, res: Resp
 
     const userId = req.user.id;
 
+    // 1. Métriques globales réelles
     const [
       listsCount,
       prospectsCount,
       connectedProspects,
+      pendingProspects,
+      notConnectedProspects,
+      doNotContactProspects,
+      repliedProspects,
       activeCampaignsCount,
       totalCampaignsCount,
+      queuedActionsCount,
+      executedActionsCount,
+      emailsFoundCount,
+      phonesFoundCount,
       linkedInAccount,
     ] = await Promise.all([
       prisma.prospectList.count({ where: { userId } }),
       prisma.prospect.count({ where: { list: { userId } } }),
       prisma.prospect.count({ where: { list: { userId }, connectionStatus: "CONNECTED" } }),
+      prisma.prospect.count({ where: { list: { userId }, connectionStatus: "PENDING" } }),
+      prisma.prospect.count({ where: { list: { userId }, connectionStatus: "NOT_CONNECTED" } }),
+      prisma.prospect.count({ where: { list: { userId }, doNotContact: true } }),
+      prisma.prospectCampaignState.count({ where: { campaign: { userId }, status: "REPLIED" } }),
       prisma.campaign.count({ where: { userId, status: "ACTIVE" } }),
       prisma.campaign.count({ where: { userId } }),
+      prisma.actionQueue.count({ where: { campaign: { userId }, status: "QUEUED" } }),
+      prisma.actionQueue.count({ where: { campaign: { userId }, status: "EXECUTED" } }),
+      prisma.prospect.count({ where: { list: { userId }, email: { not: null } } }),
+      prisma.prospect.count({ where: { list: { userId }, phone: { not: null } } }),
       prisma.linkedInAccount.findFirst({ where: { userId } }),
     ]);
 
-    const acceptanceRate = prospectsCount > 0 ? ((connectedProspects / prospectsCount) * 100).toFixed(1) : "57.8";
-    const responseRate = "37.6"; // Estimation basée sur les relances
+    // Taux réels (0 si aucune donnée)
+    const acceptanceRate = prospectsCount > 0 ? Number(((connectedProspects / prospectsCount) * 100).toFixed(1)) : 0;
+    const totalActions = executedActionsCount + (linkedInAccount?.dailyInvitesSent || 0) + (linkedInAccount?.dailyMsgSent || 0);
+    const responseRate = totalActions > 0 
+      ? Number(((repliedProspects / totalActions) * 100).toFixed(1))
+      : (prospectsCount > 0 && repliedProspects > 0 ? Number(((repliedProspects / prospectsCount) * 100).toFixed(1)) : 0);
+
+    // 2. Calcul des séries temporelles réelles sur les 7 derniers jours et 30 derniers jours
+    const dayNames = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
+    const monthNames = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"];
+    
+    // Générer les 7 derniers jours
+    const last7DaysPromises = Array.from({ length: 7 }, (_, idx) => {
+      const dayOffset = 6 - idx;
+      const date = new Date();
+      date.setDate(date.getDate() - dayOffset);
+      const start = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+      const end = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
+      const dayLabel = `${dayNames[date.getDay()]} ${date.getDate()}`;
+      const fullDate = start.toISOString().split("T")[0];
+
+      return Promise.all([
+        prisma.prospect.count({
+          where: { list: { userId }, createdAt: { gte: start, lte: end } },
+        }),
+        prisma.actionQueue.count({
+          where: { campaign: { userId }, status: "EXECUTED", executedAt: { gte: start, lte: end } },
+        }),
+        prisma.actionQueue.count({
+          where: { campaign: { userId }, actionType: "INVITATION", status: "EXECUTED", executedAt: { gte: start, lte: end } },
+        }),
+        prisma.actionQueue.count({
+          where: { campaign: { userId }, actionType: "MESSAGE", status: "EXECUTED", executedAt: { gte: start, lte: end } },
+        }),
+        prisma.message.count({
+          where: {
+            conversation: { prospect: { list: { userId } } },
+            senderType: "PROSPECT",
+            sentAt: { gte: start, lte: end },
+          },
+        }),
+      ]).then(([prospectsAdded, actionsExecuted, invitesSent, messagesSent, repliesReceived]) => ({
+        date: fullDate,
+        dayLabel,
+        prospectsAdded,
+        actionsExecuted,
+        invitesSent,
+        messagesSent,
+        repliesReceived,
+      }));
+    });
+
+    const evolution7d = await Promise.all(last7DaysPromises);
+
+    // Générer les 30 derniers jours (agrégés par tranches de 3-5 jours ou journaliers)
+    const last30DaysPromises = Array.from({ length: 15 }, (_, idx) => {
+      const dayOffset = (14 - idx) * 2;
+      const date = new Date();
+      date.setDate(date.getDate() - dayOffset);
+      const start = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+      const end = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1, 23, 59, 59, 999);
+      const dayLabel = `${date.getDate()} ${monthNames[date.getMonth()]}`;
+      const fullDate = start.toISOString().split("T")[0];
+
+      return Promise.all([
+        prisma.prospect.count({
+          where: { list: { userId }, createdAt: { gte: start, lte: end } },
+        }),
+        prisma.actionQueue.count({
+          where: { campaign: { userId }, status: "EXECUTED", executedAt: { gte: start, lte: end } },
+        }),
+        prisma.actionQueue.count({
+          where: { campaign: { userId }, actionType: "INVITATION", status: "EXECUTED", executedAt: { gte: start, lte: end } },
+        }),
+        prisma.actionQueue.count({
+          where: { campaign: { userId }, actionType: "MESSAGE", status: "EXECUTED", executedAt: { gte: start, lte: end } },
+        }),
+      ]).then(([prospectsAdded, actionsExecuted, invitesSent, messagesSent]) => ({
+        date: fullDate,
+        dayLabel,
+        prospectsAdded,
+        actionsExecuted,
+        invitesSent,
+        messagesSent,
+      }));
+    });
+
+    const evolution30d = await Promise.all(last30DaysPromises);
 
     res.json({
       success: true,
@@ -146,10 +249,20 @@ export async function getUserDashboardStats(req: AuthenticatedRequest, res: Resp
         listsCount,
         prospectsCount,
         connectedProspects,
-        acceptanceRate: parseFloat(acceptanceRate as string),
-        responseRate: parseFloat(responseRate),
+        pendingProspects,
+        notConnectedProspects,
+        doNotContactProspects,
+        repliedProspects,
+        acceptanceRate,
+        responseRate,
         activeCampaignsCount,
         totalCampaignsCount,
+        queuedActionsCount,
+        executedActionsCount,
+        emailsFoundCount,
+        phonesFoundCount,
+        evolution: evolution7d,
+        evolution30d,
         linkedInAccount: linkedInAccount
           ? {
               status: linkedInAccount.status,
@@ -163,6 +276,7 @@ export async function getUserDashboardStats(req: AuthenticatedRequest, res: Resp
       },
     });
   } catch (error: any) {
+    console.error("[Stats] Erreur getUserDashboardStats:", error);
     res.status(500).json({ success: false, error: error.message });
   }
 }

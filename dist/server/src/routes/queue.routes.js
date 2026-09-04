@@ -1,0 +1,13 @@
+import { Router } from "express";
+import { requireAuth } from "../middlewares/auth.middleware.js";
+import { getQueue, deleteQueueItem, retryQueueItem, batchDeleteQueueItems, batchRescheduleQueueItems, getScheduleSettings, updateScheduleSettings, } from "../controllers/queue.controller.js";
+const router = Router();
+router.use(requireAuth);
+router.get("/", getQueue);
+router.delete("/:id", deleteQueueItem);
+router.post("/:id/retry", retryQueueItem);
+router.post("/batch-delete", batchDeleteQueueItems);
+router.post("/batch-reschedule", batchRescheduleQueueItems);
+router.get("/schedule", getScheduleSettings);
+router.put("/schedule", updateScheduleSettings);
+export default router;

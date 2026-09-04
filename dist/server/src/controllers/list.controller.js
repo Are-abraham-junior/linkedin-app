@@ -13,9 +13,31 @@ const UpdateListSchema = z.object({
 export async function getLists(req, res) {
     try {
         const userId = req.user.id;
+        const memberId = (req.query.memberId || req.query.userId);
+        let whereClause = { userId };
+        if (req.user.role === "SUPER_ADMIN" && req.user.organizationId) {
+            if (memberId && memberId !== "ALL") {
+                whereClause = { userId: memberId, user: { organizationId: req.user.organizationId } };
+            }
+            else {
+                whereClause = { user: { organizationId: req.user.organizationId } };
+            }
+        }
+        else {
+            const currentUser = await prisma.user.findUnique({
+                where: { id: userId },
+                select: { organizationId: true, orgRole: true },
+            });
+            if (currentUser?.organizationId && (currentUser.orgRole === "OWNER" || req.query.scope === "team")) {
+                whereClause = { user: { organizationId: currentUser.organizationId } };
+            }
+        }
         const lists = await prisma.prospectList.findMany({
-            where: { userId },
+            where: whereClause,
             include: {
+                user: {
+                    select: { id: true, name: true, email: true },
+                },
                 _count: {
                     select: {
                         prospects: true,
@@ -32,6 +54,7 @@ export async function getLists(req, res) {
                 description: l.description,
                 color: l.color || "#592eff",
                 prospectsCount: l._count.prospects,
+                author: l.user ? { id: l.user.id, name: l.user.name || l.user.email } : null,
                 createdAt: l.createdAt,
                 updatedAt: l.updatedAt,
             })),
@@ -45,9 +68,13 @@ export async function createList(req, res) {
     try {
         const userId = req.user.id;
         const body = CreateListSchema.parse(req.body);
+        let targetOwnerId = userId;
+        if (req.user.role === "SUPER_ADMIN" && req.user.ownerId) {
+            targetOwnerId = req.user.ownerId; // Auto-assign to owner
+        }
         const list = await prisma.prospectList.create({
             data: {
-                userId,
+                userId: targetOwnerId,
                 name: body.name.trim(),
                 description: body.description?.trim(),
                 color: body.color || "#592eff",
@@ -56,8 +83,13 @@ export async function createList(req, res) {
         res.status(201).json({
             success: true,
             list: {
-                ...list,
+                id: list.id,
+                name: list.name,
+                description: list.description,
+                color: list.color,
                 prospectsCount: 0,
+                createdAt: list.createdAt,
+                updatedAt: list.updatedAt,
             },
         });
     }
@@ -74,8 +106,15 @@ export async function updateList(req, res) {
         const id = req.params.id;
         const userId = req.user.id;
         const body = UpdateListSchema.parse(req.body);
+        let whereClause = { id };
+        if (req.user.role === "SUPER_ADMIN" && req.user.organizationId) {
+            whereClause.user = { organizationId: req.user.organizationId };
+        }
+        else {
+            whereClause.userId = userId;
+        }
         const existing = await prisma.prospectList.findFirst({
-            where: { id, userId },
+            where: whereClause,
         });
         if (!existing) {
             res.status(404).json({ success: false, error: "Liste introuvable." });
@@ -83,17 +122,15 @@ export async function updateList(req, res) {
         }
         const updated = await prisma.prospectList.update({
             where: { id },
-            data: body,
-            include: {
-                _count: { select: { prospects: true } },
+            data: {
+                name: body.name ? body.name.trim() : undefined,
+                description: body.description !== undefined ? body.description?.trim() : undefined,
+                color: body.color || undefined,
             },
         });
         res.json({
             success: true,
-            list: {
-                ...updated,
-                prospectsCount: updated._count?.prospects ?? 0,
-            },
+            list: updated,
         });
     }
     catch (err) {
@@ -108,15 +145,25 @@ export async function deleteList(req, res) {
     try {
         const id = req.params.id;
         const userId = req.user.id;
+        let whereClause = { id };
+        if (req.user.role === "SUPER_ADMIN" && req.user.organizationId) {
+            whereClause.user = { organizationId: req.user.organizationId };
+        }
+        else {
+            whereClause.userId = userId;
+        }
         const existing = await prisma.prospectList.findFirst({
-            where: { id, userId },
+            where: whereClause,
         });
         if (!existing) {
             res.status(404).json({ success: false, error: "Liste introuvable." });
             return;
         }
         await prisma.prospectList.delete({ where: { id } });
-        res.json({ success: true, message: "Liste supprimée avec succès." });
+        res.json({
+            success: true,
+            message: "Liste supprimée avec succès.",
+        });
     }
     catch (err) {
         res.status(500).json({ success: false, error: err.message });

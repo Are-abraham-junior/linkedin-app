@@ -1,6 +1,7 @@
 import { Response } from "express";
 import { prisma } from "../../../lib/prisma.js";
 import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 import { z } from "zod";
 import { AuthenticatedRequest, generateToken } from "../middlewares/auth.middleware.js";
 import { UnipileService } from "../services/unipile.service.js";
@@ -15,6 +16,14 @@ const SetupAdminSchema = z.object({
 const LoginSchema = z.object({
   email: z.string().email("Adresse email invalide"),
   password: z.string().min(1, "Mot de passe requis"),
+});
+
+const RegisterSchema = z.object({
+  firstName: z.string().min(1, "Le prénom est obligatoire"),
+  lastName: z.string().min(1, "Le nom est obligatoire"),
+  email: z.string().email("Adresse email professionnelle invalide"),
+  password: z.string().min(8, "Le mot de passe doit contenir au moins 8 caractères"),
+  workspaceName: z.string().min(2, "Le nom de l'espace ou entreprise doit contenir au moins 2 caractères"),
 });
 
 let cachedSetupCompleted: boolean | null = true;
@@ -120,6 +129,106 @@ export async function setupSuperAdmin(req: AuthenticatedRequest, res: Response) 
   }
 }
 
+export async function register(req: AuthenticatedRequest, res: Response) {
+  try {
+    const body = RegisterSchema.parse(req.body);
+    const email = body.email.toLowerCase().trim();
+    const firstName = body.firstName.trim();
+    const lastName = body.lastName.trim();
+    const fullName = `${firstName} ${lastName}`.trim();
+    const workspaceName = body.workspaceName.trim();
+
+    // Vérifier si l'utilisateur existe déjà
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (existingUser) {
+      res.status(400).json({
+        success: false,
+        error: "Un compte existe déjà avec cette adresse email. Veuillez vous connecter.",
+      });
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(body.password, 10);
+    const slugBase = workspaceName.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").slice(0, 30);
+    const slug = `${slugBase || "org"}-${Date.now().toString(36)}`;
+
+    // Création transactionnelle de l'organisation et de l'utilisateur Owner
+    const result = await prisma.$transaction(async (tx) => {
+      const org = await tx.organization.create({
+        data: {
+          name: workspaceName,
+          slug,
+          plan: "ENTERPRISE",
+        },
+      });
+
+      const user = await tx.user.create({
+        data: {
+          email,
+          name: fullName,
+          firstName,
+          lastName,
+          passwordHash,
+          role: "USER",
+          orgRole: "OWNER",
+          status: "ACTIVE",
+          organizationId: org.id,
+          maxDailyInvites: 30,
+          maxDailyMsg: 70,
+        },
+      });
+
+      // Créer une première liste de prospects par défaut
+      await tx.prospectList.create({
+        data: {
+          name: "Premiers prospects",
+          description: "Liste initiale créée automatiquement",
+          color: "#592eff",
+          userId: user.id,
+        },
+      });
+
+      return { user, org };
+    });
+
+    const token = generateToken({
+      id: result.user.id,
+      email: result.user.email,
+      role: result.user.role,
+      name: result.user.name,
+      organizationId: result.org.id,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Compte et espace créés avec succès.",
+      token,
+      user: {
+        id: result.user.id,
+        email: result.user.email,
+        name: result.user.name,
+        firstName: result.user.firstName,
+        lastName: result.user.lastName,
+        role: result.user.role,
+        orgRole: result.user.orgRole,
+        status: result.user.status,
+        organization: result.org,
+        hasLinkedInAccount: false,
+        linkedInAccount: null,
+      },
+    });
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ success: false, error: error.issues?.[0]?.message || error.message });
+      return;
+    }
+    res.status(500).json({ success: false, error: error.message });
+  }
+}
+
 export async function login(req: AuthenticatedRequest, res: Response) {
   try {
     const body = LoginSchema.parse(req.body);
@@ -134,6 +243,7 @@ export async function login(req: AuthenticatedRequest, res: Response) {
             id: true,
             accountName: true,
             status: true,
+            unipileAccountId: true,
             dailyInvitesSent: true,
             dailyMsgSent: true,
           },
@@ -168,6 +278,9 @@ export async function login(req: AuthenticatedRequest, res: Response) {
       organizationId: user.organizationId,
     });
 
+    const primaryAccount = user.accounts[0] || null;
+    const hasLinkedInAccount = Boolean(primaryAccount && (primaryAccount.status === "CONNECTED" || primaryAccount.unipileAccountId));
+
     res.json({
       success: true,
       token,
@@ -175,13 +288,17 @@ export async function login(req: AuthenticatedRequest, res: Response) {
         id: user.id,
         email: user.email,
         name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
         avatarUrl: user.avatarUrl,
         role: user.role,
+        orgRole: user.orgRole,
         status: user.status,
         organization: user.organization,
         maxDailyInvites: user.maxDailyInvites,
         maxDailyMsg: user.maxDailyMsg,
-        linkedInAccount: user.accounts[0] || null,
+        hasLinkedInAccount,
+        linkedInAccount: primaryAccount,
       },
     });
   } catch (error: any) {
@@ -259,8 +376,25 @@ export async function getMe(req: AuthenticatedRequest, res: Response) {
       }
     }
 
-    const linkedAcc = user.accounts[0] || null;
+    let userOrg = user.organization;
+    let linkedAcc = user.accounts[0] || null;
+
+    if (req.user?.organizationId && req.user?.isImpersonating) {
+      const org = await prisma.organization.findUnique({
+        where: { id: req.user.organizationId },
+      });
+      if (org) userOrg = org;
+
+      if (!linkedAcc && req.user.ownerId) {
+        const ownerAcc = await prisma.linkedInAccount.findFirst({
+          where: { userId: req.user.ownerId },
+        });
+        if (ownerAcc) linkedAcc = ownerAcc;
+      }
+    }
+
     const finalAvatar = user.avatarUrl || linkedAcc?.profilePicture || null;
+    const hasLinkedInAccount = Boolean(linkedAcc && (linkedAcc.status === "CONNECTED" || linkedAcc.unipileAccountId));
 
     res.json({
       success: true,
@@ -268,12 +402,16 @@ export async function getMe(req: AuthenticatedRequest, res: Response) {
         id: user.id,
         email: user.email,
         name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
         avatarUrl: finalAvatar,
-        role: user.role,
+        role: (req.user as any).originalSuperAdminId ? "SUPER_ADMIN" : user.role,
+        orgRole: user.orgRole,
         status: user.status,
-        organization: user.organization,
+        organization: userOrg,
         maxDailyInvites: user.maxDailyInvites,
         maxDailyMsg: user.maxDailyMsg,
+        hasLinkedInAccount,
         linkedInAccount: linkedAcc ? { ...linkedAcc, profilePicture: finalAvatar } : null,
         stats: {
           listsCount: user._count.prospectLists,
@@ -328,23 +466,67 @@ export async function linkedinAuth(req: AuthenticatedRequest, res: Response) {
     const profileResult = await UnipileService.getConnectedAccountProfile(connectResult.accountId!);
     const profile = profileResult.profile;
 
-    // 3. Chercher si un utilisateur existe déjà (par linkedinEmail, email principal ou linkedinProfileId)
-    let user = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { linkedinEmail: body.linkedinEmail },
-          { email: body.linkedinEmail },
-          ...(profile?.linkedinProfileId ? [{ linkedinProfileId: profile.linkedinProfileId }] : []),
-        ],
-      },
-      include: {
-        organization: true,
-        accounts: { select: { id: true, accountName: true, status: true, unipileAccountId: true } },
-      },
-    });
+    // Détecter si l'appelant est déjà authentifié (ex: Onboarding après inscription)
+    let authenticatedUserId: string | null = null;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      try {
+        const decoded: any = jwt.verify(
+          authHeader.split(" ")[1],
+          process.env.JWT_SECRET || "bime-link-super-secret-jwt-key-2026"
+        );
+        if (decoded?.id) authenticatedUserId = decoded.id;
+      } catch {}
+    }
+
+    // 3. Chercher l'utilisateur : soit l'utilisateur connecté, soit par linkedinEmail/email
+    let user: any = null;
+    if (authenticatedUserId) {
+      user = await prisma.user.findUnique({
+        where: { id: authenticatedUserId },
+        include: {
+          organization: true,
+          accounts: { select: { id: true, accountName: true, status: true, unipileAccountId: true } },
+        },
+      });
+    }
+
+    if (!user) {
+      user = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { linkedinEmail: body.linkedinEmail },
+            { email: body.linkedinEmail },
+            ...(profile?.linkedinProfileId ? [{ linkedinProfileId: profile.linkedinProfileId }] : []),
+          ],
+        },
+        include: {
+          organization: true,
+          accounts: { select: { id: true, accountName: true, status: true, unipileAccountId: true } },
+        },
+      });
+    }
 
     if (user) {
-      // --- CONNEXION : mise à jour du profil & rattachement LinkedIn ---
+      // --- CONNEXION : vérification d'espace dédié & rattachement LinkedIn ---
+      if (!user.linkedinEmail || user.linkedinEmail !== body.linkedinEmail) {
+        const existingHolder = await prisma.user.findFirst({
+          where: {
+            linkedinEmail: body.linkedinEmail,
+            id: { not: user.id },
+          },
+          include: { organization: true },
+        });
+
+        if (existingHolder) {
+          res.status(400).json({
+            success: false,
+            error: `Ce compte LinkedIn (${body.linkedinEmail}) est déjà associé à l'espace "${existingHolder.organization?.name || existingHolder.email}". Chaque compte LinkedIn doit avoir son propre espace dédié.`,
+          });
+          return;
+        }
+      }
+
       const updateData: any = {};
       if (profile?.avatarUrl) updateData.avatarUrl = profile.avatarUrl;
       if (profile?.name) updateData.name = profile.name;
@@ -365,14 +547,25 @@ export async function linkedinAuth(req: AuthenticatedRequest, res: Response) {
         updateData.orgRole = "OWNER";
       }
 
-      user = await prisma.user.update({
-        where: { id: user.id },
-        data: updateData,
-        include: {
-          organization: true,
-          accounts: { select: { id: true, accountName: true, status: true, unipileAccountId: true } },
-        },
-      });
+      try {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: updateData,
+          include: {
+            organization: true,
+            accounts: { select: { id: true, accountName: true, status: true, unipileAccountId: true } },
+          },
+        });
+      } catch (dbErr: any) {
+        if (dbErr.code === "P2002") {
+          res.status(400).json({
+            success: false,
+            error: `Ce compte LinkedIn est déjà rattaché à un autre espace. Chaque compte a son propre espace dédié.`,
+          });
+          return;
+        }
+        throw dbErr;
+      }
 
       // Mise à jour du LinkedInAccount
       await prisma.linkedInAccount.upsert({

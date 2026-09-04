@@ -22,9 +22,13 @@ export interface User {
   id: string;
   email: string;
   name: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
   avatarUrl: string | null;
   role: Role;
+  orgRole?: "OWNER" | "ADMIN" | "MEMBER";
   status: UserStatus;
+  hasLinkedInAccount?: boolean;
   organizationId?: string | null;
   organization?: Organization | null;
   maxDailyInvites: number;
@@ -37,6 +41,35 @@ export interface User {
     listsCount?: number;
     campaignsCount?: number;
   };
+}
+
+export interface TeamMemberBreakdown {
+  id: string;
+  name: string;
+  email: string;
+  avatarUrl?: string | null;
+  orgRole: "OWNER" | "ADMIN" | "MEMBER";
+  status: UserStatus;
+  hasLinkedInAccount: boolean;
+  linkedInAccountName?: string | null;
+  dailyInvitesSent: number;
+  dailyMsgSent: number;
+  maxDailyInvites: number;
+  maxDailyMsg: number;
+  totalCampaigns: number;
+  activeCampaigns: number;
+  totalProspects: number;
+}
+
+export interface TeamMetrics {
+  totalMembers: number;
+  connectedAccounts: number;
+  totalProspects: number;
+  totalCampaigns: number;
+  activeCampaigns: number;
+  totalInvitesSent: number;
+  totalMsgSent: number;
+  membersBreakdown: TeamMemberBreakdown[];
 }
 
 export interface PlatformMetrics {
@@ -164,4 +197,42 @@ export interface ProspectItem {
   doNotContact: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface DailyEvolutionPoint {
+  date: string;
+  dayLabel: string;
+  prospectsAdded: number;
+  actionsExecuted: number;
+  invitesSent: number;
+  messagesSent: number;
+  repliesReceived?: number;
+}
+
+export interface DashboardStats {
+  listsCount: number;
+  prospectsCount: number;
+  connectedProspects: number;
+  pendingProspects: number;
+  notConnectedProspects: number;
+  doNotContactProspects: number;
+  repliedProspects: number;
+  acceptanceRate: number;
+  responseRate: number;
+  activeCampaignsCount: number;
+  totalCampaignsCount: number;
+  queuedActionsCount: number;
+  executedActionsCount: number;
+  emailsFoundCount: number;
+  phonesFoundCount: number;
+  evolution: DailyEvolutionPoint[];
+  evolution30d?: DailyEvolutionPoint[];
+  linkedInAccount: {
+    status: string;
+    accountName: string | null;
+    headline: string | null;
+    profilePicture: string | null;
+    dailyInvitesSent: number;
+    dailyMsgSent: number;
+  } | null;
 }

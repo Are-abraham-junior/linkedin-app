@@ -5,6 +5,8 @@ const CreateCampaignSchema = z.object({
     name: z.string().min(1, "Le nom de la campagne est requis"),
     type: z.string().default("INVITATION_AND_MESSAGES"),
     listIds: z.array(z.string()).default([]),
+    selectedProspectIds: z.array(z.string()).optional(),
+    targetUserId: z.string().optional(),
     steps: z.array(z.object({
         stepOrder: z.number(),
         actionType: z.preprocess((val) => (val === "VISIT" ? "VISIT_PROFILE" : val), z.enum(["INVITATION", "MESSAGE", "VISIT_PROFILE", "FOLLOW", "DELAY"])),
@@ -29,10 +31,46 @@ const UpdateCampaignSchema = z.object({
  */
 export async function getCampaigns(req, res) {
     try {
-        const userId = req.user.id;
+        const requestedMemberId = (req.query.memberId || req.query.userId);
+        let whereClause = {};
+        if (req.user.role === "SUPER_ADMIN" && req.user.organizationId) {
+            if (requestedMemberId && requestedMemberId !== "ALL") {
+                whereClause = { userId: requestedMemberId, user: { organizationId: req.user.organizationId } };
+            }
+            else {
+                whereClause = { user: { organizationId: req.user.organizationId } };
+            }
+        }
+        else {
+            let targetUserId = req.user.id;
+            if (requestedMemberId && requestedMemberId !== targetUserId) {
+                const caller = await prisma.user.findUnique({
+                    where: { id: req.user.id },
+                    select: { role: true, orgRole: true, organizationId: true },
+                });
+                if (caller?.orgRole === "OWNER" && caller.organizationId) {
+                    const member = await prisma.user.findFirst({
+                        where: { id: requestedMemberId, organizationId: caller.organizationId },
+                    });
+                    if (member) {
+                        targetUserId = requestedMemberId;
+                    }
+                }
+            }
+            whereClause = { userId: targetUserId };
+        }
         const campaigns = await prisma.campaign.findMany({
-            where: { userId },
+            where: whereClause,
             include: {
+                user: {
+                    select: {
+                        id: true,
+                        name: true,
+                        email: true,
+                        avatarUrl: true,
+                        orgRole: true,
+                    },
+                },
                 steps: { orderBy: { stepOrder: "asc" } },
                 prospectStates: {
                     select: { status: true },
@@ -55,6 +93,14 @@ export async function getCampaigns(req, res) {
                 updatedAt: c.updatedAt,
                 stepsCount: c.steps.length,
                 steps: c.steps,
+                author: c.user
+                    ? {
+                        id: c.user.id,
+                        name: c.user.name || c.user.email,
+                        avatarUrl: c.user.avatarUrl,
+                        orgRole: c.user.orgRole,
+                    }
+                    : null,
                 stats: {
                     totalProspects: total,
                     acceptedCount: accepted,
@@ -79,8 +125,15 @@ export async function getCampaignDetails(req, res) {
     try {
         const id = req.params.id;
         const userId = req.user.id;
+        let whereClause = { id };
+        if (req.user.role === "SUPER_ADMIN" && req.user.organizationId) {
+            whereClause.user = { organizationId: req.user.organizationId };
+        }
+        else {
+            whereClause.userId = userId;
+        }
         const campaign = await prisma.campaign.findFirst({
-            where: { id, userId },
+            where: whereClause,
             include: {
                 steps: {
                     orderBy: { stepOrder: "asc" },
@@ -172,6 +225,27 @@ export async function createCampaign(req, res) {
     try {
         const userId = req.user.id;
         const body = CreateCampaignSchema.parse(req.body);
+        let targetOwnerId = userId;
+        if (req.user.role === "SUPER_ADMIN" && req.user.ownerId) {
+            targetOwnerId = req.user.ownerId; // Auto-attribution à l'Owner de l'espace supervisé
+        }
+        if (body.targetUserId && body.targetUserId !== targetOwnerId) {
+            const caller = await prisma.user.findUnique({
+                where: { id: userId },
+                select: { role: true, orgRole: true, organizationId: true },
+            });
+            if (caller?.role === "SUPER_ADMIN") {
+                targetOwnerId = body.targetUserId;
+            }
+            else if (caller?.orgRole === "OWNER" && caller.organizationId) {
+                const member = await prisma.user.findFirst({
+                    where: { id: body.targetUserId, organizationId: caller.organizationId },
+                });
+                if (member) {
+                    targetOwnerId = body.targetUserId;
+                }
+            }
+        }
         if (body.startImmediately && (!body.listIds || body.listIds.length === 0)) {
             res.status(400).json({
                 success: false,
@@ -181,14 +255,14 @@ export async function createCampaign(req, res) {
         }
         // Récupérer le compte LinkedIn de l'utilisateur ou le compte par défaut
         const account = await prisma.linkedInAccount.findFirst({
-            where: { userId },
+            where: { userId: targetOwnerId },
         });
         const campaignStatus = body.startImmediately ? "ACTIVE" : "DRAFT";
         let campaign;
         if (body.id) {
             // Mise à jour d'un brouillon existant
             const existing = await prisma.campaign.findFirst({
-                where: { id: body.id, userId },
+                where: { id: body.id, userId: targetOwnerId },
             });
             if (existing) {
                 // Supprimer les anciennes étapes pour réécrire la configuration propre
@@ -220,7 +294,7 @@ export async function createCampaign(req, res) {
             // Nouvelle création
             campaign = await prisma.campaign.create({
                 data: {
-                    userId,
+                    userId: targetOwnerId,
                     accountId: account?.id || null,
                     name: body.name.trim(),
                     type: body.type,
@@ -239,19 +313,49 @@ export async function createCampaign(req, res) {
                 },
             });
         }
-        // Récupérer les prospects des listes sélectionnées (s'il y en a)
+        // Récupérer et filtrer les prospects des listes sélectionnées selon les règles d'éligibilité
         let prospectsEnrolled = 0;
         if (body.listIds && body.listIds.length > 0) {
-            const prospects = await prisma.prospect.findMany({
-                where: {
-                    listId: { in: body.listIds },
-                    doNotContact: false,
-                },
-            });
             const step1 = campaign.steps[0];
+            const firstActionType = step1?.actionType || "INVITATION";
+            // Récupérer les IDs de prospects déjà engagés dans une campagne active ou en attente
+            const activeStates = await prisma.prospectCampaignState.findMany({
+                where: {
+                    status: { in: ["PENDING", "IN_PROGRESS", "WAITING_DELAY", "WAITING_CONDITION"] },
+                },
+                select: { prospectId: true },
+            });
+            const busyProspectIds = new Set(activeStates.map((s) => s.prospectId));
+            const prospectWhere = {
+                listId: { in: body.listIds },
+                doNotContact: false,
+            };
+            // Si sélection manuelle d'IDs spécifique
+            if (body.selectedProspectIds && body.selectedProspectIds.length > 0) {
+                prospectWhere.id = { in: body.selectedProspectIds };
+            }
+            const candidateProspects = await prisma.prospect.findMany({
+                where: prospectWhere,
+            });
+            // Filtrer les candidats selon les règles strictes d'éligibilité
+            const eligibleProspects = candidateProspects.filter((p) => {
+                // 1. Exclure si déjà dans une campagne active
+                if (busyProspectIds.has(p.id))
+                    return false;
+                // 2. Règles selon le type d'action initiale
+                if (firstActionType === "MESSAGE") {
+                    // Campagne de message direct -> DOIT être déjà connecté
+                    return p.connectionStatus === "CONNECTED";
+                }
+                else if (firstActionType === "INVITATION" || firstActionType === "VISIT_PROFILE" || firstActionType === "FOLLOW") {
+                    // Campagne d'invitation/visite -> NE DOIT PAS être déjà connecté
+                    return p.connectionStatus !== "CONNECTED";
+                }
+                return true;
+            });
             const now = new Date();
-            if (prospects.length > 0 && step1) {
-                const statesData = prospects.map((p, index) => {
+            if (eligibleProspects.length > 0 && step1) {
+                const statesData = eligibleProspects.map((p, index) => {
                     const scheduledTime = new Date(now.getTime() + (index * 90 + Math.floor(Math.random() * 60)) * 1000);
                     return {
                         campaignId: campaign.id,
@@ -265,10 +369,10 @@ export async function createCampaign(req, res) {
                     data: statesData,
                     skipDuplicates: true,
                 });
-                prospectsEnrolled = prospects.length;
+                prospectsEnrolled = eligibleProspects.length;
                 // Si démarrage immédiat et compte présent, programmer dans ActionQueue
                 if (body.startImmediately && account) {
-                    const queueEntries = prospects.map((p, index) => {
+                    const queueEntries = eligibleProspects.map((p, index) => {
                         const scheduledTime = new Date(now.getTime() + (index * 90 + Math.floor(Math.random() * 60)) * 1000);
                         return {
                             accountId: account.id,
@@ -355,6 +459,7 @@ export async function updateCampaign(req, res) {
             res.status(404).json({ success: false, error: "Campagne introuvable." });
             return;
         }
+        // Mettre à jour les informations de base de la campagne
         const updated = await prisma.campaign.update({
             where: { id },
             data: {
@@ -362,10 +467,101 @@ export async function updateCampaign(req, res) {
                 status: body.status,
             },
         });
+        // Mettre à jour les étapes si fournies
+        if (body.steps && Array.isArray(body.steps)) {
+            for (const stepInput of body.steps) {
+                let stepId = stepInput.id;
+                // Si l'id n'est pas fourni, trouver l'étape par ordre
+                if (!stepId) {
+                    const existingStep = await prisma.campaignStep.findFirst({
+                        where: {
+                            campaignId: id,
+                            stepOrder: stepInput.stepOrder,
+                        },
+                    });
+                    if (existingStep) {
+                        stepId = existingStep.id;
+                    }
+                }
+                if (stepId) {
+                    // 1. Mettre à jour l'étape dans CampaignStep
+                    await prisma.campaignStep.update({
+                        where: { id: stepId },
+                        data: {
+                            delayDays: stepInput.delayDays !== undefined ? stepInput.delayDays : undefined,
+                            messageText: stepInput.messageText !== undefined ? stepInput.messageText : undefined,
+                        },
+                    });
+                    // 2. Synchroniser les actions en file d'attente (ActionQueue)
+                    const queuedActions = await prisma.actionQueue.findMany({
+                        where: {
+                            campaignId: id,
+                            status: "QUEUED",
+                        },
+                    });
+                    for (const action of queuedActions) {
+                        const payload = action.payload || {};
+                        if (payload.stepId === stepId) {
+                            const dataToUpdate = {};
+                            // Mettre à jour le texte du message si modifié
+                            if (stepInput.messageText !== undefined) {
+                                payload.messageText = stepInput.messageText;
+                                dataToUpdate.payload = payload;
+                            }
+                            // Mettre à jour la date d'exécution (scheduledFor) si le délai a été modifié
+                            if (stepInput.delayDays !== undefined) {
+                                const now = new Date();
+                                let newScheduled;
+                                if (stepInput.delayDays === 0) {
+                                    newScheduled = now;
+                                }
+                                else {
+                                    const state = await prisma.prospectCampaignState.findUnique({
+                                        where: {
+                                            campaignId_prospectId: {
+                                                campaignId: id,
+                                                prospectId: action.prospectId,
+                                            },
+                                        },
+                                    });
+                                    const baseTime = state?.lastActionAt || action.createdAt || now;
+                                    const targetTime = new Date(baseTime.getTime() + stepInput.delayDays * 24 * 60 * 60 * 1000);
+                                    newScheduled = targetTime.getTime() < now.getTime() ? now : targetTime;
+                                }
+                                dataToUpdate.scheduledFor = newScheduled;
+                                // Mettre à jour également prospectCampaignState.nextExecutionAt
+                                await prisma.prospectCampaignState.updateMany({
+                                    where: {
+                                        campaignId: id,
+                                        prospectId: action.prospectId,
+                                    },
+                                    data: {
+                                        nextExecutionAt: newScheduled,
+                                    },
+                                });
+                            }
+                            if (Object.keys(dataToUpdate).length > 0) {
+                                await prisma.actionQueue.update({
+                                    where: { id: action.id },
+                                    data: dataToUpdate,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // Récupérer la campagne complète avec étapes ordonnées
+        const fullCampaign = await prisma.campaign.findUnique({
+            where: { id },
+            include: {
+                steps: { orderBy: { stepOrder: "asc" } },
+            },
+        });
         res.json({
             success: true,
-            message: "Campagne mise à jour avec succès.",
-            campaign: updated,
+            message: "Campagne et séquence mises à jour avec succès.",
+            campaign: fullCampaign || updated,
         });
     }
     catch (error) {
@@ -383,8 +579,15 @@ export async function deleteCampaign(req, res) {
     try {
         const id = req.params.id;
         const userId = req.user.id;
+        let whereClause = { id };
+        if (req.user.role === "SUPER_ADMIN" && req.user.organizationId) {
+            whereClause.user = { organizationId: req.user.organizationId };
+        }
+        else {
+            whereClause.userId = userId;
+        }
         const existing = await prisma.campaign.findFirst({
-            where: { id, userId },
+            where: whereClause,
         });
         if (!existing) {
             res.status(404).json({ success: false, error: "Campagne introuvable." });

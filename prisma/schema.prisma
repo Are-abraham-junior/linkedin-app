@@ -15,6 +15,7 @@ enum Role {
 
 enum OrgRole {
   OWNER
+  ADMIN
   MEMBER
 }
 
@@ -67,6 +68,8 @@ model User {
   email            String            @unique
   passwordHash     String?
   name             String?
+  firstName        String?
+  lastName         String?
   avatarUrl        String?
   role             Role              @default(USER)
   orgRole          OrgRole           @default(MEMBER)
@@ -166,6 +169,8 @@ model Prospect {
   campaignStates    ProspectCampaignState[]
   conversations     Conversation[]
   actionQueues      ActionQueue[]
+
+  @@index([linkedinUrl])
 }
 
 model Campaign {

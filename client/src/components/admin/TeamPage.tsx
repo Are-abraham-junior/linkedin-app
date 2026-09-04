@@ -1,12 +1,32 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { apiRequest } from "../../services/api";
+import { useAuth } from "../../context/AuthContext";
+import {
+  UserPlus,
+  Shield,
+  User as UserIcon,
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  CheckCircle2,
+  X,
+  Sparkles,
+  AlertCircle,
+  LogOut,
+  Send,
+  MessageSquare,
+} from "lucide-react";
+import { ConfirmModal } from "../common/ConfirmModal";
 
 interface TeamMember {
   id: string;
   name: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
   email: string;
   avatarUrl: string | null;
-  orgRole: "OWNER" | "MEMBER";
+  orgRole: "OWNER" | "ADMIN" | "MEMBER";
   status: string;
   createdAt: string;
   linkedInAccount: {
@@ -29,15 +49,37 @@ interface PendingInvitation {
 }
 
 export const TeamPage: React.FC = () => {
+  const { user: currentUser } = useAuth();
+  const canManageTeam =
+    currentUser?.role === "SUPER_ADMIN" ||
+    currentUser?.orgRole === "OWNER" ||
+    currentUser?.orgRole === "ADMIN";
+
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteLoading, setInviteLoading] = useState(false);
-  const [inviteResult, setInviteResult] = useState<{ success: boolean; message: string; inviteUrl?: string } | null>(null);
+
+  // Modale Ajouter un membre
+  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [orgRole, setOrgRole] = useState<"MEMBER" | "ADMIN">("MEMBER");
+  const [showPassword, setShowPassword] = useState(false);
+  const [addLoading, setAddLoading] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+
+  // Notification Toast de succès
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // États d'action sur la liste
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [updatingRoleId, setUpdatingRoleId] = useState<string | null>(null);
+
+  // Modal de confirmation de retrait de membre
+  const [memberToRemove, setMemberToRemove] = useState<{ id: string; name: string } | null>(null);
 
   const loadTeam = useCallback(async () => {
     setIsLoading(true);
@@ -54,55 +96,117 @@ export const TeamPage: React.FC = () => {
     }
   }, []);
 
-  useEffect(() => { loadTeam(); }, [loadTeam]);
+  useEffect(() => {
+    loadTeam();
+  }, [loadTeam]);
 
-  const handleInvite = async (e: React.FormEvent) => {
+  // Disparition automatique du toast
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => setToastMessage(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
+
+  // Création directe d'un membre avec ses identifiants
+  const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
-    setInviteLoading(true);
-    setInviteResult(null);
+    setAddError(null);
+
+    if (!lastName.trim()) {
+      setAddError("Le nom du collaborateur est requis.");
+      return;
+    }
+    if (!email.trim()) {
+      setAddError("L'adresse email est requise.");
+      return;
+    }
+    if (password.length < 8) {
+      setAddError("Le mot de passe initial doit contenir au moins 8 caractères.");
+      return;
+    }
+
+    setAddLoading(true);
+
     try {
-      const res = await apiRequest<{ invitation: { inviteUrl: string } }>("/team/invite", {
+      const res = await apiRequest<{ success: boolean; message: string; member: TeamMember }>("/team/members", {
         method: "POST",
-        body: { email: inviteEmail.trim() },
+        body: {
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          email: email.trim(),
+          password,
+          orgRole,
+        },
       });
+
       if (res.success) {
-        setInviteResult({
-          success: true,
-          message: `Invitation envoyée à ${inviteEmail}`,
-          inviteUrl: (res as any).invitation?.inviteUrl,
-        });
-        setInviteEmail("");
+        setShowAddMemberModal(false);
+        setToastMessage(res.message || `Le membre ${firstName} ${lastName} a été ajouté avec succès !`);
+        // Réinitialiser le formulaire
+        setFirstName("");
+        setLastName("");
+        setEmail("");
+        setPassword("");
+        setOrgRole("MEMBER");
         loadTeam();
       } else {
-        setInviteResult({ success: false, message: (res as any).error || "Erreur lors de l'invitation." });
+        setAddError((res as any).error || "Erreur lors de l'ajout du membre.");
       }
     } catch (err: any) {
-      setInviteResult({ success: false, message: err.message });
+      setAddError(err.message || "Erreur inattendue. Veuillez vérifier vos informations.");
     } finally {
-      setInviteLoading(false);
+      setAddLoading(false);
     }
   };
 
-  const handleRemoveMember = async (userId: string, memberName: string) => {
-    if (!window.confirm(`Retirer ${memberName || "ce membre"} de l'équipe ?`)) return;
-    setRemovingId(userId);
+  // Modification du rôle d'un membre
+  const handleUpdateRole = async (userId: string, newRole: "ADMIN" | "MEMBER") => {
+    setUpdatingRoleId(userId);
     try {
-      await apiRequest(`/team/members/${userId}`, { method: "DELETE" });
+      const res = await apiRequest(`/team/members/${userId}/role`, {
+        method: "PUT",
+        body: { orgRole: newRole },
+      });
+      if (res.success) {
+        setToastMessage("Rôle mis à jour avec succès.");
+        loadTeam();
+      }
+    } catch (err: any) {
+      alert(err.message || "Erreur lors de la modification du rôle.");
+    } finally {
+      setUpdatingRoleId(null);
+    }
+  };
+
+  // Suppression d'un membre avec Modal
+  const handleOpenRemoveMember = (userId: string, memberName: string) => {
+    setMemberToRemove({ id: userId, name: memberName || "ce membre" });
+  };
+
+  const handleConfirmRemoveMember = async () => {
+    if (!memberToRemove) return;
+    setRemovingId(memberToRemove.id);
+    try {
+      await apiRequest(`/team/members/${memberToRemove.id}`, { method: "DELETE" });
+      setToastMessage("Membre retiré de l'espace.");
+      setMemberToRemove(null);
       loadTeam();
     } catch (err) {
-      alert("Erreur lors de la suppression.");
+      alert("Erreur lors du retrait du membre.");
     } finally {
       setRemovingId(null);
     }
   };
 
+  // Annulation d'invitation
   const handleCancelInvitation = async (invitationId: string) => {
     setCancellingId(invitationId);
     try {
       await apiRequest(`/team/invitations/${invitationId}`, { method: "DELETE" });
       loadTeam();
     } catch {
-      alert("Erreur lors de l'annulation.");
+      alert("Erreur lors de l'annulation de l'invitation.");
     } finally {
       setCancellingId(null);
     }
@@ -110,137 +214,204 @@ export const TeamPage: React.FC = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "CONNECTED": return "bg-emerald-100 text-emerald-700";
-      case "SUSPENDED": return "bg-red-100 text-red-700";
-      default: return "bg-gray-100 text-gray-600";
+      case "CONNECTED":
+        return "bg-emerald-50 text-emerald-700 border border-emerald-200";
+      case "SUSPENDED":
+        return "bg-red-50 text-red-700 border border-red-200";
+      default:
+        return "bg-amber-50 text-amber-700 border border-amber-200";
     }
   };
 
   const MemberAvatar: React.FC<{ member: TeamMember; size?: "sm" | "md" }> = ({ member, size = "md" }) => {
-    const sizeClass = size === "sm" ? "w-8 h-8 text-sm" : "w-10 h-10 text-base";
-    const src = member.linkedInAccount?.profilePicture || member.avatarUrl;
-    const name = member.linkedInAccount?.accountName || member.name || member.email;
+    const sizeClass = size === "sm" ? "w-8 h-8 text-xs" : "w-10 h-10 text-sm";
+    const isConnected = member.linkedInAccount?.status === "CONNECTED";
+    const src = (isConnected ? member.linkedInAccount?.profilePicture : null) || member.avatarUrl;
+    const name = (isConnected ? member.linkedInAccount?.accountName : null) || member.name || `${member.firstName || ""} ${member.lastName || ""}`.trim() || member.email;
+
+    const getInitials = (n: string) => {
+      const parts = n.trim().split(/\s+/).filter(Boolean);
+      if (parts.length >= 2) {
+        return (parts[0][0] + parts[1][0]).toUpperCase();
+      }
+      return n.slice(0, 2).toUpperCase() || "?";
+    };
+
     if (src) {
-      return <img src={src} alt={name} className={`${sizeClass} rounded-full object-cover border-2 border-white shadow`} />;
+      return (
+        <img
+          src={src}
+          alt={name}
+          className={`${sizeClass} rounded-2xl object-cover border border-[#e0e0db]/60 shadow-sm`}
+        />
+      );
     }
     return (
-      <div className={`${sizeClass} rounded-full flex items-center justify-center font-semibold text-white border-2 border-white shadow`}
-        style={{ background: "linear-gradient(135deg, #592eff, #7c3aed)" }}>
-        {name?.[0]?.toUpperCase() || "?"}
+      <div
+        className={`${sizeClass} rounded-2xl flex items-center justify-center font-bold text-white shadow-sm shrink-0`}
+        style={{ background: "linear-gradient(135deg, #592eff, #7c3aed)" }}
+      >
+        {getInitials(name)}
       </div>
     );
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
+    <div className="max-w-5xl mx-auto px-4 py-8 sm:py-10">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed top-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-emerald-600 text-white text-xs font-bold shadow-xl animate-fade-in">
+          <CheckCircle2 className="w-4 h-4" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Mon équipe</h1>
-          <p className="text-gray-500 text-sm mt-1">
-            {members.length} membre{members.length !== 1 ? "s" : ""}
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#592eff]/10 text-[#592eff] text-xs font-bold mb-2 tracking-wide">
+            <Sparkles className="w-3.5 h-3.5" />
+            Espace Collaboratif
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#21164c] tracking-tight">Mon équipe</h1>
+          <p className="text-[#5f5f69] text-xs sm:text-sm mt-1">
+            {members.length} collaborateur{members.length !== 1 ? "s" : ""} dans cet espace
             {invitations.length > 0 && ` · ${invitations.length} invitation${invitations.length !== 1 ? "s" : ""} en attente`}
           </p>
         </div>
-        <button
-          onClick={() => { setShowInviteModal(true); setInviteResult(null); }}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-white text-sm transition-all duration-200 hover:opacity-90 hover:shadow-lg hover:-translate-y-0.5"
-          style={{ background: "linear-gradient(135deg, #592eff, #7c3aed)" }}
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Inviter un membre
-        </button>
+
+        {/* Bouton Ajouter un membre (Réservé au Propriétaire et Admins) */}
+        {canManageTeam && (
+          <button
+            onClick={() => {
+              setShowAddMemberModal(true);
+              setAddError(null);
+            }}
+            className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl font-bold text-white text-xs shadow-lg shadow-[#592eff]/25 hover:shadow-[#592eff]/35 active:scale-[0.99] transition-all cursor-pointer"
+            style={{ background: "linear-gradient(135deg, #592eff, #7c3aed)" }}
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>+ Ajouter un membre</span>
+          </button>
+        )}
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-16 gap-3 text-gray-400">
+        <div className="flex items-center justify-center py-20 gap-3 text-gray-400">
           <div className="w-6 h-6 border-2 border-[#592eff] border-t-transparent rounded-full animate-spin" />
-          Chargement...
+          <span className="text-xs font-medium">Chargement de votre équipe...</span>
         </div>
       ) : (
         <>
-          {/* Members list */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6">
-            <div className="px-6 py-4 border-b border-gray-50">
-              <h2 className="font-semibold text-gray-900 text-sm">Membres actifs</h2>
+          {/* Members list Card */}
+          <div className="adora-card bg-white rounded-3xl shadow-xl shadow-[#592eff]/5 border border-[#e0e0db]/60 overflow-hidden mb-8">
+            <div className="px-6 py-4 border-b border-[#e0e0db]/50 flex items-center justify-between bg-[#f8f9fc]/50">
+              <h2 className="font-bold text-[#21164c] text-xs uppercase tracking-wider">Membres actifs</h2>
+              <span className="text-xs font-bold text-[#592eff] bg-[#592eff]/10 px-2.5 py-0.5 rounded-full">
+                {members.length} actif{members.length !== 1 ? "s" : ""}
+              </span>
             </div>
 
             {members.length === 0 ? (
-              <div className="px-6 py-12 text-center">
-                <div className="w-12 h-12 rounded-xl bg-purple-50 flex items-center justify-center mx-auto mb-3">
-                  <svg className="w-6 h-6 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
+              <div className="px-6 py-16 text-center">
+                <div className="w-12 h-12 rounded-2xl bg-purple-50 flex items-center justify-center mx-auto mb-3 text-[#592eff]">
+                  <UserPlus className="w-6 h-6" />
                 </div>
-                <p className="text-gray-500 text-sm">Aucun membre pour l'instant.</p>
-                <button
-                  onClick={() => setShowInviteModal(true)}
-                  className="mt-3 text-sm font-medium text-[#592eff] hover:underline"
-                >
-                  Inviter votre premier membre →
-                </button>
+                <p className="text-sm font-bold text-[#21164c]">Aucun membre pour l'instant.</p>
+                <p className="text-xs text-[#5f5f69] mt-1">Ajoutez vos collègues pour collaborer sur vos campagnes.</p>
+                {canManageTeam && (
+                  <button
+                    onClick={() => setShowAddMemberModal(true)}
+                    className="mt-4 inline-flex items-center gap-1 text-xs font-bold text-[#592eff] hover:underline cursor-pointer"
+                  >
+                    Ajouter votre premier membre →
+                  </button>
+                )}
               </div>
             ) : (
-              <div className="divide-y divide-gray-50">
+              <div className="divide-y divide-[#e0e0db]/40">
                 {members.map((member) => {
-                  const displayName = member.linkedInAccount?.accountName || member.name || member.email;
+                  const displayName = member.name || `${member.firstName || ""} ${member.lastName || ""}`.trim() || member.email;
                   const headline = member.linkedInAccount?.headline;
                   const liStatus = member.linkedInAccount?.status || "DISCONNECTED";
+                  const isConnected = liStatus === "CONNECTED";
 
                   return (
-                    <div key={member.id} className="px-6 py-4 flex items-center gap-4 hover:bg-gray-50/50 transition-colors">
+                    <div key={member.id} className="px-6 py-4 flex items-center gap-4 hover:bg-[#f8f9fc]/60 transition-colors">
                       <MemberAvatar member={member} />
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
-                          <span className="font-semibold text-gray-900 text-sm truncate">{displayName}</span>
+                          <span className="font-bold text-[#21164c] text-sm truncate">{displayName}</span>
+
+                          {/* Rôle Badge */}
                           {member.orgRole === "OWNER" && (
-                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700 shrink-0">
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#592eff]/10 text-[#592eff] border border-[#592eff]/20 shrink-0">
                               Propriétaire
                             </span>
                           )}
+                          {member.orgRole === "ADMIN" && (
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 shrink-0">
+                              Admin d'équipe
+                            </span>
+                          )}
+                          {member.orgRole === "MEMBER" && (
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-700 border border-gray-200 shrink-0">
+                              Membre
+                            </span>
+                          )}
                         </div>
-                        {headline && (
-                          <p className="text-xs text-gray-500 truncate">{headline}</p>
+
+                        {isConnected && headline && (
+                          <p className="text-xs text-[#5f5f69] truncate">{headline}</p>
                         )}
-                        <p className="text-xs text-gray-400">{member.email}</p>
+                        <p className="text-[11px] text-[#5f5f69]">{member.email}</p>
                       </div>
 
-                      {/* LinkedIn status */}
+                      {/* Statut LinkedIn & Actions */}
                       <div className="flex items-center gap-3 shrink-0">
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(liStatus)}`}>
-                          {liStatus === "CONNECTED" ? "LinkedIn ✓" : "Déconnecté"}
+                        <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${getStatusColor(liStatus)}`}>
+                          {isConnected ? "LinkedIn ✓" : "LinkedIn non lié"}
                         </span>
 
-                        {/* Daily stats */}
-                        {member.linkedInAccount && (
-                          <div className="hidden md:flex items-center gap-3 text-xs text-gray-500">
-                            <span title="Invitations aujourd'hui">
-                              📨 {member.linkedInAccount.dailyInvitesSent}
+                        {/* Quotas / Activité si connecté */}
+                        {isConnected && member.linkedInAccount && (
+                          <div className="hidden sm:flex items-center gap-3 text-xs text-[#5f5f69]">
+                            <span title="Invitations envoyées aujourd'hui" className="flex items-center gap-1">
+                              <Send className="w-3.5 h-3.5 text-[#592eff]" />
+                              {member.linkedInAccount.dailyInvitesSent}
                             </span>
-                            <span title="Messages aujourd'hui">
-                              💬 {member.linkedInAccount.dailyMsgSent}
+                            <span title="Messages envoyés aujourd'hui" className="flex items-center gap-1">
+                              <MessageSquare className="w-3.5 h-3.5 text-[#592eff]" />
+                              {member.linkedInAccount.dailyMsgSent}
                             </span>
                           </div>
                         )}
 
-                        {/* Remove button (not for owner) */}
-                        {member.orgRole !== "OWNER" && (
+                        {/* Sélecteur de rôle rapide (Réservé aux admins/owner et interdit sur l'owner ou soi-même) */}
+                        {canManageTeam && member.orgRole !== "OWNER" && member.id !== currentUser?.id && (
+                          <div className="hidden md:block">
+                            <select
+                              value={member.orgRole}
+                              disabled={updatingRoleId === member.id}
+                              onChange={(e) => handleUpdateRole(member.id, e.target.value as "ADMIN" | "MEMBER")}
+                              className="text-xs font-semibold px-2.5 py-1 rounded-xl bg-[#f8f9fc] border border-[#e0e0db] text-[#21164c] focus:outline-none focus:border-[#592eff] cursor-pointer"
+                            >
+                              <option value="MEMBER">Membre</option>
+                              <option value="ADMIN">Admin d'équipe</option>
+                            </select>
+                          </div>
+                        )}
+
+                        {/* Retirer le membre (Réservé aux admins/owner et interdit sur l'owner ou soi-même) */}
+                        {canManageTeam && member.orgRole !== "OWNER" && member.id !== currentUser?.id && (
                           <button
-                            onClick={() => handleRemoveMember(member.id, displayName)}
+                            onClick={() => handleOpenRemoveMember(member.id, displayName)}
                             disabled={removingId === member.id}
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
+                            className="p-2 rounded-xl text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer disabled:opacity-50"
                             title="Retirer de l'équipe"
                           >
-                            {removingId === member.id ? (
-                              <div className="w-4 h-4 border-2 border-red-300 border-t-red-500 rounded-full animate-spin" />
-                            ) : (
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                              </svg>
-                            )}
+                            <LogOut className="w-4 h-4" />
                           </button>
                         )}
                       </div>
@@ -251,42 +422,34 @@ export const TeamPage: React.FC = () => {
             )}
           </div>
 
-          {/* Pending invitations */}
+          {/* Pending Invitations list (si existantes) */}
           {invitations.length > 0 && (
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-50">
-                <h2 className="font-semibold text-gray-900 text-sm">Invitations en attente</h2>
+            <div className="adora-card bg-white rounded-3xl shadow-sm border border-[#e0e0db]/60 overflow-hidden">
+              <div className="px-6 py-4 border-b border-[#e0e0db]/50 bg-[#f8f9fc]/50">
+                <h2 className="font-bold text-[#21164c] text-xs uppercase tracking-wider">Invitations en attente</h2>
               </div>
-              <div className="divide-y divide-gray-50">
+              <div className="divide-y divide-[#e0e0db]/40">
                 {invitations.map((inv) => (
                   <div key={inv.id} className="px-6 py-4 flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-                      <svg className="w-5 h-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                      </svg>
+                    <div className="w-10 h-10 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0 text-amber-600">
+                      <Mail className="w-4 h-4" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 text-sm">{inv.email}</p>
-                      <p className="text-xs text-gray-400">
+                      <p className="font-bold text-[#21164c] text-xs">{inv.email}</p>
+                      <p className="text-[11px] text-[#5f5f69]">
                         Expire le {new Date(inv.expiresAt).toLocaleDateString("fr-FR")}
                       </p>
                     </div>
-                    <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700 shrink-0">
+                    <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
                       En attente
                     </span>
                     <button
                       onClick={() => handleCancelInvitation(inv.id)}
                       disabled={cancellingId === inv.id}
-                      className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
+                      className="p-2 rounded-xl text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer disabled:opacity-50"
                       title="Annuler l'invitation"
                     >
-                      {cancellingId === inv.id ? (
-                        <div className="w-4 h-4 border-2 border-red-300 border-t-red-500 rounded-full animate-spin" />
-                      ) : (
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      )}
+                      <X className="w-4 h-4" />
                     </button>
                   </div>
                 ))}
@@ -296,90 +459,212 @@ export const TeamPage: React.FC = () => {
         </>
       )}
 
-      {/* ── Invite Modal ─────────────────────────────── */}
-      {showInviteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
-              <h3 className="font-bold text-gray-900">Inviter un membre</h3>
-              <button onClick={() => { setShowInviteModal(false); setInviteResult(null); setInviteEmail(""); }}
-                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+      {/* ── MODALE AJOUTER UN MEMBRE ───────────────────────── */}
+      {showAddMemberModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(33, 22, 76, 0.45)", backdropFilter: "blur(6px)" }}
+        >
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-[#e0e0db]/60 animate-fade-in">
+            {/* Modal Header */}
+            <div className="px-6 py-5 border-b border-[#e0e0db]/60 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-[#592eff]/10 text-[#592eff] flex items-center justify-center">
+                  <UserPlus className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-[#21164c] text-base">Ajouter un membre</h3>
+                  <p className="text-[#5f5f69] text-[11px]">Créez ses identifiants pour l'intégrer à votre espace.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowAddMemberModal(false);
+                  setAddError(null);
+                }}
+                className="p-2 rounded-xl text-[#5f5f69] hover:text-[#21164c] hover:bg-[#f8f9fc] transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="p-6">
-              {inviteResult ? (
-                <div className={`rounded-xl p-4 ${inviteResult.success ? "bg-emerald-50 border border-emerald-200" : "bg-red-50 border border-red-200"}`}>
-                  <div className="flex items-start gap-3">
-                    {inviteResult.success ? (
-                      <svg className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    ) : (
-                      <svg className="w-5 h-5 text-red-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    )}
-                    <div>
-                      <p className={`text-sm font-medium ${inviteResult.success ? "text-emerald-800" : "text-red-800"}`}>
-                        {inviteResult.message}
-                      </p>
-                      {inviteResult.inviteUrl && (
-                        <div className="mt-3">
-                          <p className="text-xs text-emerald-600 mb-2">Lien d'invitation (à copier en dev) :</p>
-                          <div className="bg-white rounded-lg p-2.5 border border-emerald-200 break-all">
-                            <code className="text-xs text-gray-700">{inviteResult.inviteUrl}</code>
-                          </div>
-                          <button
-                            onClick={() => navigator.clipboard.writeText(inviteResult.inviteUrl!)}
-                            className="mt-2 text-xs font-medium text-emerald-600 hover:underline"
-                          >
-                            📋 Copier le lien
-                          </button>
-                        </div>
-                      )}
-                    </div>
+            {/* Modal Form */}
+            <form onSubmit={handleAddMember} className="p-6 space-y-4">
+              {addError && (
+                <div className="p-3 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span className="flex-1">{addError}</span>
+                </div>
+              )}
+
+              {/* Prénom & Nom */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-[#21164c] uppercase tracking-wider mb-1.5">
+                    Prénom
+                  </label>
+                  <div className="relative">
+                    <UserIcon className="w-4 h-4 text-[#5f5f69] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      placeholder="Jean"
+                      className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#f8f9fc] border border-[#e0e0db] text-[#21164c] text-xs focus:outline-none focus:border-[#592eff] focus:bg-white focus:ring-3 focus:ring-[#592eff]/10 transition-all font-medium"
+                    />
                   </div>
                 </div>
-              ) : (
-                <form onSubmit={handleInvite} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      Email du membre à inviter
-                    </label>
+
+                <div>
+                  <label className="block text-xs font-bold text-[#21164c] uppercase tracking-wider mb-1.5">
+                    Nom <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <UserIcon className="w-4 h-4 text-[#5f5f69] absolute left-3.5 top-1/2 -translate-y-1/2" />
                     <input
-                      type="email"
-                      value={inviteEmail}
-                      onChange={(e) => setInviteEmail(e.target.value)}
-                      placeholder="colleague@company.com"
+                      type="text"
                       required
-                      autoFocus
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 transition-all"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      placeholder="Dupont"
+                      className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#f8f9fc] border border-[#e0e0db] text-[#21164c] text-xs focus:outline-none focus:border-[#592eff] focus:bg-white focus:ring-3 focus:ring-[#592eff]/10 transition-all font-medium"
                     />
-                    <p className="mt-1.5 text-xs text-gray-400">
-                      Un lien d'invitation sera généré. Le membre devra connecter son LinkedIn pour rejoindre l'équipe.
+                  </div>
+                </div>
+              </div>
+
+              {/* Email professionnel */}
+              <div>
+                <label className="block text-xs font-bold text-[#21164c] uppercase tracking-wider mb-1.5">
+                  Email professionnel <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-[#5f5f69] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="jean.dupont@entreprise.com"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#f8f9fc] border border-[#e0e0db] text-[#21164c] text-xs focus:outline-none focus:border-[#592eff] focus:bg-white focus:ring-3 focus:ring-[#592eff]/10 transition-all font-medium"
+                  />
+                </div>
+              </div>
+
+              {/* Mot de passe initial */}
+              <div>
+                <label className="block text-xs font-bold text-[#21164c] uppercase tracking-wider mb-1.5">
+                  Mot de passe initial (8 car. min) <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-[#5f5f69] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    required
+                    minLength={8}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••••••"
+                    className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-[#f8f9fc] border border-[#e0e0db] text-[#21164c] text-xs focus:outline-none focus:border-[#592eff] focus:bg-white focus:ring-3 focus:ring-[#592eff]/10 transition-all font-medium"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#5f5f69] hover:text-[#21164c] cursor-pointer"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Sélecteur de Rôle / Permissions (2 cartes radio) */}
+              <div>
+                <label className="block text-xs font-bold text-[#21164c] uppercase tracking-wider mb-1.5">
+                  Permissions & Rôle
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {/* Option Membre */}
+                  <div
+                    onClick={() => setOrgRole("MEMBER")}
+                    className={`p-3 rounded-2xl border-2 cursor-pointer transition-all ${
+                      orgRole === "MEMBER"
+                        ? "border-[#592eff] bg-[#592eff]/5 shadow-sm"
+                        : "border-[#e0e0db] bg-[#f8f9fc] hover:border-gray-300"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <UserIcon className={`w-4 h-4 ${orgRole === "MEMBER" ? "text-[#592eff]" : "text-[#5f5f69]"}`} />
+                      <span className="text-xs font-bold text-[#21164c]">Membre</span>
+                    </div>
+                    <p className="text-[11px] text-[#5f5f69] leading-snug">
+                      Gère ses prospects, ses campagnes et sa messagerie.
                     </p>
                   </div>
-                  <button
-                    type="submit"
-                    disabled={inviteLoading}
-                    className="w-full py-3 rounded-xl font-semibold text-white text-sm transition-all hover:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2"
-                    style={{ background: "linear-gradient(135deg, #592eff, #7c3aed)" }}
+
+                  {/* Option Admin */}
+                  <div
+                    onClick={() => setOrgRole("ADMIN")}
+                    className={`p-3 rounded-2xl border-2 cursor-pointer transition-all ${
+                      orgRole === "ADMIN"
+                        ? "border-[#592eff] bg-[#592eff]/5 shadow-sm"
+                        : "border-[#e0e0db] bg-[#f8f9fc] hover:border-gray-300"
+                    }`}
                   >
-                    {inviteLoading ? (
-                      <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />Envoi...</>
-                    ) : "Envoyer l'invitation"}
-                  </button>
-                </form>
-              )}
-            </div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <Shield className={`w-4 h-4 ${orgRole === "ADMIN" ? "text-[#592eff]" : "text-[#5f5f69]"}`} />
+                      <span className="text-xs font-bold text-[#21164c]">Admin d'équipe</span>
+                    </div>
+                    <p className="text-[11px] text-[#5f5f69] leading-snug">
+                      Peut également ajouter des membres et voir les métriques d'équipe.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <div className="pt-3">
+                <button
+                  type="submit"
+                  disabled={addLoading}
+                  className="w-full py-3 px-5 rounded-xl font-bold text-xs text-white shadow-lg shadow-[#592eff]/25 hover:shadow-[#592eff]/35 active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  style={{ background: "linear-gradient(135deg, #592eff, #7c3aed)" }}
+                >
+                  {addLoading ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      <span>Création en cours...</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="w-4 h-4" />
+                      <span>Ajouter le membre à l'espace</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
+
+      {/* Modal de Confirmation de Retrait de Membre */}
+      <ConfirmModal
+        isOpen={Boolean(memberToRemove)}
+        onClose={() => {
+          if (!removingId) setMemberToRemove(null);
+        }}
+        onConfirm={handleConfirmRemoveMember}
+        title="Retirer le membre de l'espace"
+        description="Cette action révoquera immédiatement l'accès de ce collaborateur à votre espace de travail."
+        itemName={memberToRemove?.name}
+        itemType="Membre d'équipe"
+        variant="warning"
+        confirmText="Retirer de l'équipe"
+        cancelText="Conserver le membre"
+        isLoading={Boolean(removingId)}
+        warningMessage="Le membre ne pourra plus consulter les campagnes, prospects ni envoyer de messages pour cette organisation."
+      />
     </div>
   );
 };
+

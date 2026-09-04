@@ -7,6 +7,13 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   setupNeeded: boolean;
+  selectedMemberId: string | null;
+  setSelectedMemberId: (id: string | null) => void;
+  impersonatedOrg: { id: string; name: string; slug: string } | null;
+  setImpersonatedOrg: (org: { id: string; name: string; slug: string } | null) => void;
+  showLinkedInModal: boolean;
+  setShowLinkedInModal: (show: boolean) => void;
+  openLinkedInModal: () => void;
   login: (token: string, user: User) => void;
   logout: () => void;
   updateUser: (updatedUser: Partial<User>) => void;
@@ -24,6 +31,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [token, setToken] = useState<string | null>(localStorage.getItem("bime_token"));
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [setupNeeded, setSetupNeeded] = useState<boolean>(false);
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
+  const [impersonatedOrg, setImpersonatedOrgState] = useState<{ id: string; name: string; slug: string } | null>(() => {
+    const saved = localStorage.getItem("bime_impersonated_org");
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  const setImpersonatedOrg = (org: { id: string; name: string; slug: string } | null) => {
+    if (org) {
+      localStorage.setItem("bime_impersonated_org", JSON.stringify(org));
+    } else {
+      localStorage.removeItem("bime_impersonated_org");
+    }
+    setImpersonatedOrgState(org);
+    setSelectedMemberId(null);
+  };
+  const [showLinkedInModal, setShowLinkedInModal] = useState<boolean>(false);
+
+  const openLinkedInModal = () => setShowLinkedInModal(true);
 
   const checkSetupStatus = async (): Promise<boolean> => {
     try {
@@ -100,6 +125,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         token,
         isLoading,
         setupNeeded,
+        selectedMemberId,
+        setSelectedMemberId,
+        impersonatedOrg,
+        setImpersonatedOrg,
+        showLinkedInModal,
+        setShowLinkedInModal,
+        openLinkedInModal,
         login,
         logout,
         updateUser,
