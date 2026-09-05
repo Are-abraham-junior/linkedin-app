@@ -7,6 +7,7 @@ import { ProspectDetailDrawer } from "./ProspectDetailDrawer";
 import { ListsSidebar } from "./ListsSidebar";
 import { useAuth } from "../../context/AuthContext";
 import { LinkedInRequiredModal } from "../common/LinkedInRequiredModal";
+import { ConfirmModal } from "../common/ConfirmModal";
 import {
   Users,
   Search,
@@ -83,7 +84,7 @@ interface ProspectsViewProps {
 }
 
 export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign }) => {
-  const { user, selectedMemberId, setSelectedMemberId, openLinkedInModal } = useAuth();
+  const { user, selectedMemberId, setSelectedMemberId, openLinkedInModal, impersonatedOrg } = useAuth();
   const [lists, setLists] = useState<any[]>([]);
   const [selectedListId, setSelectedListId] = useState<string>("ALL");
   const [prospects, setProspects] = useState<any[]>([]);
@@ -108,14 +109,14 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
           if (res.success && res.members) {
             setTeamMembers(res.members);
             if (res.members.length > 0) {
-              const other = res.members.find((m) => m.id !== user.id);
+              const other = res.members.find((m: any) => m.id !== user.id);
               if (other) setTargetMemberId(other.id);
             }
           }
         })
         .catch(() => {});
     }
-  }, [user?.id, user?.orgRole]);
+  }, [user?.id, user?.orgRole, impersonatedOrg?.id]);
 
   // Pagination state (Waalaxy style)
   const [currentPage, setCurrentPage] = useState(1);
@@ -163,6 +164,17 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
   const [renameInputText, setRenameInputText] = useState("");
   const [isInlineEditingTitle, setIsInlineEditingTitle] = useState(false);
   const [inlineTitleText, setInlineTitleText] = useState("");
+
+  // Delete list modal state (Adora popup)
+  const [listToDeleteModal, setListToDeleteModal] = useState<{ id: string; name: string } | null>(null);
+  const [isDeletingList, setIsDeletingList] = useState(false);
+
+  // Delete prospects modal state (Adora ConfirmModal)
+  const [prospectsToDelete, setProspectsToDelete] = useState<{
+    ids: string[];
+    singleProspect?: any;
+  } | null>(null);
+  const [isDeletingProspects, setIsDeletingProspects] = useState(false);
 
   // Import dropdown menu
   const [isImportDropdownOpen, setIsImportDropdownOpen] = useState(false);
@@ -361,16 +373,16 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
 
   useEffect(() => {
     fetchLists();
-  }, [selectedMemberId]);
+  }, [selectedMemberId, impersonatedOrg?.id]);
 
   // Reset to page 1 whenever any filter or list changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedListId, statusFilter, hasEmailFilter, campaignFilter, searchTerm, selectedMemberId]);
+  }, [selectedListId, statusFilter, hasEmailFilter, campaignFilter, searchTerm, selectedMemberId, impersonatedOrg?.id]);
 
   useEffect(() => {
     fetchProspects();
-  }, [selectedListId, statusFilter, hasEmailFilter, campaignFilter, currentPage, pageSize, selectedMemberId]);
+  }, [selectedListId, statusFilter, hasEmailFilter, campaignFilter, currentPage, pageSize, selectedMemberId, impersonatedOrg?.id]);
 
   // GSAP Stagger animation on prospects table rows
   useEffect(() => {
@@ -435,20 +447,32 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
     }
   };
 
-  const handleDeleteList = async (listId: string) => {
-    if (!window.confirm("Êtes-vous sûr de vouloir supprimer cette liste ? Les prospects resteront dans la base générale.")) return;
+  const handleDeleteList = (listId: string) => {
+    const target = lists.find((l) => l.id === listId);
+    setListToDeleteModal({
+      id: listId,
+      name: target?.name || "cette liste",
+    });
+  };
+
+  const confirmDeleteList = async () => {
+    if (!listToDeleteModal) return;
+    setIsDeletingList(true);
     try {
-      const res = await apiRequest(`/lists/${listId}`, {
+      const res = await apiRequest(`/lists/${listToDeleteModal.id}`, {
         method: "DELETE",
       });
       if (res.success) {
-        if (selectedListId === listId) {
+        if (selectedListId === listToDeleteModal.id) {
           setSelectedListId("ALL");
         }
         fetchLists();
+        setListToDeleteModal(null);
       }
     } catch (e) {
       console.error(e);
+    } finally {
+      setIsDeletingList(false);
     }
   };
 
@@ -470,19 +494,38 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
     setSelectedIds(next);
   };
 
-  const handleBulkDelete = async () => {
-    if (!window.confirm(`Supprimer les ${selectedIds.size} prospects sélectionnés ?`)) return;
+  const handleOpenDeleteModal = () => {
+    if (selectedIds.size === 0) return;
+    const single = selectedIds.size === 1 ? prospects.find((p) => selectedIds.has(p.id)) : undefined;
+    setProspectsToDelete({
+      ids: Array.from(selectedIds),
+      singleProspect: single,
+    });
+  };
 
+  const handleConfirmDeleteProspects = async () => {
+    if (!prospectsToDelete || prospectsToDelete.ids.length === 0) return;
+
+    setIsDeletingProspects(true);
     try {
       await apiRequest("/prospects/bulk-delete", {
         method: "POST",
-        body: JSON.stringify({ ids: Array.from(selectedIds) }),
+        body: JSON.stringify({ ids: prospectsToDelete.ids }),
       });
-      setSelectedIds(new Set());
-      fetchProspects();
-      fetchLists();
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        prospectsToDelete.ids.forEach((id) => next.delete(id));
+        return next;
+      });
+      if (selectedProspect && prospectsToDelete.ids.includes(selectedProspect.id)) {
+        setSelectedProspect(null);
+      }
+      setProspectsToDelete(null);
+      await Promise.all([fetchProspects(), fetchLists()]);
     } catch (e) {
-      console.error(e);
+      console.error("Erreur lors de la suppression des prospects:", e);
+    } finally {
+      setIsDeletingProspects(false);
     }
   };
 
@@ -1124,8 +1167,8 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                   <Download className="w-3 h-3" /> Exporter
                 </button>
                 <button
-                  onClick={handleBulkDelete}
-                  className="py-1 px-2.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                  onClick={handleOpenDeleteModal}
+                  className="py-1 px-2.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <Trash2 className="w-3 h-3" /> Supprimer
                 </button>
@@ -1138,7 +1181,7 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
             {/* Scrollable Container with Custom Scrollbar */}
             <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto custom-scrollbar">
               <table className="w-full text-left text-xs border-collapse">
-                <thead className="sticky top-0 bg-[#fbfbfe] z-20 shadow-2xs border-b border-[#e0e0db]">
+                <thead className="sticky top-0 bg-[#fbfbfe] z-10 shadow-2xs border-b border-[#e0e0db]">
                   <tr className="text-[#5f5f69] uppercase font-bold tracking-wider select-none text-[11px]">
                     <th className="py-2 px-3 w-10">
                       <button onClick={toggleSelectAll}>
@@ -1281,18 +1324,33 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                             </td>
                           ))}
 
-                          {/* Action détail CRM */}
+                          {/* Action détail CRM & suppression rapide */}
                           <td className="py-2 text-right pr-3">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedProspect(p);
-                              }}
-                              className="p-1 rounded-lg border border-[#e0e0db] hover:bg-[#592eff]/10 hover:border-[#592eff]/30 text-[#353241] hover:text-[#592eff] transition-colors"
-                              title="Ouvrir la fiche CRM"
-                            >
-                              <ChevronRight className="w-3.5 h-3.5" />
-                            </button>
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setProspectsToDelete({
+                                    ids: [p.id],
+                                    singleProspect: p,
+                                  });
+                                }}
+                                className="p-1 rounded-lg border border-transparent hover:border-rose-200 hover:bg-rose-50 text-[#8a8a93] hover:text-rose-600 transition-colors cursor-pointer"
+                                title="Supprimer ce prospect"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedProspect(p);
+                                }}
+                                className="p-1 rounded-lg border border-[#e0e0db] hover:bg-[#592eff]/10 hover:border-[#592eff]/30 text-[#353241] hover:text-[#592eff] transition-colors cursor-pointer"
+                                title="Ouvrir la fiche CRM"
+                              >
+                                <ChevronRight className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -1713,6 +1771,62 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
         </div>
       )}
 
+      {/* DELETE LIST CONFIRMATION MODAL (ADORA STYLE) */}
+      <ConfirmModal
+        isOpen={Boolean(listToDeleteModal)}
+        onClose={() => {
+          if (!isDeletingList) setListToDeleteModal(null);
+        }}
+        onConfirm={confirmDeleteList}
+        isLoading={isDeletingList}
+        variant="danger"
+        title="Supprimer la liste"
+        description="Êtes-vous sûr de vouloir supprimer cette liste ? Les prospects associés ne seront pas supprimés et resteront conservés dans votre base générale."
+        itemName={listToDeleteModal?.name}
+        itemType="Liste"
+        confirmText="Supprimer définitivement"
+        cancelText="Annuler"
+        warningMessage="Les prospects associés ne seront pas supprimés et resteront conservés dans votre base générale (Tous les prospects)."
+      />
+
+      {/* DELETE PROSPECTS CONFIRMATION MODAL (ADORA STYLE) */}
+      <ConfirmModal
+        isOpen={Boolean(prospectsToDelete)}
+        onClose={() => {
+          if (!isDeletingProspects) setProspectsToDelete(null);
+        }}
+        onConfirm={handleConfirmDeleteProspects}
+        isLoading={isDeletingProspects}
+        variant="danger"
+        title={
+          prospectsToDelete?.ids.length === 1
+            ? "Supprimer le prospect"
+            : `Supprimer les ${prospectsToDelete?.ids.length} prospects`
+        }
+        description={
+          prospectsToDelete?.ids.length === 1
+            ? "Êtes-vous sûr de vouloir supprimer définitivement ce prospect ? Cette action retirera également ce contact de vos campagnes et de vos listes."
+            : `Êtes-vous sûr de vouloir supprimer définitivement ces ${prospectsToDelete?.ids.length} prospects sélectionnés ? Cette action retirera également ces contacts de vos campagnes et de vos listes.`
+        }
+        itemName={
+          prospectsToDelete?.singleProspect
+            ? `${prospectsToDelete.singleProspect.firstName || ""} ${prospectsToDelete.singleProspect.lastName || ""}`.trim() ||
+              prospectsToDelete.singleProspect.headline ||
+              "Prospect"
+            : prospectsToDelete
+            ? `${prospectsToDelete.ids.length} prospects sélectionnés`
+            : undefined
+        }
+        itemType={prospectsToDelete?.ids.length === 1 ? "Prospect" : "Sélection"}
+        confirmText={
+          prospectsToDelete?.ids.length === 1
+            ? "Supprimer définitivement"
+            : `Supprimer les ${prospectsToDelete?.ids.length} prospects`
+        }
+        cancelText="Annuler"
+        warningMessage="Cette action est irréversible. Les prospects supprimés seront retirés de toutes les campagnes en cours et de vos listes."
+      />
+
       {/* EXCEL IMPORT MODAL */}
       <ExcelImportModal
         isOpen={isExcelModalOpen}
@@ -1752,6 +1866,12 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
         onClose={() => setSelectedProspect(null)}
         onUpdate={() => {
           fetchProspects();
+        }}
+        onDelete={(p) => {
+          setProspectsToDelete({
+            ids: [p.id],
+            singleProspect: p,
+          });
         }}
       />
 

@@ -45,6 +45,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setImpersonatedOrgState(org);
     setSelectedMemberId(null);
+    refreshUser();
   };
   const [showLinkedInModal, setShowLinkedInModal] = useState<boolean>(false);
 

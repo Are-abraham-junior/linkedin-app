@@ -232,10 +232,12 @@ export async function bulkImportProspects(req: AuthenticatedRequest, res: Respon
       });
 
       for (const op of allOrgProspects) {
-        orgUrlsMap.set(op.linkedinUrl.toLowerCase().trim(), {
-          ownerId: op.list.userId,
-          ownerName: op.list.user.name || op.list.user.email,
-        });
+        if (op.list) {
+          orgUrlsMap.set(op.linkedinUrl.toLowerCase().trim(), {
+            ownerId: op.list.userId,
+            ownerName: op.list.user.name || op.list.user.email,
+          });
+        }
       }
     }
 
@@ -339,15 +341,22 @@ export async function deleteProspect(req: AuthenticatedRequest, res: Response) {
     const id = req.params.id as string;
     const userId = req.user!.id;
 
-    let prospectWhere: any = { id };
+    const userOrWhere: any[] = [
+      { list: { userId } },
+      { userId: userId },
+    ];
     if (req.user!.role === "SUPER_ADMIN" && req.user!.organizationId) {
-      prospectWhere.list = { user: { organizationId: req.user!.organizationId } };
-    } else {
-      prospectWhere.list = { userId };
+      userOrWhere.push(
+        { list: { user: { organizationId: req.user!.organizationId } } },
+        { user: { organizationId: req.user!.organizationId } }
+      );
     }
 
     const existing = await prisma.prospect.findFirst({
-      where: prospectWhere,
+      where: {
+        id,
+        OR: userOrWhere,
+      },
     });
 
     if (!existing) {
@@ -373,15 +382,21 @@ export async function bulkDeleteProspects(req: AuthenticatedRequest, res: Respon
       return;
     }
 
-    let listClause: any = { userId };
+    const userOrWhere: any[] = [
+      { list: { userId } },
+      { userId: userId },
+    ];
     if (req.user!.role === "SUPER_ADMIN" && req.user!.organizationId) {
-      listClause = { user: { organizationId: req.user!.organizationId } };
+      userOrWhere.push(
+        { list: { user: { organizationId: req.user!.organizationId } } },
+        { user: { organizationId: req.user!.organizationId } }
+      );
     }
 
     await prisma.prospect.deleteMany({
       where: {
         id: { in: ids },
-        list: listClause,
+        OR: userOrWhere,
       },
     });
 
@@ -450,7 +465,15 @@ export async function syncProspectsStatus(req: AuthenticatedRequest, res: Respon
       orderBy: { updatedAt: "desc" },
     });
 
-    const unipileAccountId = linkedInAcc?.unipileAccountId || undefined;
+    if (!linkedInAcc?.unipileAccountId) {
+      res.status(400).json({
+        success: false,
+        error: "Veuillez connecter votre compte LinkedIn avant de synchroniser les statuts des contacts.",
+      });
+      return;
+    }
+
+    const unipileAccountId = linkedInAcc.unipileAccountId;
 
     const where: any = { list: { userId } };
 
@@ -557,14 +580,21 @@ export async function checkProspectCollision(req: AuthenticatedRequest, res: Res
       linkedinUrl: p.linkedinUrl,
       name: `${p.firstName} ${p.lastName}`.trim(),
       company: p.company,
-      ownedByMe: p.list.userId === userId,
-      owner: {
-        id: p.list.user.id,
-        name: p.list.user.name,
-        email: p.list.user.email,
-        avatarUrl: p.list.user.avatarUrl,
-      },
-      listName: p.list.name,
+      ownedByMe: p.list?.userId === userId || p.userId === userId,
+      owner: p.list
+        ? {
+            id: p.list.user.id,
+            name: p.list.user.name,
+            email: p.list.user.email,
+            avatarUrl: p.list.user.avatarUrl,
+          }
+        : {
+            id: p.userId || "",
+            name: "Messagerie",
+            email: "",
+            avatarUrl: null,
+          },
+      listName: p.list?.name || "Messagerie",
     }));
 
     res.json({

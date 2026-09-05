@@ -28,7 +28,7 @@ export async function handleUnipileWebhook(req: Request, res: Response) {
 
       if (chatId) {
         // 1. Trouver la conversation
-        let conv = await prisma.conversation.findUnique({
+        let conv: any = await prisma.conversation.findUnique({
           where: { unipileChatId: chatId },
           include: { prospect: true },
         });
@@ -46,24 +46,12 @@ export async function handleUnipileWebhook(req: Request, res: Response) {
           }
 
           if (!user) {
-            user = await prisma.user.findFirst();
+            console.warn(`[Webhook Unipile] Compte LinkedIn introuvable pour accountId=${accountId}. Message ignoré pour protéger l'étanchéité des données.`);
+            res.status(200).json({ success: true, ignored: true });
+            return;
           }
 
           if (user) {
-            let defaultList = await prisma.prospectList.findFirst({
-              where: { userId: user.id },
-            });
-
-            if (!defaultList) {
-              defaultList = await prisma.prospectList.create({
-                data: {
-                  userId: user.id,
-                  name: "Messagerie LinkedIn",
-                  color: "#592eff",
-                },
-              });
-            }
-
             const senderName = data.sender_name || data.name || "Contact LinkedIn";
             const nameParts = senderName.split(" ");
             const firstName = nameParts[0] || "Contact";
@@ -71,7 +59,8 @@ export async function handleUnipileWebhook(req: Request, res: Response) {
 
             const prospect = await prisma.prospect.create({
               data: {
-                listId: defaultList.id,
+                userId: user.id,
+                listId: null,
                 providerProfileId: senderId || `user_${Date.now()}`,
                 firstName,
                 lastName,
@@ -84,6 +73,7 @@ export async function handleUnipileWebhook(req: Request, res: Response) {
 
             conv = await prisma.conversation.create({
               data: {
+                userId: user.id,
                 prospectId: prospect.id,
                 unipileChatId: chatId,
                 lastMessageText: text,

@@ -72,33 +72,177 @@ const DAY_MAP: Record<number, string> = {
   6: "SAT",
 };
 
+const WEEKDAY_ABBR: Record<string, string> = {
+  Sun: "SUN",
+  Mon: "MON",
+  Tue: "TUE",
+  Wed: "WED",
+  Thu: "THU",
+  Fri: "FRI",
+  Sat: "SAT",
+};
+
 /**
  * Vérifie si l'heure actuelle est dans les jours et heures ouvrées configurés par l'utilisateur
+ * en respectant scrupuleusement son fuseau horaire (ex: Africa/Abidjan, Europe/Paris, etc.)
  */
 function isUserInWorkingHours(user: any): boolean {
   if (!user) return true;
 
-  const now = new Date();
-  const currentDay = DAY_MAP[now.getDay()];
   const workingDays: string[] = user.workingDays?.length
     ? user.workingDays
     : ["MON", "TUE", "WED", "THU", "FRI"];
 
-  // Vérifier si le jour actuel est actif
-  if (!workingDays.includes(currentDay)) {
-    return false;
+  const timezone = user.timezone || "Africa/Abidjan";
+
+  try {
+    const now = new Date();
+    // Convertir l'heure actuelle dans le fuseau horaire configuré par l'utilisateur
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      weekday: "short",
+      hour: "numeric",
+      minute: "numeric",
+      hour12: false,
+    });
+
+    const parts = formatter.formatToParts(now);
+    let weekdayStr = "";
+    let hour = 0;
+    let minute = 0;
+
+    for (const part of parts) {
+      if (part.type === "weekday") {
+        weekdayStr = WEEKDAY_ABBR[part.value] || part.value.toUpperCase().slice(0, 3);
+      } else if (part.type === "hour") {
+        hour = parseInt(part.value, 10);
+      } else if (part.type === "minute") {
+        minute = parseInt(part.value, 10);
+      }
+    }
+
+    if (!weekdayStr) {
+      weekdayStr = DAY_MAP[now.getDay()] || "MON";
+      hour = now.getHours();
+      minute = now.getMinutes();
+    }
+
+    // 1. Vérifier si le jour actuel fait partie des jours autorisés
+    if (!workingDays.includes(weekdayStr)) {
+      return false;
+    }
+
+    // 2. Vérifier la plage horaire
+    const currentMinutes = hour * 60 + minute;
+    const [startH, startM] = (user.workingHoursStart || "08:00").split(":").map(Number);
+    const [endH, endM] = (user.workingHoursEnd || "19:00").split(":").map(Number);
+
+    const startTotal = (startH || 8) * 60 + (startM || 0);
+    const endTotal = (endH || 19) * 60 + (endM || 0);
+
+    return currentMinutes >= startTotal && currentMinutes <= endTotal;
+  } catch (err) {
+    console.error("[CampaignWorker] Erreur de calcul de fuseau horaire:", err);
+    return true;
+  }
+}
+
+type UnipileErrorAction = "CONTINUE" | "DEFER_ACTION" | "DISCONNECT_ACCOUNT";
+
+function categorizeUnipileError(errorMsg?: string): { action: UnipileErrorAction; reason: string } {
+  if (!errorMsg) return { action: "CONTINUE", reason: "Erreur inconnue" };
+  const lower = errorMsg.toLowerCase();
+
+  // Déconnexion ou checkpoint selon doc Unipile (https://developer.unipile.com/reference)
+  if (
+    lower.includes("checkpoint") ||
+    lower.includes("unauthorized") ||
+    lower.includes("401") ||
+    lower.includes("reconnect") ||
+    lower.includes("session expired") ||
+    lower.includes("disconnected") ||
+    lower.includes("invalid account") ||
+    lower.includes("not connected")
+  ) {
+    return { action: "DISCONNECT_ACCOUNT", reason: "Compte LinkedIn déconnecté ou checkpoint requis" };
   }
 
-  // Vérifier la plage horaire
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  // Rate limits / 429
+  if (
+    lower.includes("429") ||
+    lower.includes("too many requests") ||
+    lower.includes("rate limit") ||
+    lower.includes("resource_exhausted") ||
+    lower.includes("throttled")
+  ) {
+    return { action: "DEFER_ACTION", reason: "Limite de taux Unipile / LinkedIn atteinte (429)" };
+  }
 
-  const [startH, startM] = (user.workingHoursStart || "08:00").split(":").map(Number);
-  const [endH, endM] = (user.workingHoursEnd || "19:00").split(":").map(Number);
+  return { action: "CONTINUE", reason: errorMsg };
+}
 
-  const startTotal = (startH || 8) * 60 + (startM || 0);
-  const endTotal = (endH || 19) * 60 + (endM || 0);
+/**
+ * Gère les échecs d'action Unipile avec protection de compte et gestion du rate-limit
+ */
+async function handleActionResultFailure(
+  action: any,
+  prospect: any,
+  account: any,
+  errorMessage?: string,
+  defaultMessage = "Erreur exécution action"
+): Promise<"CONTINUE" | "BREAK"> {
+  const errInfo = categorizeUnipileError(errorMessage);
 
-  return currentMinutes >= startTotal && currentMinutes <= endTotal;
+  if (errInfo.action === "DISCONNECT_ACCOUNT") {
+    console.error(`[CampaignWorker] Compte ${account.id} déconnecté ou checkpoint requis. Mise en pause du compte.`);
+    await prisma.linkedInAccount.update({
+      where: { id: account.id },
+      data: { status: "DISCONNECTED" },
+    });
+    // Reprogrammer l'action pour dans 2h (en attente de reconnexion de session)
+    await prisma.actionQueue.update({
+      where: { id: action.id },
+      data: {
+        status: "QUEUED",
+        scheduledFor: new Date(Date.now() + 2 * 3600 * 1000),
+        errorMessage: errInfo.reason,
+      },
+    });
+    return "BREAK";
+  }
+
+  if (errInfo.action === "DEFER_ACTION") {
+    console.warn(`[CampaignWorker] Rate limit Unipile/LinkedIn détecté pour le compte ${account.id}. Pause de 15 minutes.`);
+    await prisma.actionQueue.update({
+      where: { id: action.id },
+      data: {
+        status: "QUEUED",
+        scheduledFor: new Date(Date.now() + 15 * 60 * 1000),
+        errorMessage: errInfo.reason,
+      },
+    });
+    return "BREAK";
+  }
+
+  // Erreur réelle et non récupérable sur ce prospect spécifique
+  await prisma.actionQueue.update({
+    where: { id: action.id },
+    data: {
+      status: "FAILED",
+      executedAt: new Date(),
+      errorMessage: errorMessage || defaultMessage,
+    },
+  });
+
+  await prisma.prospectCampaignState.updateMany({
+    where: { campaignId: action.campaignId, prospectId: prospect.id },
+    data: {
+      status: "FAILED",
+      errorLog: errorMessage || defaultMessage,
+    },
+  });
+
+  return "CONTINUE";
 }
 
 let isRunning = false;
@@ -142,6 +286,17 @@ export async function processActionQueue(): Promise<void> {
         const account = action.linkedInAccount;
         const user = account.user;
 
+        // Si le compte est déconnecté, différer l'action et ne pas exécuter
+        if (account.status === "DISCONNECTED") {
+          console.warn(`[CampaignWorker] Compte LinkedIn ${account.id} déconnecté. Action différée.`);
+          const nextCheck = new Date(now.getTime() + 60 * 60 * 1000);
+          await prisma.actionQueue.update({
+            where: { id: action.id },
+            data: { scheduledFor: nextCheck, status: "QUEUED" },
+          });
+          continue;
+        }
+
         // Vérifier si nous sommes dans les horaires d'activité autorisés par l'utilisateur
         if (!isUserInWorkingHours(user)) {
           // Reprogrammer pour la prochaine fenêtre (décaler de 30 minutes)
@@ -152,6 +307,7 @@ export async function processActionQueue(): Promise<void> {
           });
           continue;
         }
+
         // Vérifier si la campagne est toujours active
         const campaign = await prisma.campaign.findUnique({
           where: { id: action.campaignId },
@@ -161,19 +317,62 @@ export async function processActionQueue(): Promise<void> {
           continue;
         }
 
-        // Vérifier les quotas du compte LinkedIn
+        // Calcul dynamique et fiable des quotas exécutés aujourd'hui (source de vérité : ActionQueue)
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+
+        const [invitesSentToday, messagesSentToday] = await Promise.all([
+          prisma.actionQueue.count({
+            where: {
+              accountId: account.id,
+              actionType: "INVITATION",
+              status: { in: ["SUCCESS", "EXECUTED"] },
+              executedAt: { gte: todayStart },
+            },
+          }),
+          prisma.actionQueue.count({
+            where: {
+              accountId: account.id,
+              actionType: "MESSAGE",
+              status: { in: ["SUCCESS", "EXECUTED"] },
+              executedAt: { gte: todayStart },
+            },
+          }),
+        ]);
+
+        // Synchroniser les compteurs sur le compte LinkedIn si décalage détecté
+        if (account.dailyInvitesSent !== invitesSentToday || account.dailyMsgSent !== messagesSentToday) {
+          await prisma.linkedInAccount.update({
+            where: { id: account.id },
+            data: { dailyInvitesSent: invitesSentToday, dailyMsgSent: messagesSentToday },
+          });
+          account.dailyInvitesSent = invitesSentToday;
+          account.dailyMsgSent = messagesSentToday;
+        }
+
         const maxDailyInvites = user?.maxDailyInvites || 30;
         const maxDailyMsg = user?.maxDailyMsg || 70;
 
-        if (action.actionType === "INVITATION" && account.dailyInvitesSent >= maxDailyInvites) {
-          console.warn(`[CampaignWorker] Quota d'invitations journalières atteint (${maxDailyInvites}) pour le compte ${account.id}. Action différée.`);
-          // Reprogrammer pour demain 09:00
+        if (action.actionType === "INVITATION" && invitesSentToday >= maxDailyInvites) {
+          console.warn(`[CampaignWorker] Quota d'invitations journalières atteint (${invitesSentToday}/${maxDailyInvites}) pour le compte ${account.id}. Action différée.`);
           const tomorrow = new Date();
           tomorrow.setDate(tomorrow.getDate() + 1);
           tomorrow.setHours(9, 0, 0, 0);
           await prisma.actionQueue.update({
             where: { id: action.id },
-            data: { scheduledFor: tomorrow },
+            data: { scheduledFor: tomorrow, status: "QUEUED" },
+          });
+          continue;
+        }
+
+        if (action.actionType === "MESSAGE" && messagesSentToday >= maxDailyMsg) {
+          console.warn(`[CampaignWorker] Quota de messages journaliers atteint (${messagesSentToday}/${maxDailyMsg}) pour le compte ${account.id}. Action différée.`);
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          tomorrow.setHours(9, 0, 0, 0);
+          await prisma.actionQueue.update({
+            where: { id: action.id },
+            data: { scheduledFor: tomorrow, status: "QUEUED" },
           });
           continue;
         }
@@ -245,22 +444,8 @@ export async function processActionQueue(): Promise<void> {
 
             console.log(`[CampaignWorker] Invitation envoyée avec succès à ${prospect.firstName} ${prospect.lastName}`);
           } else {
-            await prisma.actionQueue.update({
-              where: { id: action.id },
-              data: {
-                status: "FAILED",
-                executedAt: new Date(),
-                errorMessage: result.error || "Erreur envoi invitation",
-              },
-            });
-
-            await prisma.prospectCampaignState.updateMany({
-              where: { campaignId: action.campaignId, prospectId: prospect.id },
-              data: {
-                status: "FAILED",
-                errorLog: result.error || "Échec d'envoi de l'invitation",
-              },
-            });
+            const outcome = await handleActionResultFailure(action, prospect, account, result.error, "Erreur envoi invitation");
+            if (outcome === "BREAK") break;
           }
         } else if (action.actionType === "MESSAGE") {
           const rawMessage = payload.messageText || "";
@@ -347,14 +532,8 @@ export async function processActionQueue(): Promise<void> {
 
             console.log(`[CampaignWorker] Message envoyé à ${prospect.firstName} ${prospect.lastName}`);
           } else {
-            await prisma.actionQueue.update({
-              where: { id: action.id },
-              data: {
-                status: "FAILED",
-                executedAt: new Date(),
-                errorMessage: result.error || "Erreur envoi message",
-              },
-            });
+            const outcome = await handleActionResultFailure(action, prospect, account, result.error, "Erreur envoi message");
+            if (outcome === "BREAK") break;
           }
         } else if (action.actionType === "VISIT_PROFILE" || (action.actionType as string) === "VISIT") {
           const targetIdentifier = (await resolveProviderId(prospect, account.unipileAccountId)) || prospect.linkedinUrl;
@@ -422,14 +601,8 @@ export async function processActionQueue(): Promise<void> {
 
             console.log(`[CampaignWorker] Profil visité avec succès : ${prospect.firstName} ${prospect.lastName}`);
           } else {
-            await prisma.actionQueue.update({
-              where: { id: action.id },
-              data: {
-                status: "FAILED",
-                executedAt: new Date(),
-                errorMessage: result.error || "Erreur visite profil",
-              },
-            });
+            const outcome = await handleActionResultFailure(action, prospect, account, result.error, "Erreur visite profil");
+            if (outcome === "BREAK") break;
           }
         } else if (action.actionType === "FOLLOW") {
           const targetIdentifier = (await resolveProviderId(prospect, account.unipileAccountId)) || prospect.linkedinUrl;
@@ -497,14 +670,8 @@ export async function processActionQueue(): Promise<void> {
 
             console.log(`[CampaignWorker] Profil suivi (follow) avec succès : ${prospect.firstName} ${prospect.lastName}`);
           } else {
-            await prisma.actionQueue.update({
-              where: { id: action.id },
-              data: {
-                status: "FAILED",
-                executedAt: new Date(),
-                errorMessage: result.error || "Erreur follow profil",
-              },
-            });
+            const outcome = await handleActionResultFailure(action, prospect, account, result.error, "Erreur follow profil");
+            if (outcome === "BREAK") break;
           }
         }
       } catch (innerErr: any) {
@@ -541,19 +708,46 @@ export async function checkAcceptedInvitations(): Promise<void> {
           },
         },
       },
+      orderBy: { lastActionAt: "asc" }, // Évite la famine des prospects non vérifiés
       take: 20,
     });
 
     if (activeStates.length === 0) return;
 
     for (const state of activeStates) {
-      const account = state.campaign.linkedInAccount;
-      if (!account) continue;
+      let account = state.campaign.linkedInAccount;
+      if (!account) {
+        account = await prisma.linkedInAccount.findFirst({
+          where: { userId: state.campaign.userId, status: "CONNECTED" },
+        });
+      }
+
+      if (!account) {
+        // Mettre à jour lastActionAt pour permettre la rotation vers d'autres campagnes
+        await prisma.prospectCampaignState.update({
+          where: { id: state.id },
+          data: { lastActionAt: new Date() },
+        });
+        continue;
+      }
 
       const profileRes = await UnipileService.getProfile({
         accountId: account.unipileAccountId,
         identifier: state.prospect.providerProfileId || state.prospect.linkedinUrl,
       });
+
+      // Gestion des déconnexions/checkpoints Unipile
+      if (!profileRes.success && profileRes.error) {
+        const errInfo = categorizeUnipileError(profileRes.error);
+        if (errInfo.action === "DISCONNECT_ACCOUNT") {
+          console.warn(`[CampaignWorker] Compte ${account.id} déconnecté lors de la vérification d'invitations.`);
+          await prisma.linkedInAccount.update({
+            where: { id: account.id },
+            data: { status: "DISCONNECTED" },
+          });
+          break;
+        }
+      }
 
       if (profileRes.success && profileRes.profile) {
         const isConnected =
@@ -585,6 +779,7 @@ export async function checkAcceptedInvitations(): Promise<void> {
                 currentStepId: nextStep.id,
                 status: "WAITING_DELAY",
                 nextExecutionAt: scheduledFor,
+                lastActionAt: new Date(),
               },
             });
 
@@ -605,10 +800,22 @@ export async function checkAcceptedInvitations(): Promise<void> {
           } else {
             await prisma.prospectCampaignState.update({
               where: { id: state.id },
-              data: { status: "COMPLETED" },
+              data: { status: "COMPLETED", lastActionAt: new Date() },
             });
           }
+        } else {
+          // Pas encore accepté : mettre à jour lastActionAt pour passer au prospect suivant lors du prochain cycle
+          await prisma.prospectCampaignState.update({
+            where: { id: state.id },
+            data: { lastActionAt: new Date() },
+          });
         }
+      } else {
+        // En cas d'erreur transitoire sur le profil, mettre à jour lastActionAt pour éviter le blocage
+        await prisma.prospectCampaignState.update({
+          where: { id: state.id },
+          data: { lastActionAt: new Date() },
+        });
       }
     }
   } catch (err: any) {

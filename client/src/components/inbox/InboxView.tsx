@@ -29,19 +29,16 @@ import {
   Copy,
   CheckCircle2,
   Trash2,
+  X,
+  FolderPlus,
 } from "lucide-react";
 import { InboxConversation, ChatMessage, InboxProspect } from "../../types";
 import { apiRequest } from "../../services/api";
 import { NewConversationModal } from "./NewConversationModal";
-
-const QUICK_TEMPLATES = [
-  { label: "Demande de dispo", text: "Bonjour {{firstName}}, seriez-vous disponible pour un court appel de 10 min cette semaine ?" },
-  { label: "Remerciement", text: "Merci pour votre retour {{firstName}} ! Quelles sont vos disponibilités pour échanger ?" },
-  { label: "Partage lien", text: "Ravi d'échanger avec vous ! Voici le lien vers notre documentation : https://croixance.net" },
-  { label: "Clôture polie", text: "Parfait, je note cela. Je reste à votre entière disposition !" },
-];
+import { useAuth } from "../../context/AuthContext";
 
 export const InboxView: React.FC = () => {
+  const { impersonatedOrg } = useAuth();
   const [conversations, setConversations] = useState<InboxConversation[]>([]);
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -59,6 +56,11 @@ export const InboxView: React.FC = () => {
   const [isNewConvModalOpen, setIsNewConvModalOpen] = useState<boolean>(false);
 
   // CRM State for selected prospect
+  const [availableLists, setAvailableLists] = useState<{ id: string; name: string; color?: string }[]>([]);
+  const [showListSelector, setShowListSelector] = useState<boolean>(false);
+  const [assigningList, setAssigningList] = useState<boolean>(false);
+  const [listAssignSuccess, setListAssignSuccess] = useState<string | null>(null);
+
   const [newTagInput, setNewTagInput] = useState<string>("");
   const [showAddTag, setShowAddTag] = useState<boolean>(false);
   const [prospectNote, setProspectNote] = useState<string>("");
@@ -73,6 +75,18 @@ export const InboxView: React.FC = () => {
 
   const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
     messagesEndRef.current?.scrollIntoView({ behavior });
+  };
+
+  // Charger les listes de prospects CRM disponibles
+  const loadAvailableLists = async () => {
+    try {
+      const res = await apiRequest<{ success: boolean; lists: any[] }>("/lists");
+      if (res.success && Array.isArray(res.lists)) {
+        setAvailableLists(res.lists);
+      }
+    } catch (err) {
+      console.warn("[InboxView] Erreur chargement listes:", err);
+    }
   };
 
   // 1. Charger la liste des conversations
@@ -129,6 +143,21 @@ export const InboxView: React.FC = () => {
     }
   };
 
+  // Sélection instantanée d'une conversation avec effacement immédiat du badge non lu
+  const handleSelectConversation = (convId: string) => {
+    setSelectedConvId(convId);
+    setShowListSelector(false);
+    setConversations((prev) =>
+      prev.map((c) => {
+        if (c.id === convId && c.unreadCount > 0) {
+          setTotalUnread((t) => Math.max(0, t - c.unreadCount));
+          return { ...c, unreadCount: 0 };
+        }
+        return c;
+      })
+    );
+  };
+
   // 3. Charger les messages de la conversation sélectionnée
   const loadMessages = async (convId: string, silent: boolean = false) => {
     if (!silent) setLoadingMessages(true);
@@ -142,7 +171,13 @@ export const InboxView: React.FC = () => {
         setMessages(res.messages);
         // Mettre à jour l'état non-lu localement
         setConversations((prev) =>
-          prev.map((c) => (c.id === convId ? { ...c, unreadCount: 0 } : c))
+          prev.map((c) => {
+            if (c.id === convId && c.unreadCount > 0) {
+              setTotalUnread((t) => Math.max(0, t - c.unreadCount));
+              return { ...c, unreadCount: 0 };
+            }
+            return c;
+          })
         );
       }
     } catch (err) {
@@ -152,10 +187,47 @@ export const InboxView: React.FC = () => {
     }
   };
 
+  // Assigner le prospect à une liste CRM
+  const handleAssignToList = async (listId: string) => {
+    if (!currentProspect || assigningList) return;
+    setAssigningList(true);
+    try {
+      const res = await apiRequest<{ success: boolean; prospect: any }>(
+        `/inbox/prospects/${currentProspect.id}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ listId }),
+        }
+      );
+      if (res.success && res.prospect) {
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.prospect.id === currentProspect.id
+              ? { ...c, prospect: { ...c.prospect, list: res.prospect.list } }
+              : c
+          )
+        );
+        setShowListSelector(false);
+        setListAssignSuccess("Prospect assigné à la liste avec succès !");
+        setTimeout(() => setListAssignSuccess(null), 3000);
+      }
+    } catch (err) {
+      console.error("[InboxView] Erreur assignation liste:", err);
+    } finally {
+      setAssigningList(false);
+    }
+  };
+
   // Initialisation et filtres
   useEffect(() => {
+    loadAvailableLists();
+  }, []);
+
+  useEffect(() => {
+    setSelectedConvId(null);
+    setMessages([]);
     loadConversations();
-  }, [filterTab, searchQuery]);
+  }, [filterTab, searchQuery, impersonatedOrg?.id]);
 
   // Chargement des messages au changement de sélection
   useEffect(() => {
@@ -234,18 +306,6 @@ export const InboxView: React.FC = () => {
       setSending(false);
       setTimeout(() => messageInputRef.current?.focus(), 50);
     }
-  };
-
-  // Insertion d'un template de réponse rapide avec variables
-  const handleApplyTemplate = (tplText: string) => {
-    let replaced = tplText;
-    if (currentProspect) {
-      replaced = replaced.replace(/\{\{firstName\}\}/g, currentProspect.firstName || "");
-      replaced = replaced.replace(/\{\{lastName\}\}/g, currentProspect.lastName || "");
-      replaced = replaced.replace(/\{\{company\}\}/g, currentProspect.company || "votre entreprise");
-    }
-    setInputMessage((prev) => (prev ? `${prev} ${replaced}` : replaced));
-    messageInputRef.current?.focus();
   };
 
   // Gestion des Tags CRM
@@ -460,11 +520,11 @@ export const InboxView: React.FC = () => {
               return (
                 <div
                   key={conv.id}
-                  onClick={() => setSelectedConvId(conv.id)}
-                  className={`p-3.5 flex items-start gap-3 cursor-pointer transition-all relative ${
+                  onClick={() => handleSelectConversation(conv.id)}
+                  className={`p-3 flex items-start gap-2.5 cursor-pointer transition-all relative ${
                     isSelected
-                      ? "bg-indigo-50/70 dark:bg-indigo-950/30 border-l-4 border-indigo-600"
-                      : "hover:bg-slate-50/80 dark:hover:bg-slate-800/40"
+                      ? "bg-violet-50/80 dark:bg-violet-950/30 border-l-3 border-[#592eff]"
+                      : "hover:bg-slate-50 dark:hover:bg-slate-800/40"
                   }`}
                 >
                   {/* Prospect Avatar with connection ring */}
@@ -477,10 +537,10 @@ export const InboxView: React.FC = () => {
                         )}&background=592eff&color=fff`
                       }
                       alt=""
-                      className="w-11 h-11 rounded-full object-cover border border-slate-200 dark:border-slate-700 shadow-xs"
+                      className="w-10 h-10 rounded-full object-cover border border-slate-200 dark:border-slate-700 shadow-xs"
                     />
                     {prospect.connectionStatus === "CONNECTED" && (
-                      <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900" />
+                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900" />
                     )}
                   </div>
 
@@ -496,13 +556,13 @@ export const InboxView: React.FC = () => {
                       >
                         {prospect.firstName} {prospect.lastName}
                       </h4>
-                      <span className="text-[11px] text-slate-400 font-medium shrink-0 ml-1">
+                      <span className="text-[10px] text-slate-400 font-medium shrink-0 ml-1">
                         {formatListDate(conv.lastMessageAt || conv.updatedAt)}
                       </span>
                     </div>
 
                     <p
-                      className={`text-xs truncate line-clamp-1 mb-1.5 ${
+                      className={`text-xs truncate line-clamp-1 mb-1 ${
                         hasUnread
                           ? "font-semibold text-slate-900 dark:text-white"
                           : "text-slate-500 dark:text-slate-400"
@@ -514,7 +574,7 @@ export const InboxView: React.FC = () => {
                     {/* Meta badges */}
                     <div className="flex items-center gap-1.5">
                       {prospect.campaignState && (
-                        <span className="px-1.5 py-0.5 text-[10px] font-medium bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-300 rounded border border-purple-200/60 dark:border-purple-800/40 truncate max-w-[120px]">
+                        <span className="px-1.5 py-0.5 text-[9px] font-medium bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-300 rounded border border-purple-200/60 dark:border-purple-800/40 truncate max-w-[120px]">
                           {prospect.campaignState.campaignName}
                         </span>
                       )}
@@ -529,7 +589,7 @@ export const InboxView: React.FC = () => {
                   {/* Unread counter badge */}
                   {hasUnread && (
                     <div className="shrink-0 self-center">
-                      <span className="w-5 h-5 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center shadow-xs">
+                      <span className="w-5 h-5 rounded-full bg-[#592eff] text-white text-[10px] font-bold flex items-center justify-center shadow-xs">
                         {conv.unreadCount}
                       </span>
                     </div>
@@ -625,7 +685,7 @@ export const InboxView: React.FC = () => {
                 return (
                   <div
                     key={m.id || idx}
-                    className={`flex items-end gap-2.5 ${isUser ? "justify-end" : "justify-start"}`}
+                    className={`flex items-end gap-2 ${isUser ? "justify-end" : "justify-start"}`}
                   >
                     {!isUser && (
                       <img
@@ -636,16 +696,16 @@ export const InboxView: React.FC = () => {
                           )}&background=592eff&color=fff`
                         }
                         alt=""
-                        className="w-7 h-7 rounded-full object-cover mb-1 shrink-0 border border-slate-200 dark:border-slate-700"
+                        className="w-6 h-6 rounded-full object-cover mb-1 shrink-0 border border-slate-200 dark:border-slate-700"
                       />
                     )}
 
-                    <div className={`max-w-md lg:max-w-lg space-y-1 ${isUser ? "items-end" : "items-start"}`}>
+                    <div className={`max-w-[75%] sm:max-w-[65%] space-y-1 ${isUser ? "items-end" : "items-start"}`}>
                       <div
-                        className={`px-4 py-3 rounded-2xl text-xs leading-relaxed shadow-xs ${
+                        className={`px-3.5 py-2.5 rounded-2xl text-xs leading-relaxed shadow-xs break-words ${
                           isUser
-                            ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-br-xs"
-                            : "bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-200/80 dark:border-slate-700/80 rounded-bl-xs"
+                            ? "bg-[#592eff] text-white rounded-tr-xs"
+                            : "bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200/80 dark:border-slate-700/80 rounded-tl-xs"
                         }`}
                       >
                         <p className="whitespace-pre-wrap">{m.text}</p>
@@ -667,7 +727,7 @@ export const InboxView: React.FC = () => {
                       </div>
 
                       <div
-                        className={`flex items-center gap-1.5 text-[10px] text-slate-400 px-1 ${
+                        className={`flex items-center gap-1 text-[10px] text-slate-400 px-1 ${
                           isUser ? "justify-end" : "justify-start"
                         }`}
                       >
@@ -677,7 +737,7 @@ export const InboxView: React.FC = () => {
                             {m.status === "sending" ? (
                               <Clock className="w-3 h-3 text-slate-400 animate-pulse" />
                             ) : (
-                              <CheckCheck className="w-3.5 h-3.5 text-indigo-500" />
+                              <CheckCheck className="w-3.5 h-3.5 text-[#592eff]" />
                             )}
                           </span>
                         )}
@@ -690,27 +750,10 @@ export const InboxView: React.FC = () => {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Quick Replies Bar */}
-          <div className="px-6 py-2 bg-white/60 dark:bg-slate-900/60 border-t border-slate-200/60 dark:border-slate-800/60 flex items-center gap-2 overflow-x-auto no-scrollbar">
-            <span className="text-[11px] font-semibold text-slate-400 shrink-0 flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-indigo-500" />
-              Réponses rapides :
-            </span>
-            {QUICK_TEMPLATES.map((tpl, tIdx) => (
-              <button
-                key={tIdx}
-                onClick={() => handleApplyTemplate(tpl.text)}
-                className="px-2.5 py-1 text-xs bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 hover:text-indigo-600 dark:hover:text-indigo-300 rounded-lg transition-all shrink-0 border border-slate-200/50 dark:border-slate-700/50"
-              >
-                {tpl.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Rich Chat Input Footer */}
-          <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-200/80 dark:border-slate-800/80">
+          {/* Chat Input Footer */}
+          <div className="p-3 bg-white dark:bg-slate-900 border-t border-slate-200/80 dark:border-slate-800/80">
             <form onSubmit={handleSendMessage} className="space-y-2">
-              <div className="relative border border-slate-200 dark:border-slate-700/80 rounded-2xl bg-slate-50 dark:bg-slate-800/60 focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-transparent transition-all overflow-hidden">
+              <div className="relative border border-slate-200 dark:border-slate-700/80 rounded-2xl bg-slate-50/70 dark:bg-slate-800/60 focus-within:ring-2 focus-within:ring-[#592eff] focus-within:border-transparent transition-all overflow-hidden">
                 <textarea
                   ref={messageInputRef}
                   rows={2}
@@ -726,21 +769,11 @@ export const InboxView: React.FC = () => {
                   className="w-full p-3 text-xs bg-transparent focus:outline-none text-slate-900 dark:text-white placeholder-slate-400 resize-none max-h-32"
                 />
 
-                <div className="px-3 py-2 flex items-center justify-between border-t border-slate-200/50 dark:border-slate-700/50 bg-white/40 dark:bg-slate-900/40">
-                  <div className="flex items-center gap-2 text-slate-400">
-                    <button
-                      type="button"
-                      onClick={() => handleApplyTemplate("Bonjour {{firstName}}, ")}
-                      className="px-2 py-1 text-[11px] bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded hover:bg-indigo-100 font-medium"
-                    >
-                      + {currentProspect.firstName || "Prénom"}
-                    </button>
-                  </div>
-
+                <div className="px-3 py-1.5 flex items-center justify-end border-t border-slate-200/40 dark:border-slate-700/40 bg-white/40 dark:bg-slate-900/40">
                   <button
                     type="submit"
                     disabled={!inputMessage.trim() || sending}
-                    className="px-4 py-2 text-xs font-semibold text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 rounded-xl shadow-md shadow-indigo-500/20 flex items-center gap-1.5 disabled:opacity-40 transition-all cursor-pointer"
+                    className="px-4 py-1.5 text-xs font-semibold text-white bg-[#592eff] hover:bg-[#4a24dd] rounded-xl shadow-xs flex items-center gap-1.5 disabled:opacity-40 transition-all cursor-pointer"
                   >
                     <Send className="w-3.5 h-3.5" />
                     <span>Envoyer</span>
@@ -774,31 +807,38 @@ export const InboxView: React.FC = () => {
       )}
 
       {/* ========================================================= */}
-      {/* COLONNE 3 : VOLET PROSPECT CRM (Droite - 360px) */}
+      {/* COLONNE 3 : VOLET PROSPECT CRM (Droite - Compact & Rétractable) */}
       {/* ========================================================= */}
       {showRightDrawer && currentProspect && (
-        <div className="w-80 lg:w-96 flex flex-col border-l border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-900 shrink-0 overflow-y-auto select-none">
+        <div className="w-72 lg:w-80 flex flex-col border-l border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-900 shrink-0 overflow-y-auto select-none">
           {/* Brand Header */}
-          <div className="p-4 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
-                Fiche Prospect CRM
-              </span>
+          <div className="h-14 px-4 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between shrink-0">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-[#592eff] dark:text-violet-400">
+              Fiche Prospect CRM
+            </span>
+            <div className="flex items-center gap-1">
+              <a
+                href={currentProspect.linkedinUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="p-1.5 text-slate-400 hover:text-[#592eff] rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                title="Voir le profil sur LinkedIn"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+              <button
+                onClick={() => setShowRightDrawer(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                title="Masquer le volet"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
             </div>
-            <a
-              href={currentProspect.linkedinUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="p-1.5 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-              title="Voir le profil sur LinkedIn"
-            >
-              <ExternalLink className="w-4 h-4" />
-            </a>
           </div>
 
-          <div className="p-5 space-y-6 flex-1">
+          <div className="p-4 space-y-4 flex-1">
             {/* Profile Hero Card */}
-            <div className="flex flex-col items-center text-center space-y-3 pb-5 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex flex-col items-center text-center space-y-2 pb-3 border-b border-slate-100 dark:border-slate-800">
               <div className="relative">
                 <img
                   src={
@@ -808,51 +848,149 @@ export const InboxView: React.FC = () => {
                     )}&background=592eff&color=fff`
                   }
                   alt=""
-                  className="w-20 h-20 rounded-full object-cover border-2 border-indigo-500/30 shadow-md"
+                  className="w-12 h-12 rounded-full object-cover border border-[#592eff]/30 shadow-xs"
                 />
-                <span className="absolute bottom-0 right-1 w-4 h-4 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] font-bold ring-2 ring-white dark:ring-slate-900">
+                <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-[#592eff] text-white flex items-center justify-center text-[9px] font-bold ring-2 ring-white dark:ring-slate-900">
                   in
                 </span>
               </div>
 
               <div>
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                <h3 className="text-xs font-bold text-slate-900 dark:text-white">
                   {currentProspect.firstName} {currentProspect.lastName}
                 </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">
                   {currentProspect.headline || "Contact LinkedIn"}
                 </p>
                 {currentProspect.company && (
-                  <p className="text-xs font-medium text-indigo-600 dark:text-indigo-400 mt-1 flex items-center justify-center gap-1">
-                    <Building className="w-3.5 h-3.5" />
+                  <p className="text-[11px] font-medium text-[#592eff] dark:text-violet-400 mt-0.5 flex items-center justify-center gap-1">
+                    <Building className="w-3 h-3" />
                     {currentProspect.company}
                   </p>
                 )}
               </div>
 
-              <div className="w-full flex items-center gap-2 pt-1">
+              <div className="w-full pt-1">
                 <a
                   href={currentProspect.linkedinUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex-1 py-2 text-xs font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 rounded-xl transition-all border border-indigo-200/50 flex items-center justify-center gap-1.5"
+                  className="w-full py-1.5 text-xs font-semibold bg-violet-50 dark:bg-violet-950/60 text-[#592eff] dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/60 rounded-xl transition-all border border-violet-200/50 flex items-center justify-center gap-1.5"
                 >
-                  <ExternalLink className="w-3.5 h-3.5" />
+                  <ExternalLink className="w-3 h-3" />
                   Voir sur LinkedIn
                 </a>
               </div>
             </div>
 
+            {/* Section Liste CRM */}
+            <div className="p-3 bg-slate-50/80 dark:bg-slate-800/40 rounded-2xl border border-slate-200/70 dark:border-slate-700/60 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <Shield className="w-3.5 h-3.5 text-[#592eff]" />
+                  Liste CRM
+                </span>
+                {currentProspect.list && (
+                  <button
+                    onClick={() => setShowListSelector(!showListSelector)}
+                    className="text-[11px] text-[#592eff] hover:underline font-medium cursor-pointer"
+                  >
+                    Changer
+                  </button>
+                )}
+              </div>
+
+              {listAssignSuccess && (
+                <div className="p-2 text-[11px] text-emerald-700 bg-emerald-50 dark:bg-emerald-950/50 dark:text-emerald-300 rounded-lg border border-emerald-200/60">
+                  {listAssignSuccess}
+                </div>
+              )}
+
+              {currentProspect.list ? (
+                <div className="flex items-center justify-between p-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span
+                      className="w-2.5 h-2.5 rounded-full shrink-0"
+                      style={{ backgroundColor: currentProspect.list.color || "#592eff" }}
+                    />
+                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">
+                      {currentProspect.list.name}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Ce contact n'appartient à aucune liste de prospection CRM.
+                  </p>
+                  {!showListSelector && (
+                    <button
+                      onClick={() => setShowListSelector(true)}
+                      className="w-full py-1.5 px-3 text-xs font-semibold text-white bg-[#592eff] hover:bg-[#4a24dd] rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Ajouter à une liste CRM
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {showListSelector && (
+                <div className="mt-2 p-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 space-y-1.5">
+                  <div className="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-700/50">
+                    <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                      Choisir une liste :
+                    </span>
+                    <button
+                      onClick={() => setShowListSelector(false)}
+                      className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs cursor-pointer"
+                    >
+                      Annuler
+                    </button>
+                  </div>
+                  {availableLists.length === 0 ? (
+                    <p className="text-[11px] text-slate-400 p-1">Aucune liste disponible.</p>
+                  ) : (
+                    <div className="max-h-32 overflow-y-auto space-y-1 no-scrollbar">
+                      {availableLists.map((l) => (
+                        <button
+                          key={l.id}
+                          disabled={assigningList}
+                          onClick={() => handleAssignToList(l.id)}
+                          className={`w-full text-left px-2.5 py-1.5 text-xs rounded-lg flex items-center justify-between hover:bg-violet-50 dark:hover:bg-violet-950/40 transition-colors cursor-pointer ${
+                            currentProspect.list?.id === l.id
+                              ? "bg-violet-50 text-[#592eff] font-bold"
+                              : "text-slate-700 dark:text-slate-300"
+                          }`}
+                        >
+                          <span className="flex items-center gap-2 truncate">
+                            <span
+                              className="w-2 h-2 rounded-full shrink-0"
+                              style={{ backgroundColor: l.color || "#592eff" }}
+                            />
+                            <span className="truncate">{l.name}</span>
+                          </span>
+                          {currentProspect.list?.id === l.id && (
+                            <Check className="w-3.5 h-3.5 text-[#592eff]" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* Tags Section */}
-            <div className="space-y-2.5">
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                  <Tag className="w-3.5 h-3.5 text-indigo-500" />
+                  <Tag className="w-3.5 h-3.5 text-[#592eff]" />
                   Tags & Segments
                 </label>
                 <button
                   onClick={() => setShowAddTag(!showAddTag)}
-                  className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
+                  className="text-xs text-[#592eff] hover:underline font-medium cursor-pointer"
                 >
                   + Ajouter
                 </button>
@@ -871,11 +1009,11 @@ export const InboxView: React.FC = () => {
                         handleAddTag();
                       }
                     }}
-                    className="flex-1 px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-900 dark:text-white"
+                    className="flex-1 px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#592eff] text-slate-900 dark:text-white"
                   />
                   <button
                     onClick={handleAddTag}
-                    className="px-2.5 py-1.5 text-xs bg-indigo-600 text-white rounded-lg font-medium"
+                    className="px-2.5 py-1.5 text-xs bg-[#592eff] hover:bg-[#4a24dd] text-white rounded-lg font-medium cursor-pointer"
                   >
                     OK
                   </button>
@@ -887,25 +1025,25 @@ export const InboxView: React.FC = () => {
                   currentProspect.tags.map((tag, tIdx) => (
                     <span
                       key={tIdx}
-                      className="px-2.5 py-1 text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg border border-slate-200/60 dark:border-slate-700/60 flex items-center gap-1.5 group"
+                      className="px-2 py-0.5 text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg border border-slate-200/60 dark:border-slate-700/60 flex items-center gap-1.5 group"
                     >
                       {tag}
                       <button
                         onClick={() => handleRemoveTag(tag)}
-                        className="text-slate-400 hover:text-red-500 transition-colors"
+                        className="text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
                       >
                         ×
                       </button>
                     </span>
                   ))
                 ) : (
-                  <p className="text-xs text-slate-400 italic">Aucun tag pour le moment.</p>
+                  <p className="text-[11px] text-slate-400 italic">Aucun tag pour le moment.</p>
                 )}
               </div>
             </div>
 
             {/* Campaign Widget */}
-            <div className="p-3.5 bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200/60 dark:border-purple-900/40 rounded-2xl space-y-2">
+            <div className="p-3 bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200/60 dark:border-purple-900/40 rounded-2xl space-y-1.5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-purple-900 dark:text-purple-300 flex items-center gap-1.5">
                   <Layers className="w-3.5 h-3.5 text-purple-600" />
@@ -933,13 +1071,13 @@ export const InboxView: React.FC = () => {
             </div>
 
             {/* Tabs Infos / Notes */}
-            <div className="space-y-3 pt-2">
+            <div className="space-y-2.5 pt-1">
               <div className="flex border-b border-slate-100 dark:border-slate-800">
                 <button
                   onClick={() => setCrmTab("INFOS")}
-                  className={`pb-2.5 px-3 text-xs font-bold border-b-2 transition-all ${
+                  className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer ${
                     crmTab === "INFOS"
-                      ? "border-indigo-600 text-indigo-600 dark:text-indigo-400"
+                      ? "border-[#592eff] text-[#592eff] dark:text-violet-400"
                       : "border-transparent text-slate-400 hover:text-slate-600"
                   }`}
                 >
@@ -947,9 +1085,9 @@ export const InboxView: React.FC = () => {
                 </button>
                 <button
                   onClick={() => setCrmTab("NOTES")}
-                  className={`pb-2.5 px-3 text-xs font-bold border-b-2 transition-all ${
+                  className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer ${
                     crmTab === "NOTES"
-                      ? "border-indigo-600 text-indigo-600 dark:text-indigo-400"
+                      ? "border-[#592eff] text-[#592eff] dark:text-violet-400"
                       : "border-transparent text-slate-400 hover:text-slate-600"
                   }`}
                 >
@@ -958,7 +1096,7 @@ export const InboxView: React.FC = () => {
               </div>
 
               {crmTab === "INFOS" ? (
-                <div className="space-y-3 text-xs">
+                <div className="space-y-2 text-xs">
                   <div className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50">
                     <span className="text-slate-400 flex items-center gap-2">
                       <Mail className="w-3.5 h-3.5" /> Email
@@ -968,7 +1106,7 @@ export const InboxView: React.FC = () => {
                       {currentProspect.email && (
                         <button
                           onClick={() => handleCopy(currentProspect.email!, "email")}
-                          className="text-slate-400 hover:text-indigo-600"
+                          className="text-slate-400 hover:text-[#592eff] cursor-pointer"
                         >
                           <Copy className="w-3 h-3" />
                         </button>
@@ -1005,15 +1143,15 @@ export const InboxView: React.FC = () => {
 
                   <div className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50">
                     <span className="text-slate-400 flex items-center gap-2">
-                      <Shield className="w-3.5 h-3.5" /> Liste Bime
+                      <Shield className="w-3.5 h-3.5" /> Liste CRM
                     </span>
-                    <span className="font-medium text-indigo-600 dark:text-indigo-400">
-                      {currentProspect.list?.name || "Messagerie LinkedIn"}
+                    <span className="font-medium text-[#592eff] dark:text-violet-400">
+                      {currentProspect.list?.name || "Non assigné"}
                     </span>
                   </div>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2.5">
                   <div className="space-y-1.5">
                     <label className="text-[11px] font-semibold text-slate-500">
                       Notes internes sur ce prospect :
@@ -1023,7 +1161,7 @@ export const InboxView: React.FC = () => {
                       placeholder="Notez des détails clés (besoins, budget, rappel convenu)..."
                       value={prospectNote}
                       onChange={(e) => setProspectNote(e.target.value)}
-                      className="w-full p-2.5 text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-900 dark:text-white resize-none"
+                      className="w-full p-2 text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#592eff] text-slate-900 dark:text-white resize-none"
                     />
                   </div>
                   <button
@@ -1031,7 +1169,7 @@ export const InboxView: React.FC = () => {
                       setSavingNote(true);
                       setTimeout(() => setSavingNote(false), 800);
                     }}
-                    className="w-full py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl transition-all flex items-center justify-center gap-1.5"
+                    className="w-full py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     {savingNote ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> : <FileText className="w-3.5 h-3.5" />}
                     {savingNote ? "Note enregistrée !" : "Enregistrer la note"}

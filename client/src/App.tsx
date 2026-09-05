@@ -12,7 +12,8 @@ import { useAuth } from "./context/AuthContext";
 import { SetupAdmin } from "./components/auth/SetupAdmin";
 import { Login } from "./components/auth/Login";
 import { JoinPage } from "./components/auth/JoinPage";
-import { FloatingNavPill } from "./components/layout/FloatingNavPill";
+import { Sidebar } from "./components/layout/Sidebar";
+import { Header } from "./components/layout/Header";
 import { AdminDashboard } from "./components/admin/AdminDashboard";
 import { UserManagement } from "./components/admin/UserManagement";
 import { TeamPage } from "./components/admin/TeamPage";
@@ -22,7 +23,7 @@ import { CampaignsView } from "./components/campaigns/CampaignsView";
 import { InboxView } from "./components/inbox/InboxView";
 import { ProfileModal } from "./components/profile/ProfileModal";
 import { LinkedInOnboardingWall } from "./components/auth/LinkedInOnboardingWall";
-import { SuperAdminBar } from "./components/layout/SuperAdminBar";
+import { Sparkles, ArrowRight } from "lucide-react";
 
 /**
  * Wrapper pour la page /join?token=...
@@ -46,13 +47,13 @@ const AppLayout: React.FC = () => {
   const {
     user,
     impersonatedOrg,
-    setImpersonatedOrg,
     showLinkedInModal,
     setShowLinkedInModal,
   } = useAuth();
   const location = useLocation();
-  const navigate = useNavigate();
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   if (!user) {
     return <Navigate to="/login" replace />;
@@ -65,62 +66,61 @@ const AppLayout: React.FC = () => {
     location.pathname.startsWith("/inbox");
 
   return (
-    <div
-      className={`text-[#353241] flex flex-col ${
-        isNoScrollPage
-          ? "h-screen overflow-hidden bg-[#f8f9fc]"
-          : "min-h-screen bg-[#f8f9fc]"
-      }`}
-    >
-      {/* Super Admin Immersion Banner */}
-      {isSuperAdmin && impersonatedOrg && (
-        <SuperAdminBar
-          organizationName={impersonatedOrg.name}
-          onExit={() => {
-            setImpersonatedOrg(null);
-            navigate("/admin");
-          }}
+    <div className="text-[#353241] flex h-screen overflow-hidden bg-[#f8f9fc]">
+      {/* Barre latérale de navigation verticale Adora à gauche */}
+      <Sidebar
+        isCollapsed={isSidebarCollapsed}
+        onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        isMobileOpen={isMobileSidebarOpen}
+        onMobileClose={() => setIsMobileSidebarOpen(false)}
+        onOpenProfile={() => setIsProfileModalOpen(true)}
+      />
+
+      {/* Contenu principal : Header supérieur + Page active */}
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+        {/* En-tête supérieur avec Titre, Recherche, Collaborateur, et WorkspaceSwitcher */}
+        <Header
+          onOpenMobileMenu={() => setIsMobileSidebarOpen(true)}
+          onOpenProfile={() => setIsProfileModalOpen(true)}
         />
-      )}
 
-      {/* LinkedIn Connect Reminder Banner pour les membres non connectés */}
-      {!user.hasLinkedInAccount && !isSuperAdmin && (
-        <div className="bg-gradient-to-r from-[#592eff]/10 via-[#7c3aed]/5 to-[#0077b5]/10 border-b border-[#592eff]/20 px-4 py-2 flex items-center justify-between text-xs z-30">
-          <div className="flex items-center gap-2.5 text-[#21164c] font-medium">
-            <span className="flex h-2 w-2 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#0077b5] opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-[#0077b5]"></span>
-            </span>
-            <span>
-              Votre compte LinkedIn n'est pas encore lié. Associez-le pour activer la prospection et vos campagnes personnelles.
-            </span>
+        {/* LinkedIn Connect Reminder Banner pour les membres non connectés */}
+        {!user.hasLinkedInAccount && !isSuperAdmin && (
+          <div className="bg-gradient-to-r from-[#592eff]/15 via-[#7c3aed]/10 to-[#0a66c2]/15 border-b border-[#592eff]/25 px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs z-20 shrink-0 shadow-xs">
+            <div className="flex items-center gap-2.5 text-[#21164c] flex-1 min-w-0">
+              <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#592eff] text-white font-extrabold text-[10px] uppercase tracking-wider shadow-xs shrink-0">
+                <Sparkles className="w-3 h-3 animate-pulse" />
+                Action Requise
+              </span>
+              <p className="text-xs text-[#21164c] truncate">
+                <strong className="font-extrabold">Activez votre prospection :</strong>{" "}
+                <span className="text-[#3b2b73] font-medium">
+                  Connectez votre compte LinkedIn pour lancer vos campagnes et générer des leads qualifiés en continu.
+                </span>
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowLinkedInModal(true)}
+              className="px-3.5 py-1.5 bg-[#592eff] hover:bg-[#4a22e0] text-white font-bold text-xs rounded-xl shadow-md shadow-[#592eff]/25 hover:shadow-[#592eff]/40 active:scale-[0.98] transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+            >
+              <span>Connecter LinkedIn</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowLinkedInModal(true)}
-            className="px-3 py-1 bg-[#0077b5] hover:bg-[#005f93] text-white font-bold rounded-lg shadow-sm transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ml-3"
-          >
-            <span>Connecter LinkedIn</span>
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-        </div>
-      )}
+        )}
 
-      {/* Floating Adora Navigation Bar */}
-      <FloatingNavPill onOpenProfile={() => setIsProfileModalOpen(true)} />
-
-      {/* Main View Area */}
-      <main
-        className={`flex-1 ${
-          isNoScrollPage
-            ? "min-h-0 overflow-hidden flex flex-col"
-            : "pb-16"
-        }`}
-      >
-        <Outlet />
-      </main>
+        {/* Zone de contenu principale */}
+        <main
+          className={`flex-1 ${
+            isNoScrollPage
+              ? "min-h-0 overflow-hidden flex flex-col"
+              : "overflow-y-auto"
+          }`}
+        >
+          <Outlet />
+        </main>
+      </div>
 
       {/* User Profile Modal */}
       <ProfileModal

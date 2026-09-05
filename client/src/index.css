@@ -31,18 +31,50 @@ body {
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: #f1f1f4;
 }
 ::-webkit-scrollbar-thumb {
-  background: #d8d8d4;
+  background: #c7c7c0;
   border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #b0b0a8;
+  background: #592eff;
+}
+
+/* Explicit class for elements needing a visible scrollbar */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #c7c7c0 #f1f1f4;
+}
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f1f1f4;
+  border-radius: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #c7c7c0;
+  border-radius: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #592eff;
+}
+
+/* Hide scrollbar utility for clean containers like Sidebar */
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
 }
 
 /* Adora Pill & Glass Elements */

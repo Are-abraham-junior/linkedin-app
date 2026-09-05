@@ -66,7 +66,7 @@ export async function handleProspectReply(prospectId, text) {
 /**
  * Synchronise les discussions Unipile pour un utilisateur donné avec throttling
  */
-async function syncUserChatsWithUnipile(userId, limit = 50, force = false) {
+export async function syncUserChatsWithUnipile(userId, limit = 50, force = false) {
     const now = Date.now();
     const lastSync = lastSyncByUser.get(userId) || 0;
     // Throttling : si synchronisé il y a moins de 60s ou déjà en cours, servir la BDD immédiatement
@@ -86,40 +86,92 @@ async function syncUserChatsWithUnipile(userId, limit = 50, force = false) {
         if (!unipileChats.success || !Array.isArray(unipileChats.items)) {
             return { synced: 0, error: unipileChats.error };
         }
-        // Liste par défaut "Messagerie LinkedIn"
-        let defaultList = await prisma.prospectList.findFirst({
-            where: { userId },
-        });
-        if (!defaultList) {
-            defaultList = await prisma.prospectList.create({
-                data: {
-                    userId,
-                    name: "Messagerie LinkedIn",
-                    color: "#592eff",
-                },
-            });
-        }
         let count = 0;
         for (const item of unipileChats.items) {
             const chatId = item.id;
             if (!chatId)
                 continue;
+            // Détecter si c'est un message publicitaire ou InMail sponsorisé
+            const subject = (item.subject || "").toLowerCase();
+            if (subject.includes("invitation") ||
+                subject.includes("découvrez") ||
+                subject.includes("odoo") ||
+                subject.includes("gartner") ||
+                subject.includes("mba") ||
+                subject.includes("synergies") ||
+                subject.includes("conférence")) {
+                continue;
+            }
             const attendeeProviderId = item.attendee_provider_id;
             const attendees = Array.isArray(item.attendees) ? item.attendees : [];
-            const otherAttendee = attendees.find((a) => !a.is_self && (a.provider_id || a.id)) ||
+            let otherAttendee = attendees.find((a) => !a.is_self && (a.provider_id || a.id || a.name)) ||
                 attendees[0] ||
                 {};
-            const providerId = attendeeProviderId ||
+            let providerId = attendeeProviderId ||
                 otherAttendee.provider_id ||
                 otherAttendee.id ||
                 item.provider_id;
-            const attendeeName = (otherAttendee.name || item.name || "Contact LinkedIn").trim();
-            const attendeePicture = otherAttendee.picture_url ||
+            let attendeeName = (otherAttendee.name || item.name || "").trim();
+            let attendeePicture = otherAttendee.picture_url ||
                 otherAttendee.avatar_url ||
                 otherAttendee.picture ||
                 item.picture_url ||
                 null;
-            const attendeeHeadline = otherAttendee.headline || otherAttendee.occupation || item.subject || "Contact LinkedIn";
+            let attendeeHeadline = otherAttendee.headline || otherAttendee.occupation || "";
+            let profileUrl = otherAttendee.profile_url || null;
+            // Si la conversation existe déjà avec un prospect bien nommé, réutiliser ses données pour éviter un appel réseau Unipile
+            const existingConvForChat = await prisma.conversation.findFirst({
+                where: { unipileChatId: chatId },
+                include: { prospect: true },
+            });
+            if (existingConvForChat?.prospect && existingConvForChat.prospect.firstName && existingConvForChat.prospect.firstName !== "Contact") {
+                attendeeName = `${existingConvForChat.prospect.firstName} ${existingConvForChat.prospect.lastName}`.trim();
+                if (!attendeePicture)
+                    attendeePicture = existingConvForChat.prospect.avatarUrl;
+                if (!attendeeHeadline)
+                    attendeeHeadline = existingConvForChat.prospect.headline || "";
+                if (!profileUrl)
+                    profileUrl = existingConvForChat.prospect.linkedinUrl;
+            }
+            // Si le nom du participant est absent ou générique, interroger l'API Unipile des participants
+            if (!attendeeName || attendeeName === "Contact LinkedIn" || attendeeName === "LinkedIn Member") {
+                try {
+                    const attendeesRes = await UnipileService.getChatAttendees(chatId);
+                    if (attendeesRes.success && Array.isArray(attendeesRes.items) && attendeesRes.items.length > 0) {
+                        const realOther = attendeesRes.items.find((a) => !a.is_self && (a.name || a.provider_id)) ||
+                            attendeesRes.items[0];
+                        if (realOther) {
+                            // Ignorer s'il s'agit d'une page entreprise ou d'un compte masqué
+                            if (realOther.specifics?.is_company || realOther.hidden) {
+                                continue;
+                            }
+                            if (realOther.name && realOther.name.trim() !== "Contact LinkedIn") {
+                                attendeeName = realOther.name.trim();
+                            }
+                            if (realOther.picture_url)
+                                attendeePicture = realOther.picture_url;
+                            if (realOther.specifics?.occupation)
+                                attendeeHeadline = realOther.specifics.occupation;
+                            if (realOther.provider_id)
+                                providerId = realOther.provider_id;
+                            if (realOther.profile_url)
+                                profileUrl = realOther.profile_url;
+                        }
+                    }
+                }
+                catch (attErr) {
+                    console.warn(`[Inbox] Impossible de récupérer les participants du chat ${chatId}:`, attErr);
+                }
+            }
+            // Si aucun nom humain valide n'a pu être identifié, ignorer pour ne pas polluer la messagerie
+            if (!attendeeName ||
+                attendeeName === "Contact LinkedIn" ||
+                attendeeName === "LinkedIn Member" ||
+                attendeeName.toLowerCase().startsWith("invitation") ||
+                attendeeName.toLowerCase().startsWith("découvrez") ||
+                attendeeName.toLowerCase().startsWith("échange")) {
+                continue;
+            }
             const nameParts = attendeeName.split(" ");
             const firstName = nameParts[0] || "Contact";
             const lastName = nameParts.slice(1).join(" ") || "";
@@ -129,7 +181,7 @@ async function syncUserChatsWithUnipile(userId, limit = 50, force = false) {
                 orConditions.push({ providerProfileId: providerId });
             if (attendeeProviderId)
                 orConditions.push({ providerProfileId: attendeeProviderId });
-            if (attendeeName && attendeeName !== "Contact LinkedIn") {
+            if (attendeeName) {
                 orConditions.push({
                     firstName: { equals: firstName, mode: "insensitive" },
                     lastName: { equals: lastName, mode: "insensitive" },
@@ -145,16 +197,17 @@ async function syncUserChatsWithUnipile(userId, limit = 50, force = false) {
             if (!prospect) {
                 prospect = await prisma.prospect.create({
                     data: {
-                        listId: defaultList.id,
+                        userId,
+                        listId: null,
                         providerProfileId: providerId || `chat_${chatId}`,
                         firstName,
                         lastName,
-                        linkedinUrl: otherAttendee.profile_url ||
+                        linkedinUrl: profileUrl ||
                             (providerId && (providerId.startsWith("ACo") || providerId.startsWith("ACw"))
                                 ? `https://www.linkedin.com/in/${providerId}`
                                 : `https://www.linkedin.com/search/results/all/?keywords=${encodeURIComponent(attendeeName)}`),
                         avatarUrl: attendeePicture,
-                        headline: attendeeHeadline,
+                        headline: attendeeHeadline || "Contact LinkedIn",
                         connectionStatus: "CONNECTED",
                     },
                 });
@@ -162,12 +215,17 @@ async function syncUserChatsWithUnipile(userId, limit = 50, force = false) {
             else {
                 // Mettre à jour les informations manquantes
                 const updates = {};
+                if (!prospect.userId)
+                    updates.userId = userId;
                 if (!prospect.avatarUrl && attendeePicture)
                     updates.avatarUrl = attendeePicture;
-                if (!prospect.headline && attendeeHeadline)
+                if ((!prospect.headline || prospect.headline === "Contact LinkedIn") && attendeeHeadline) {
                     updates.headline = attendeeHeadline;
+                }
                 if (!prospect.providerProfileId && providerId)
                     updates.providerProfileId = providerId;
+                if (profileUrl && !prospect.linkedinUrl.includes("/in/"))
+                    updates.linkedinUrl = profileUrl;
                 if (Object.keys(updates).length > 0) {
                     prospect = await prisma.prospect.update({
                         where: { id: prospect.id },
@@ -190,13 +248,20 @@ async function syncUserChatsWithUnipile(userId, limit = 50, force = false) {
                 },
             });
             if (existingConv) {
+                // Protection anti-écrasement du statut "lu" :
+                // Si la conversation a été lue en local (unreadCount === 0), on ne remet non-lu que si un NOUVEAU message est arrivé
+                const isNewerMessage = existingConv.lastMessageAt &&
+                    lastTime &&
+                    lastTime.getTime() > existingConv.lastMessageAt.getTime();
+                const finalUnread = existingConv.unreadCount === 0 && !isNewerMessage ? 0 : unreadCount;
                 await prisma.conversation.update({
                     where: { id: existingConv.id },
                     data: {
+                        userId,
                         unipileChatId: chatId,
                         lastMessageText: lastText || existingConv.lastMessageText,
-                        lastMessageAt: lastTime,
-                        unreadCount,
+                        lastMessageAt: lastTime || existingConv.lastMessageAt,
+                        unreadCount: finalUnread,
                         prospectId: prospect.id,
                     },
                 });
@@ -204,6 +269,7 @@ async function syncUserChatsWithUnipile(userId, limit = 50, force = false) {
             else {
                 await prisma.conversation.create({
                     data: {
+                        userId,
                         prospectId: prospect.id,
                         unipileChatId: chatId,
                         lastMessageText: lastText,
@@ -232,30 +298,6 @@ export async function getConversations(req, res) {
         // 1. Vérifier si l'utilisateur possède un compte LinkedIn connecté actif
         const activeLinkedIn = await getValidLinkedInAccountId(userId);
         if (!activeLinkedIn) {
-            // Nettoyer les fausses conversations orphelines créées par l'ancien fallback
-            const fakeLists = await prisma.prospectList.findMany({
-                where: { userId, name: "Messagerie LinkedIn" },
-                select: { id: true },
-            });
-            if (fakeLists.length > 0) {
-                const listIds = fakeLists.map((l) => l.id);
-                const orphanProspects = await prisma.prospect.findMany({
-                    where: { listId: { in: listIds } },
-                    select: { id: true },
-                });
-                if (orphanProspects.length > 0) {
-                    const prospectIds = orphanProspects.map((p) => p.id);
-                    await prisma.message.deleteMany({
-                        where: { conversation: { prospectId: { in: prospectIds } } },
-                    });
-                    await prisma.conversation.deleteMany({
-                        where: { prospectId: { in: prospectIds } },
-                    });
-                    await prisma.prospect.deleteMany({
-                        where: { id: { in: prospectIds } },
-                    });
-                }
-            }
             res.json({
                 success: true,
                 conversations: [],
@@ -263,30 +305,33 @@ export async function getConversations(req, res) {
             });
             return;
         }
-        // Synchronisation automatique douce Unipile
-        try {
-            await syncUserChatsWithUnipile(userId, 30);
-        }
-        catch (syncErr) {
-            console.warn("[Inbox] Erreur synchronisation douce Unipile:", syncErr);
-        }
+        // Synchronisation en arrière-plan non bloquante (réponse BDD instantanée < 50ms)
+        syncUserChatsWithUnipile(userId, 20).catch((syncErr) => {
+            console.warn("[Inbox] Erreur background sync Unipile:", syncErr);
+        });
         // Récupérer les conversations depuis la base de données
         const whereClause = {
-            prospect: {
-                list: { userId },
-            },
+            OR: [
+                { userId },
+                { prospect: { userId } },
+                { prospect: { list: { userId } } },
+            ],
         };
         if (status === "UNREAD") {
             whereClause.unreadCount = { gt: 0 };
         }
         if (search && search.trim()) {
             const q = search.trim();
-            whereClause.OR = [
-                { lastMessageText: { contains: q, mode: "insensitive" } },
-                { prospect: { firstName: { contains: q, mode: "insensitive" } } },
-                { prospect: { lastName: { contains: q, mode: "insensitive" } } },
-                { prospect: { company: { contains: q, mode: "insensitive" } } },
-                { prospect: { headline: { contains: q, mode: "insensitive" } } },
+            whereClause.AND = [
+                {
+                    OR: [
+                        { lastMessageText: { contains: q, mode: "insensitive" } },
+                        { prospect: { firstName: { contains: q, mode: "insensitive" } } },
+                        { prospect: { lastName: { contains: q, mode: "insensitive" } } },
+                        { prospect: { company: { contains: q, mode: "insensitive" } } },
+                        { prospect: { headline: { contains: q, mode: "insensitive" } } },
+                    ],
+                },
             ];
         }
         const conversations = await prisma.conversation.findMany({
@@ -349,7 +394,11 @@ export async function getConversations(req, res) {
         // Total non lus
         const totalUnread = await prisma.conversation.aggregate({
             where: {
-                prospect: { list: { userId } },
+                OR: [
+                    { userId },
+                    { prospect: { userId } },
+                    { prospect: { list: { userId } } },
+                ],
                 unreadCount: { gt: 0 },
             },
             _sum: { unreadCount: true },
@@ -679,17 +728,12 @@ export async function startNewConversation(req, res) {
             });
         }
         else if (linkedinUrl) {
-            let defaultList = await prisma.prospectList.findFirst({ where: { userId } });
-            if (!defaultList) {
-                defaultList = await prisma.prospectList.create({
-                    data: { userId, name: "Messagerie LinkedIn", color: "#592eff" },
-                });
-            }
             const profileData = await UnipileService.getProfileDetailsAndStatus(linkedinUrl, accountId);
             const p = profileData.profile;
             prospect = await prisma.prospect.create({
                 data: {
-                    listId: defaultList.id,
+                    userId,
+                    listId: null,
                     linkedinUrl,
                     providerProfileId: p?.providerProfileId,
                     firstName: p?.firstName || "Contact",
@@ -734,6 +778,7 @@ export async function startNewConversation(req, res) {
         if (!conversation) {
             conversation = await prisma.conversation.create({
                 data: {
+                    userId,
                     prospectId: prospect.id,
                     unipileChatId: targetChatId,
                     lastMessageText: text.trim(),
@@ -746,6 +791,7 @@ export async function startNewConversation(req, res) {
             await prisma.conversation.update({
                 where: { id: conversation.id },
                 data: {
+                    userId,
                     unipileChatId: targetChatId,
                     lastMessageText: text.trim(),
                     lastMessageAt: now,
@@ -808,7 +854,7 @@ export async function markAsRead(req, res) {
 export async function updateProspectDetails(req, res) {
     try {
         const id = req.params.id;
-        const { tags, email, phone, company, headline, location, doNotContact } = req.body;
+        const { tags, email, phone, company, headline, location, doNotContact, listId } = req.body;
         const data = {};
         if (tags !== undefined)
             data.tags = tags;
@@ -824,6 +870,8 @@ export async function updateProspectDetails(req, res) {
             data.location = location;
         if (doNotContact !== undefined)
             data.doNotContact = doNotContact;
+        if (listId !== undefined)
+            data.listId = listId;
         const updated = await prisma.prospect.update({
             where: { id },
             data,

@@ -98,6 +98,8 @@ model User {
   campaigns        Campaign[]
   messageTemplates MessageTemplate[]
   sentInvitations  TeamInvitation[]  @relation("InvitedBy")
+  prospects        Prospect[]
+  conversations    Conversation[]
 }
 
 model TeamInvitation {
@@ -148,8 +150,10 @@ model ProspectList {
 
 model Prospect {
   id                String            @id @default(uuid())
-  listId            String
-  list              ProspectList      @relation(fields: [listId], references: [id], onDelete: Cascade)
+  userId            String?
+  user              User?             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listId            String?
+  list              ProspectList?     @relation(fields: [listId], references: [id], onDelete: SetNull)
   linkedinUrl       String
   providerProfileId String?
   firstName         String
@@ -171,6 +175,8 @@ model Prospect {
   actionQueues      ActionQueue[]
 
   @@index([linkedinUrl])
+  @@index([userId])
+  @@index([listId])
 }
 
 model Campaign {
@@ -240,6 +246,8 @@ model ActionQueue {
 
 model Conversation {
   id                String       @id @default(uuid())
+  userId            String?
+  user              User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
   prospectId        String
   prospect          Prospect     @relation(fields: [prospectId], references: [id], onDelete: Cascade)
   unipileChatId     String?      @unique
@@ -250,6 +258,8 @@ model Conversation {
   updatedAt         DateTime     @updatedAt
 
   messages          Message[]
+
+  @@index([userId])
 }
 
 model Message {
