@@ -87,8 +87,15 @@ export const QueueView: React.FC = () => {
   const [selectedActionType, setSelectedActionType] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(15);
   const [totalPages, setTotalPages] = useState<number>(1);
   const [totalCount, setTotalCount] = useState<number>(0);
+  const [scheduleInfo, setScheduleInfo] = useState<{
+    workingDays: string[];
+    workingHoursStart: string;
+    workingHoursEnd: string;
+    timezone: string;
+  } | null>(null);
 
   // Selection
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -101,7 +108,7 @@ export const QueueView: React.FC = () => {
     try {
       const params = new URLSearchParams({
         page: page.toString(),
-        limit: "15",
+        limit: pageSize.toString(),
         status: statusFilter,
       });
 
@@ -126,7 +133,7 @@ export const QueueView: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter, selectedCampaignId, selectedActionType, searchQuery]);
+  }, [page, pageSize, statusFilter, selectedCampaignId, selectedActionType, searchQuery]);
 
   // Handle single item retry
   const handleRetryItem = async (id: string) => {
@@ -154,6 +161,78 @@ export const QueueView: React.FC = () => {
     };
     fetchCampaigns();
   }, []);
+
+  const fetchScheduleInfo = async () => {
+    try {
+      const res = await apiRequest<{ schedule: any }>("/queue/schedule");
+      if (res.success && res.schedule) {
+        setScheduleInfo(res.schedule);
+      }
+    } catch (err) {
+      console.error("Erreur récupération planning:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchScheduleInfo();
+  }, []);
+
+  const getWorkingSlotStatus = () => {
+    if (!scheduleInfo) return { inHours: true, message: "" };
+    try {
+      const now = new Date();
+      const formatter = new Intl.DateTimeFormat("en-US", {
+        timeZone: scheduleInfo.timezone || "Africa/Abidjan",
+        weekday: "short",
+        hour: "numeric",
+        minute: "numeric",
+        hour12: false,
+      });
+      const parts = formatter.formatToParts(now);
+      let day = "";
+      let hour = 0;
+      let min = 0;
+      for (const p of parts) {
+        if (p.type === "weekday") {
+          const map: Record<string, string> = {
+            Sun: "SUN",
+            Mon: "MON",
+            Tue: "TUE",
+            Wed: "WED",
+            Thu: "THU",
+            Fri: "FRI",
+            Sat: "SAT",
+          };
+          day = map[p.value] || p.value.toUpperCase().slice(0, 3);
+        } else if (p.type === "hour") {
+          hour = parseInt(p.value, 10);
+        } else if (p.type === "minute") {
+          min = parseInt(p.value, 10);
+        }
+      }
+      const days = scheduleInfo.workingDays || ["MON", "TUE", "WED", "THU", "FRI"];
+      if (!days.includes(day)) {
+        return { inHours: false, message: `En veille (Jour non actif : ${day})` };
+      }
+      const curM = hour * 60 + min;
+      const [sh, sm] = (scheduleInfo.workingHoursStart || "08:00").split(":").map(Number);
+      const [eh, em] = (scheduleInfo.workingHoursEnd || "19:00").split(":").map(Number);
+      const startM = (sh || 8) * 60 + (sm || 0);
+      const endM = (eh || 19) * 60 + (em || 0);
+      if (curM < startM || curM > endM) {
+        return {
+          inHours: false,
+          message: `En veille nocturne (Plage : ${scheduleInfo.workingHoursStart || "08:00"} - ${scheduleInfo.workingHoursEnd || "19:00"})`,
+        };
+      }
+      return {
+        inHours: true,
+        message: `Plage active (${scheduleInfo.workingHoursStart} - ${scheduleInfo.workingHoursEnd})`,
+      };
+    } catch {
+      return { inHours: true, message: "" };
+    }
+  };
 
   useEffect(() => {
     fetchQueue();
@@ -324,12 +403,14 @@ export const QueueView: React.FC = () => {
     }
   };
 
+  const slotStatus = getWorkingSlotStatus();
+
   return (
-    <div className="flex-1 flex flex-col p-6 max-w-[1640px] mx-auto w-full overflow-hidden">
+    <div className="flex-1 flex flex-col p-4 sm:p-6 max-w-[1640px] mx-auto w-full">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
             <h1 className="text-2xl font-black text-[#21164c] tracking-tight">File d'attente</h1>
             <span
               className={`px-2.5 py-0.5 rounded-full text-xs font-bold flex items-center gap-1.5 ${
@@ -345,6 +426,17 @@ export const QueueView: React.FC = () => {
               />
               {stats?.isQueueActive ? "Active" : "En pause"}
             </span>
+
+            {/* Indicateur de tranche horaire d'activité */}
+            {!slotStatus.inHours && (
+              <span
+                className="px-2.5 py-0.5 rounded-full text-xs font-bold flex items-center gap-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200"
+                title="Les actions sont différées pour respecter vos horaires d'activité configurés et protéger votre compte."
+              >
+                <span>🌙</span>
+                <span>{slotStatus.message}</span>
+              </span>
+            )}
           </div>
           <p className="text-xs text-[#5f5f69] mt-1">
             Suivi en temps réel des actions planifiées et cadence d'exécution
@@ -533,10 +625,10 @@ export const QueueView: React.FC = () => {
 
           {/* Table Container */}
           <div className="bg-white rounded-3xl border border-[#e0e0db] shadow-sm overflow-hidden flex flex-col">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto overflow-y-auto max-h-[620px] custom-scrollbar">
               <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-[#e0e0db]/60 text-[11px] font-bold text-[#5f5f69] uppercase tracking-wider bg-[#fafaff]">
+                <thead className="sticky top-0 bg-[#fafaff] z-10 border-b border-[#e0e0db]/80 text-[11px] font-bold text-[#5f5f69] uppercase tracking-wider shadow-2xs">
+                  <tr>
                     <th className="py-3.5 px-4 w-10">
                       <button
                         onClick={handleToggleSelectAll}
@@ -727,30 +819,83 @@ export const QueueView: React.FC = () => {
               </table>
             </div>
 
-            {/* Pagination footer */}
-            {totalPages > 1 && (
-              <div className="p-4 border-t border-[#e0e0db]/60 flex items-center justify-between bg-[#fafaff]">
-                <p className="text-xs text-[#5f5f69]">
-                  Affichage de <span className="font-bold text-[#21164c]">{items.length}</span> sur{" "}
-                  <span className="font-bold text-[#21164c]">{totalCount}</span> actions
-                </p>
+            {/* Pagination footer permanente / Barre de navigation */}
+            {totalCount > 0 && (
+              <div className="p-3.5 sm:p-4 border-t border-[#e0e0db]/60 flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#fafaff]">
+                <div className="flex flex-wrap items-center gap-3">
+                  <p className="text-xs text-[#5f5f69]">
+                    Affichage de <span className="font-bold text-[#21164c]">{items.length}</span> sur{" "}
+                    <span className="font-bold text-[#21164c]">{totalCount}</span> action(s) planifiée(s)
+                  </p>
+
+                  <div className="flex items-center gap-1.5 text-xs text-[#5f5f69] border-l border-[#e0e0db] pl-3">
+                    <span className="hidden sm:inline text-[11px]">Par page :</span>
+                    {[15, 30, 50].map((size) => (
+                      <button
+                        key={size}
+                        type="button"
+                        onClick={() => {
+                          setPageSize(size);
+                          setPage(1);
+                        }}
+                        className={`px-2 py-0.5 rounded-md font-bold text-[11px] transition-colors cursor-pointer ${
+                          pageSize === size
+                            ? "bg-[#592eff] text-white"
+                            : "bg-white border border-[#e0e0db] text-[#5f5f69] hover:text-[#21164c]"
+                        }`}
+                      >
+                        {size}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
                 <div className="flex items-center gap-1">
                   <button
+                    type="button"
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                    className="p-1.5 rounded-lg border border-[#e0e0db] bg-white text-[#21164c] disabled:opacity-40 hover:bg-[#f8f9fc] transition-colors"
+                    disabled={page <= 1 || loading}
+                    className="px-2.5 py-1.5 rounded-xl border border-[#e0e0db] bg-white text-[#21164c] text-xs font-bold disabled:opacity-40 hover:bg-[#f8f9fc] hover:border-[#592eff]/30 transition-all flex items-center gap-1 cursor-pointer disabled:cursor-not-allowed shadow-2xs"
+                    title="Page précédente"
                   >
                     <ChevronLeft className="w-4 h-4" />
+                    <span className="hidden sm:inline">Précédent</span>
                   </button>
-                  <span className="text-xs font-bold text-[#21164c] px-3">
-                    {page} / {totalPages}
-                  </span>
+
+                  {/* Numéros de page */}
+                  <div className="flex items-center gap-1 mx-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                      .filter((p) => p === 1 || p === totalPages || (p >= page - 1 && p <= page + 1))
+                      .map((p, idx, arr) => {
+                        const prev = arr[idx - 1];
+                        const hasGap = prev && p - prev > 1;
+                        return (
+                          <React.Fragment key={p}>
+                            {hasGap && <span className="px-1 text-xs text-[#8a8a93] font-bold">...</span>}
+                            <button
+                              type="button"
+                              onClick={() => setPage(p)}
+                              className={`min-w-[28px] h-7 px-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                page === p
+                                  ? "bg-[#592eff] text-white shadow-sm shadow-[#592eff]/25"
+                                  : "bg-white border border-[#e0e0db] text-[#5f5f69] hover:bg-[#f5f3ff] hover:text-[#592eff]"
+                              }`}
+                            >
+                              {p}
+                            </button>
+                          </React.Fragment>
+                        );
+                      })}
+                  </div>
+
                   <button
+                    type="button"
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={page === totalPages}
-                    className="p-1.5 rounded-lg border border-[#e0e0db] bg-white text-[#21164c] disabled:opacity-40 hover:bg-[#f8f9fc] transition-colors"
+                    disabled={page >= totalPages || loading}
+                    className="px-2.5 py-1.5 rounded-xl border border-[#e0e0db] bg-white text-[#21164c] text-xs font-bold disabled:opacity-40 hover:bg-[#f8f9fc] hover:border-[#592eff]/30 transition-all flex items-center gap-1 cursor-pointer disabled:cursor-not-allowed shadow-2xs"
+                    title="Page suivante"
                   >
+                    <span className="hidden sm:inline">Suivant</span>
                     <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
@@ -963,7 +1108,10 @@ export const QueueView: React.FC = () => {
       <ScheduleActivityModal
         isOpen={isScheduleModalOpen}
         onClose={() => setIsScheduleModalOpen(false)}
-        onSaved={fetchQueue}
+        onSaved={() => {
+          fetchScheduleInfo();
+          fetchQueue();
+        }}
       />
     </div>
   );

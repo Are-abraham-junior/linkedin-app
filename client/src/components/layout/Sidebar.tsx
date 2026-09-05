@@ -13,7 +13,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Sparkles,
-  Building2,
   X,
   Layers,
 } from "lucide-react";
@@ -147,14 +146,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const sidebarContent = (
     <aside
-      className={`flex flex-col h-full bg-white border-r border-[#e0e0db] transition-all duration-300 select-none ${
+      className={`flex flex-col h-full bg-white border-r border-[#e0e0db] transition-all duration-300 select-none overflow-hidden ${
         isCollapsed ? "w-[76px]" : "w-[260px]"
       }`}
     >
       {/* Header de la Sidebar : Logo + Titre + Bouton Rétractable */}
       <div
         className={`flex items-center justify-between px-4 py-4 border-b border-[#e0e0db]/70 shrink-0 ${
-          isCollapsed ? "flex-col gap-3 px-2" : ""
+          isCollapsed ? "flex-col gap-3 px-2 py-3" : ""
         }`}
       >
         <div
@@ -181,32 +180,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </svg>
           </div>
 
-          {/* Titre & Sous-titre si non rétracté */}
+          {/* Titre si non rétracté */}
           {!isCollapsed && (
-            <div className="flex flex-col overflow-hidden">
-              <div className="flex items-center gap-1.5">
-                <span className="font-extrabold text-base text-[#21164c] tracking-tight truncate">
-                  Bime Link
-                </span>
-                {isSuperAdmin && (
-                  <span className="bg-[#592eff]/10 text-[#592eff] border border-[#592eff]/20 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full uppercase tracking-wider">
-                    Super Admin
-                  </span>
-                )}
-              </div>
-              {impersonatedOrg ? (
-                <span className="text-[11px] text-[#592eff] font-bold truncate flex items-center gap-1">
-                  <Building2 className="w-3 h-3 shrink-0" />
-                  <span className="truncate">{impersonatedOrg.name}</span>
-                </span>
-              ) : user.organization ? (
-                <span className="text-[11px] text-[#5f5f69] font-medium truncate flex items-center gap-1">
-                  <Building2 className="w-3 h-3 text-[#592eff] shrink-0" />
-                  <span className="truncate">{user.organization.name}</span>
-                </span>
-              ) : (
-                <span className="text-[11px] text-[#5f5f69] font-medium truncate">
-                  Automation Suite
+            <div className="flex items-center gap-1.5 overflow-hidden">
+              <span className="font-extrabold text-base text-[#21164c] tracking-tight truncate">
+                Bime Link
+              </span>
+              {isSuperAdmin && (
+                <span className="bg-[#592eff]/10 text-[#592eff] border border-[#592eff]/20 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full uppercase tracking-wider">
+                  Super Admin
                 </span>
               )}
             </div>
@@ -238,7 +220,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Navigation principale par catégories */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
+      <nav
+        className={`flex-1 overflow-y-auto overflow-x-hidden no-scrollbar ${
+          isCollapsed ? "px-2 py-2.5 space-y-2" : "px-3 py-4 space-y-4"
+        }`}
+      >
         {navSections.map((section) => (
           <div key={section.category} className="space-y-1">
             {/* Titre de catégorie */}
@@ -247,13 +233,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {section.category}
               </p>
             ) : (
-              <div className="w-full flex justify-center py-1">
+              <div className="w-full flex justify-center py-0.5">
                 <div className="w-5 h-[1px] bg-[#e0e0db]" />
               </div>
             )}
 
             {/* Liens de la catégorie */}
-            <div className="space-y-1">
+            <div className={`space-y-1 ${isCollapsed ? "flex flex-col items-center" : ""}`}>
               {section.items.map((item) => {
                 const active = isItemActive(item);
                 const IconComponent = item.icon;
@@ -264,10 +250,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     type="button"
                     onClick={() => handleNavigate(item.path)}
                     title={isCollapsed ? item.label : undefined}
-                    className={`w-full group relative flex items-center gap-3 transition-all duration-150 cursor-pointer ${
+                    className={`group relative flex items-center transition-all duration-150 cursor-pointer ${
                       isCollapsed
-                        ? "justify-center p-2.5 rounded-2xl"
-                        : "px-3.5 py-2.5 rounded-2xl text-left"
+                        ? "justify-center w-11 h-11 p-0 rounded-2xl mx-auto shrink-0"
+                        : "w-full gap-3 px-3.5 py-2.5 rounded-2xl text-left"
                     } ${
                       active
                         ? "bg-[#592eff] text-white font-bold shadow-md shadow-[#592eff]/25"
@@ -299,7 +285,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </nav>
 
       {/* Carte Profil Utilisateur ancrée en bas */}
-      <div className="p-3 border-t border-[#e0e0db]/70 shrink-0 bg-white">
+      <div className={`border-t border-[#e0e0db]/70 shrink-0 bg-white ${isCollapsed ? "p-2" : "p-3"}`}>
         {!isCollapsed ? (
           <div className="p-2.5 rounded-2xl bg-[#f8f9fc] border border-[#e0e0db]/80 flex items-center justify-between gap-2">
             <div
@@ -394,7 +380,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <>
       {/* Affichage Desktop fixe */}
-      <div className="hidden lg:block shrink-0 h-screen sticky top-0 z-30">
+      <div className="hidden lg:block shrink-0 h-screen sticky top-0 z-30 overflow-hidden">
         {sidebarContent}
       </div>
 

@@ -103,7 +103,7 @@ const CustomDonutTooltip = ({ active, payload }: any) => {
 };
 
 export const MainDashboard: React.FC<MainDashboardProps> = ({ onStartCampaign }) => {
-  const { user, selectedMemberId, setSelectedMemberId, impersonatedOrg } = useAuth();
+  const { user, selectedMemberId, setSelectedMemberId, impersonatedOrg, openLinkedInModal } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [teamMetrics, setTeamMetrics] = useState<TeamMetrics | null>(null);
@@ -435,18 +435,18 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({ onStartCampaign })
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-2xl bg-white/15 border border-white/25 flex items-center justify-center shrink-0">
-                      <svg className="w-5 h-5 fill-current text-white" viewBox="0 0 24 24">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-12 h-12 rounded-2xl bg-white/20 border border-white/30 flex items-center justify-center shrink-0 shadow-inner">
+                      <svg className="w-6 h-6 fill-current text-white" viewBox="0 0 24 24">
                         <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.2a1.64 1.64 0 1 0 0 3.28 1.64 1.64 0 0 0 0-3.28z" />
                       </svg>
                     </div>
                     <div>
                       <h2 className="font-black text-base sm:text-lg text-white leading-tight">
-                        Compte LinkedIn non lié
+                        🚀 Activez votre machine à leads LinkedIn
                       </h2>
-                      <p className="text-xs text-white/75 font-medium mt-0.5">
-                        Associez votre compte pour activer la prospection
+                      <p className="text-xs sm:text-[13px] text-white/85 font-medium mt-1 leading-snug">
+                        Connectez votre compte pour lancer vos campagnes et générer des opportunités qualifiées.
                       </p>
                     </div>
                   </div>
@@ -459,10 +459,11 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({ onStartCampaign })
                   </span>
                 ) : (
                   <button
-                    onClick={() => navigate("/team")}
-                    className="text-xs bg-white text-[#592eff] px-3.5 py-1.5 rounded-full font-bold shadow hover:bg-white/90 transition-all cursor-pointer"
+                    onClick={() => (openLinkedInModal ? openLinkedInModal() : navigate("/team"))}
+                    className="text-xs bg-white text-[#592eff] hover:text-[#4319d6] hover:bg-white/95 px-4 py-2 rounded-full font-black shadow-lg shadow-black/15 hover:shadow-xl hover:scale-105 active:scale-[0.98] transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
                   >
-                    Connecter LinkedIn →
+                    <span>Connecter LinkedIn</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 )}
               </div>
@@ -542,12 +543,17 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({ onStartCampaign })
                 <span className="badge-tag bg-[#592eff]/10 text-[#592eff] border border-[#592eff]/20 text-[10px]">
                   {stats?.owner?.orgRole === "OWNER" || user?.orgRole === "OWNER" ? "Propriétaire Espace" : "Membre Collaborateur"}
                 </span>
-                <span className={`text-xs font-semibold flex items-center gap-1 ${
-                  stats?.linkedInAccount ? "text-emerald-600" : "text-amber-600"
-                }`}>
-                  <span className={`w-2 h-2 rounded-full ${stats?.linkedInAccount ? "bg-emerald-500" : "bg-amber-500"}`}></span>
-                  {stats?.linkedInAccount ? "Actif" : "LinkedIn déconnecté"}
-                </span>
+                <button
+                  type="button"
+                  onClick={() => !stats?.linkedInAccount && (openLinkedInModal ? openLinkedInModal() : navigate("/team"))}
+                  className={`text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                    stats?.linkedInAccount ? "text-emerald-600 cursor-default" : "text-amber-600 hover:text-amber-700 cursor-pointer"
+                  }`}
+                  title={stats?.linkedInAccount ? "Compte LinkedIn synchronisé" : "Cliquer pour associer votre compte LinkedIn"}
+                >
+                  <span className={`w-2 h-2 rounded-full ${stats?.linkedInAccount ? "bg-emerald-500" : "bg-amber-500 animate-pulse"}`}></span>
+                  {stats?.linkedInAccount ? "LinkedIn Actif" : "LinkedIn déconnecté"}
+                </button>
               </div>
 
               <div className="text-center my-3">

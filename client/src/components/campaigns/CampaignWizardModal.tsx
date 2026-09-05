@@ -21,6 +21,7 @@ import {
   UserCheck,
   Zap,
   BookmarkCheck,
+  Lock,
 } from "lucide-react";
 import { CampaignStep, ActionType } from "../../types";
 import { apiRequest } from "../../services/api";
@@ -38,20 +39,7 @@ interface CampaignWizardModalProps {
   onCampaignCreated: () => void;
 }
 
-interface SequenceTemplate {
-  id: string;
-  title: string;
-  badge: string;
-  badgeColor?: string;
-  description: string;
-  recommendedFor: string;
-  steps: {
-    actionType: ActionType;
-    delayDays: number;
-    defaultMessage: string;
-    label: string;
-  }[];
-}
+import { TemplateDetailModal, SequenceTemplate } from "./TemplateDetailModal";
 
 const TEMPLATES: SequenceTemplate[] = [
   {
@@ -59,6 +47,8 @@ const TEMPLATES: SequenceTemplate[] = [
     title: "Invitation + 3 messages",
     badge: "Haute conversion",
     badgeColor: "bg-[#592eff]/10 text-[#592eff]",
+    image: "/campagnes_images/01_invitation_3_messages.png",
+    popularity: "44.4K",
     description: "Séquence de prospection complète avec 1 invitation et 3 relances de valeur. Arrêt automatique garanti dès que le prospect répond.",
     recommendedFor: "Prospection commerciale B2B & Nurturing intensif de décideurs",
     steps: [
@@ -93,6 +83,8 @@ const TEMPLATES: SequenceTemplate[] = [
     title: "Visite + Follow + Invitation",
     badge: "Préchauffage max",
     badgeColor: "bg-amber-500/10 text-amber-700",
+    image: "/campagnes_images/02_visite_follow_invitation.png",
+    popularity: "28.1K",
     description: "Stratégie multi-touch : consulte le profil le Jour J, s'abonne à ses publications à J+1, puis envoie l'invitation à J+2 avec un taux d'acceptation record.",
     recommendedFor: "Grands comptes, Cadres dirigeants & Cibles très sollicitées",
     steps: [
@@ -121,6 +113,8 @@ const TEMPLATES: SequenceTemplate[] = [
     title: "Visite + Invitation + 1 message",
     badge: "Approche naturelle",
     badgeColor: "bg-emerald-500/10 text-emerald-700",
+    image: "/campagnes_images/03_visite_invitation_1_message.png",
+    popularity: "118.5K",
     description: "Préchauffez votre prospect par une consultation de son profil, puis envoyez l'invitation et un premier message d'introduction dès acceptation.",
     recommendedFor: "Prospection consultative, Consulting & Freelances",
     steps: [
@@ -149,6 +143,8 @@ const TEMPLATES: SequenceTemplate[] = [
     title: "Connexion & Double Relance",
     badge: "Le plus populaire",
     badgeColor: "bg-blue-500/10 text-blue-700",
+    image: "/campagnes_images/06_invitation_2_messages.png",
+    popularity: "376.4K",
     description: "Envoie une invitation ciblée, puis 2 messages espacés dès que le contact accepte la relation.",
     recommendedFor: "Prospection commerciale B2B & Génération de leads",
     steps: [
@@ -177,6 +173,8 @@ const TEMPLATES: SequenceTemplate[] = [
     title: "Invitation Douce sans note",
     badge: "Taux d'acceptation max",
     badgeColor: "bg-violet-500/10 text-violet-700",
+    image: "/campagnes_images/05_invitation.png",
+    popularity: "92.3K",
     description: "Invitation sans message d'accroche (recommandé pour un taux d'acceptation optimal), suivie d'un premier message.",
     recommendedFor: "Recrutement, Réseau & Prospection discrète",
     steps: [
@@ -199,6 +197,8 @@ const TEMPLATES: SequenceTemplate[] = [
     title: "Message Direct (Contacts 1er degré)",
     badge: "Relations existantes",
     badgeColor: "bg-slate-500/10 text-slate-700",
+    image: "/campagnes_images/04_message_direct.png",
+    popularity: "65.2K",
     description: "Contacte directement les prospects qui font déjà partie de votre réseau LinkedIn avec une relance automatique.",
     recommendedFor: "Réactivation de réseau, Invités webinar & Newsletters",
     steps: [
@@ -235,10 +235,12 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [campaignName, setCampaignName] = useState<string>("");
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("INVITE_AND_3_MESSAGES");
+  const [viewingTemplate, setViewingTemplate] = useState<SequenceTemplate | null>(null);
   const [availableLists, setAvailableLists] = useState<ProspectListOption[]>([]);
   const [selectedListIds, setSelectedListIds] = useState<string[]>([]);
   const [configuredSteps, setConfiguredSteps] = useState<CampaignStep[]>([]);
   const [activeStepTab, setActiveStepTab] = useState<number>(0);
+  const [validatedStepTabs, setValidatedStepTabs] = useState<number[]>([]);
   const [startImmediately, setStartImmediately] = useState<boolean>(true);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -280,6 +282,10 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       loadLists();
+      setCurrentStep(1);
+      setActiveStepTab(0);
+      setValidatedStepTabs([]);
+      setError(null);
     }
   }, [isOpen]);
 
@@ -321,7 +327,21 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
       }))
     );
     setActiveStepTab(0);
+    setValidatedStepTabs([]);
   }, [selectedTemplateId]);
+
+  // Validation séquentielle pas-à-pas (Étape 3)
+  const handleValidateCurrentStepTab = () => {
+    if (!validatedStepTabs.includes(activeStepTab)) {
+      setValidatedStepTabs((prev) => [...prev, activeStepTab]);
+    }
+    if (activeStepTab < configuredSteps.length - 1) {
+      setActiveStepTab((prev) => prev + 1);
+    } else {
+      // Toutes les étapes de la séquence sont validées -> passage à l'étape 4
+      setCurrentStep(4);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -654,26 +674,18 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
 
           {/* STEP 1: Modèle de Séquence */}
           {currentStep === 1 && (
-            <div className="space-y-6">
-              <div>
-                <label className="block text-xs font-bold text-[#21164c] uppercase tracking-wider mb-2">
-                  Nom de la campagne
-                </label>
-                <input
-                  type="text"
-                  value={campaignName}
-                  onChange={(e) => setCampaignName(e.target.value)}
-                  placeholder="ex: Directeurs Commerciaux Paris - Mars 2026"
-                  className="w-full px-4 py-3 rounded-2xl border border-[#e0e0db] text-sm text-[#21164c] focus:outline-none focus:border-[#592eff] focus:ring-2 focus:ring-[#592eff]/10 font-medium"
-                />
-              </div>
-
+            <div className="space-y-4">
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <label className="block text-xs font-bold text-[#21164c] uppercase tracking-wider">
-                    Choisissez une séquence pré-paramétrée (6 modèles disponibles)
-                  </label>
-                  <span className="text-[11px] text-[#592eff] font-bold flex items-center gap-1">
+                  <div>
+                    <label className="block text-xs font-bold text-[#21164c] uppercase tracking-wider">
+                      Choisissez une séquence pré-paramétrée
+                    </label>
+                    <p className="text-xs text-[#5f5f69] mt-0.5">
+                      Sélectionnez un modèle adapté à votre stratégie. Vous pourrez nommer et personnaliser la campagne à l'étape suivante.
+                    </p>
+                  </div>
+                  <span className="text-[11px] text-[#592eff] font-bold flex items-center gap-1 shrink-0">
                     <Zap className="w-3.5 h-3.5" /> Prêts à l'emploi
                   </span>
                 </div>
@@ -684,42 +696,93 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                     return (
                       <div
                         key={tmpl.id}
-                        onClick={() => setSelectedTemplateId(tmpl.id)}
-                        className={`p-5 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                        onClick={() => setViewingTemplate(tmpl)}
+                        className={`group rounded-2xl border-2 cursor-pointer transition-all duration-300 flex flex-col justify-between overflow-hidden bg-white hover:-translate-y-0.5 hover:shadow-lg ${
                           isSelected
-                            ? "border-[#592eff] bg-[#592eff]/[0.03] shadow-md shadow-[#592eff]/10 ring-2 ring-[#592eff]/20"
-                            : "border-[#e0e0db] hover:border-[#592eff]/40 hover:bg-slate-50/50"
+                            ? "border-[#592eff] shadow-md shadow-[#592eff]/15 ring-2 ring-[#592eff]/20"
+                            : "border-[#e0e0db] hover:border-[#592eff]/50 shadow-2xs"
                         }`}
                       >
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <span
-                              className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                                tmpl.badgeColor || "bg-[#592eff]/10 text-[#592eff]"
-                              }`}
-                            >
-                              {tmpl.badge}
-                            </span>
-                            {isSelected && (
-                              <CheckCircle2 className="w-5 h-5 text-[#592eff]" />
-                            )}
+                        {/* Illustration 3D Waalaxy Header Compact */}
+                        <div className="relative h-28 sm:h-32 bg-gradient-to-b from-[#f0f4fe] via-[#f7f9fe] to-white flex items-center justify-center p-2 border-b border-[#e0e0db]/60 overflow-hidden">
+                          <img
+                            src={tmpl.image}
+                            alt={tmpl.title}
+                            className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105"
+                            loading="lazy"
+                          />
+
+                          {/* LinkedIn Badge (top-left) */}
+                          <div className="absolute top-2.5 left-2.5 px-1.5 py-0.5 rounded-md bg-[#0077b5] text-white text-[9px] font-bold flex items-center gap-1 shadow-2xs">
+                            <span className="font-extrabold text-[8px]">in</span>
+                            <span>LinkedIn</span>
                           </div>
-                          <h3 className="font-bold text-[#21164c] text-sm mb-1.5">
-                            {tmpl.title}
-                          </h3>
-                          <p className="text-xs text-[#5f5f69] leading-relaxed mb-3">
-                            {tmpl.description}
-                          </p>
+
+                          {/* Quick selection checkmark (top-right) */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedTemplateId(tmpl.id);
+                            }}
+                            className={`absolute top-2.5 right-2.5 w-6 h-6 rounded-full flex items-center justify-center transition-all cursor-pointer shadow-2xs ${
+                              isSelected
+                                ? "bg-[#592eff] text-white ring-2 ring-white scale-110"
+                                : "bg-white/90 hover:bg-white text-[#5f5f69] hover:text-[#592eff] border border-[#e0e0db]"
+                            }`}
+                            title={isSelected ? "Modèle sélectionné" : "Sélectionner ce modèle"}
+                          >
+                            <Check className="w-3.5 h-3.5 stroke-[3]" />
+                          </button>
+
+                          {/* Hover Overlay Hint */}
+                          <div className="absolute inset-0 bg-[#21164c]/10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                            <span className="px-2.5 py-1 rounded-full bg-white/95 text-[#21164c] text-[10px] font-extrabold shadow-md flex items-center gap-1 backdrop-blur-xs">
+                              <Eye className="w-3 h-3 text-[#592eff]" />
+                              Voir détails
+                            </span>
+                          </div>
                         </div>
 
-                        <div className="pt-3 border-t border-[#f0f0ed] flex items-center justify-between text-[11px] text-[#592eff] font-bold">
-                          <div className="flex items-center gap-1.5">
-                            <Layers className="w-3.5 h-3.5" />
-                            <span>{tmpl.steps.length} étape(s) automatisée(s)</span>
+                        {/* Card Content Compact - Titre uniquement */}
+                        <div className="p-3.5 flex-1 flex flex-col justify-between space-y-2">
+                          <div>
+                            {/* Badges & Popularity */}
+                            <div className="flex items-center justify-between gap-2 mb-1.5">
+                              <span
+                                className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                                  tmpl.badgeColor || "bg-[#592eff]/10 text-[#592eff]"
+                                }`}
+                              >
+                                {tmpl.badge}
+                              </span>
+
+                              {tmpl.popularity && (
+                                <span className="text-[10px] font-semibold text-[#5f5f69] flex items-center gap-1">
+                                  <Users className="w-3 h-3 text-[#592eff]" />
+                                  <span>{tmpl.popularity}</span>
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Title - Sans description */}
+                            <h3 className="font-extrabold text-[#21164c] text-xs sm:text-sm group-hover:text-[#592eff] transition-colors leading-snug line-clamp-2">
+                              {tmpl.title}
+                            </h3>
                           </div>
-                          <span className="text-[10px] text-[#5f5f69] font-normal">
-                            Arrêt si réponse
-                          </span>
+
+                          {/* Bottom Row */}
+                          <div className="pt-2 border-t border-[#f0f0ed] flex items-center justify-between text-[11px]">
+                            <div className="flex items-center gap-1.5 text-[#592eff] font-bold">
+                              <Layers className="w-3.5 h-3.5" />
+                              <span>{tmpl.steps.length} étapes</span>
+                            </div>
+
+                            <div className="flex items-center gap-1 text-[#5f5f69] group-hover:text-[#592eff] font-bold transition-colors">
+                              <span>Détails</span>
+                              <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                            </div>
+                          </div>
                         </div>
                       </div>
                     );
@@ -734,7 +797,26 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Colonne Principale (Sélecteur & Choix de prospects) */}
               <div className="lg:col-span-2 space-y-6">
-                {/* En-tête de l'étape avec CTA de création */}
+                {/* 1. Nom de la campagne (Défini après avoir choisi le modèle) */}
+                <div className="p-4 sm:p-5 rounded-2xl bg-white border border-[#e0e0db] shadow-2xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-bold text-[#21164c] uppercase tracking-wider">
+                      Nom de votre campagne
+                    </label>
+                    <span className="text-[11px] text-[#5f5f69]">
+                      Modèle choisi : <strong className="text-[#592eff]">{currentTemplate.title}</strong>
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    value={campaignName}
+                    onChange={(e) => setCampaignName(e.target.value)}
+                    placeholder="ex: Directeurs Commerciaux Paris - Mars 2026"
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#e0e0db] text-sm text-[#21164c] focus:outline-none focus:border-[#592eff] focus:ring-2 focus:ring-[#592eff]/10 font-medium"
+                  />
+                </div>
+
+                {/* En-tête de sélection de liste avec CTA de création */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <h3 className="text-sm font-bold text-[#21164c] mb-1">
@@ -1194,25 +1276,46 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
           {/* STEP 3: Contenu des Messages & Délais */}
           {currentStep === 3 && (
             <div className="space-y-6">
-              {/* Onglets des étapes */}
+              {/* Onglets des étapes avec validation séquentielle */}
               <div className="flex items-center gap-2 border-b border-[#f0f0ed] pb-3 overflow-x-auto custom-scrollbar">
-                {configuredSteps.map((step, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setActiveStepTab(idx)}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
-                      activeStepTab === idx
-                        ? "bg-[#592eff] text-white shadow-sm shadow-[#592eff]/25"
-                        : "bg-[#f5f5f7] text-[#5f5f69] hover:text-[#21164c]"
-                    }`}
-                  >
-                    {getActionTypeIcon(step.actionType)}
-                    <span>Étape {step.stepOrder}</span>
-                    <span className="text-[10px] opacity-80">
-                      ({getActionTypeLabel(step.actionType)})
-                    </span>
-                  </button>
-                ))}
+                {configuredSteps.map((step, idx) => {
+                  const isUnlocked = idx === 0 || validatedStepTabs.includes(idx - 1) || validatedStepTabs.includes(idx);
+                  const isValidated = validatedStepTabs.includes(idx);
+                  const isActive = activeStepTab === idx;
+
+                  return (
+                    <button
+                      key={idx}
+                      disabled={!isUnlocked}
+                      onClick={() => isUnlocked && setActiveStepTab(idx)}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
+                        isActive
+                          ? "bg-[#592eff] text-white shadow-sm shadow-[#592eff]/25"
+                          : isValidated
+                          ? "bg-emerald-50 text-emerald-800 border border-emerald-200/80 hover:bg-emerald-100 cursor-pointer"
+                          : isUnlocked
+                          ? "bg-[#f5f5f7] text-[#5f5f69] hover:text-[#21164c] cursor-pointer"
+                          : "bg-slate-100 text-slate-400 opacity-50 cursor-not-allowed border border-slate-200/60"
+                      }`}
+                      title={!isUnlocked ? `Validez l'étape ${idx} pour débloquer celle-ci` : undefined}
+                    >
+                      {!isUnlocked ? (
+                        <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      ) : isValidated && !isActive ? (
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      ) : (
+                        getActionTypeIcon(step.actionType)
+                      )}
+                      <span>Étape {step.stepOrder}</span>
+                      <span className="text-[10px] opacity-80">
+                        ({getActionTypeLabel(step.actionType)})
+                      </span>
+                      {isValidated && isActive && (
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-white ml-0.5" />
+                      )}
+                    </button>
+                  );
+                })}
               </div>
 
               {configuredSteps[activeStepTab] && (
@@ -1369,6 +1472,23 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                       </div>
                     </>
                   )}
+
+                  {/* Indicateur d'état de l'étape (le bouton d'action principal est dans le pied de page) */}
+                  <div className="pt-4 border-t border-[#f0f0ed] flex items-center justify-between">
+                    <div className="text-xs text-[#5f5f69] flex items-center gap-1.5">
+                      {validatedStepTabs.includes(activeStepTab) ? (
+                        <span className="text-emerald-600 font-bold flex items-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          Étape {activeStepTab + 1} validée
+                        </span>
+                      ) : (
+                        <span className="text-[#5f5f69] flex items-center gap-1.5">
+                          <Info className="w-4 h-4 text-[#592eff]" />
+                          Cliquez sur « Valider & Étape suivante » ci-dessous pour continuer
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -1472,7 +1592,20 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
             {currentStep > 1 && (
               <button
                 type="button"
-                onClick={() => setCurrentStep((prev) => prev - 1)}
+                onClick={() => {
+                  if (currentStep === 3) {
+                    if (activeStepTab > 0) {
+                      setActiveStepTab((prev) => prev - 1);
+                    } else {
+                      setCurrentStep(2);
+                    }
+                  } else if (currentStep === 4) {
+                    setCurrentStep(3);
+                    setActiveStepTab(configuredSteps.length - 1);
+                  } else {
+                    setCurrentStep((prev) => prev - 1);
+                  }
+                }}
                 className="px-4 py-2.5 rounded-full border border-[#e0e0db] text-xs font-bold text-[#5f5f69] hover:text-[#21164c] hover:bg-white transition-colors flex items-center gap-1.5 cursor-pointer"
               >
                 <ChevronLeft className="w-4 h-4" /> Précédent
@@ -1504,10 +1637,33 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
             {currentStep < 4 ? (
               <button
                 type="button"
-                onClick={() => setCurrentStep((prev) => prev + 1)}
+                onClick={() => {
+                  if (currentStep === 3) {
+                    handleValidateCurrentStepTab();
+                  } else {
+                    setCurrentStep((prev) => prev + 1);
+                  }
+                }}
                 className="px-6 py-2.5 rounded-full bg-[#592eff] hover:bg-[#4d25e0] text-white text-xs font-bold shadow-md shadow-[#592eff]/25 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
               >
-                Suivant <ChevronRight className="w-4 h-4" />
+                {currentStep === 3 ? (
+                  activeStepTab < configuredSteps.length - 1 ? (
+                    <>
+                      <span>Valider & Étape suivante</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </>
+                  ) : (
+                    <>
+                      <span>Valider la séquence</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </>
+                  )
+                ) : (
+                  <>
+                    <span>Suivant</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </>
+                )}
               </button>
             ) : (
               <button
@@ -1529,6 +1685,19 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Modale de détails du modèle de séquence (Style Waalaxy) */}
+      <TemplateDetailModal
+        template={viewingTemplate}
+        isOpen={Boolean(viewingTemplate)}
+        onClose={() => setViewingTemplate(null)}
+        isSelected={selectedTemplateId === viewingTemplate?.id}
+        onSelectAndProceed={(templateId) => {
+          setSelectedTemplateId(templateId);
+          setViewingTemplate(null);
+          setCurrentStep(2);
+        }}
+      />
     </div>
   );
 };

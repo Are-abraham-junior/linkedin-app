@@ -7,6 +7,7 @@ import { ProspectDetailDrawer } from "./ProspectDetailDrawer";
 import { ListsSidebar } from "./ListsSidebar";
 import { useAuth } from "../../context/AuthContext";
 import { LinkedInRequiredModal } from "../common/LinkedInRequiredModal";
+import { ConfirmModal } from "../common/ConfirmModal";
 import {
   Users,
   Search,
@@ -167,6 +168,13 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
   // Delete list modal state (Adora popup)
   const [listToDeleteModal, setListToDeleteModal] = useState<{ id: string; name: string } | null>(null);
   const [isDeletingList, setIsDeletingList] = useState(false);
+
+  // Delete prospects modal state (Adora ConfirmModal)
+  const [prospectsToDelete, setProspectsToDelete] = useState<{
+    ids: string[];
+    singleProspect?: any;
+  } | null>(null);
+  const [isDeletingProspects, setIsDeletingProspects] = useState(false);
 
   // Import dropdown menu
   const [isImportDropdownOpen, setIsImportDropdownOpen] = useState(false);
@@ -486,19 +494,38 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
     setSelectedIds(next);
   };
 
-  const handleBulkDelete = async () => {
-    if (!window.confirm(`Supprimer les ${selectedIds.size} prospects sélectionnés ?`)) return;
+  const handleOpenDeleteModal = () => {
+    if (selectedIds.size === 0) return;
+    const single = selectedIds.size === 1 ? prospects.find((p) => selectedIds.has(p.id)) : undefined;
+    setProspectsToDelete({
+      ids: Array.from(selectedIds),
+      singleProspect: single,
+    });
+  };
 
+  const handleConfirmDeleteProspects = async () => {
+    if (!prospectsToDelete || prospectsToDelete.ids.length === 0) return;
+
+    setIsDeletingProspects(true);
     try {
       await apiRequest("/prospects/bulk-delete", {
         method: "POST",
-        body: JSON.stringify({ ids: Array.from(selectedIds) }),
+        body: JSON.stringify({ ids: prospectsToDelete.ids }),
       });
-      setSelectedIds(new Set());
-      fetchProspects();
-      fetchLists();
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        prospectsToDelete.ids.forEach((id) => next.delete(id));
+        return next;
+      });
+      if (selectedProspect && prospectsToDelete.ids.includes(selectedProspect.id)) {
+        setSelectedProspect(null);
+      }
+      setProspectsToDelete(null);
+      await Promise.all([fetchProspects(), fetchLists()]);
     } catch (e) {
-      console.error(e);
+      console.error("Erreur lors de la suppression des prospects:", e);
+    } finally {
+      setIsDeletingProspects(false);
     }
   };
 
@@ -1140,8 +1167,8 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                   <Download className="w-3 h-3" /> Exporter
                 </button>
                 <button
-                  onClick={handleBulkDelete}
-                  className="py-1 px-2.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                  onClick={handleOpenDeleteModal}
+                  className="py-1 px-2.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <Trash2 className="w-3 h-3" /> Supprimer
                 </button>
@@ -1297,18 +1324,33 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                             </td>
                           ))}
 
-                          {/* Action détail CRM */}
+                          {/* Action détail CRM & suppression rapide */}
                           <td className="py-2 text-right pr-3">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedProspect(p);
-                              }}
-                              className="p-1 rounded-lg border border-[#e0e0db] hover:bg-[#592eff]/10 hover:border-[#592eff]/30 text-[#353241] hover:text-[#592eff] transition-colors"
-                              title="Ouvrir la fiche CRM"
-                            >
-                              <ChevronRight className="w-3.5 h-3.5" />
-                            </button>
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setProspectsToDelete({
+                                    ids: [p.id],
+                                    singleProspect: p,
+                                  });
+                                }}
+                                className="p-1 rounded-lg border border-transparent hover:border-rose-200 hover:bg-rose-50 text-[#8a8a93] hover:text-rose-600 transition-colors cursor-pointer"
+                                title="Supprimer ce prospect"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedProspect(p);
+                                }}
+                                className="p-1 rounded-lg border border-[#e0e0db] hover:bg-[#592eff]/10 hover:border-[#592eff]/30 text-[#353241] hover:text-[#592eff] transition-colors cursor-pointer"
+                                title="Ouvrir la fiche CRM"
+                              >
+                                <ChevronRight className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -1730,56 +1772,60 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
       )}
 
       {/* DELETE LIST CONFIRMATION MODAL (ADORA STYLE) */}
-      {listToDeleteModal && (
-        <div className="fixed inset-0 bg-[#21164c]/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in">
-          <div className="adora-card bg-white w-full max-w-md p-6 sm:p-7 shadow-2xl relative animate-in zoom-in-95">
-            <button
-              onClick={() => setListToDeleteModal(null)}
-              className="absolute right-5 top-5 p-2 rounded-full hover:bg-[#f5f5f7] text-[#5f5f69] transition-colors cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
+      <ConfirmModal
+        isOpen={Boolean(listToDeleteModal)}
+        onClose={() => {
+          if (!isDeletingList) setListToDeleteModal(null);
+        }}
+        onConfirm={confirmDeleteList}
+        isLoading={isDeletingList}
+        variant="danger"
+        title="Supprimer la liste"
+        description="Êtes-vous sûr de vouloir supprimer cette liste ? Les prospects associés ne seront pas supprimés et resteront conservés dans votre base générale."
+        itemName={listToDeleteModal?.name}
+        itemType="Liste"
+        confirmText="Supprimer définitivement"
+        cancelText="Annuler"
+        warningMessage="Les prospects associés ne seront pas supprimés et resteront conservés dans votre base générale (Tous les prospects)."
+      />
 
-            <div className="flex items-center gap-3.5 mb-4">
-              <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-100 shadow-sm">
-                <Trash2 className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="text-base font-extrabold text-[#21164c]">Supprimer la liste</h3>
-                <p className="text-xs text-[#5f5f69]">Action irréversible sur l'organisation</p>
-              </div>
-            </div>
-
-            <div className="p-4 bg-rose-50/70 rounded-2xl border border-rose-100/80 text-xs text-rose-950 mb-5 space-y-1.5">
-              <p className="font-semibold">
-                Êtes-vous sûr de vouloir supprimer la liste <strong className="font-extrabold text-rose-600">« {listToDeleteModal.name} »</strong> ?
-              </p>
-              <p className="text-[11px] text-rose-800 leading-relaxed">
-                ℹ️ Les prospects associés ne seront pas supprimés et resteront conservés dans votre base générale (Tous les prospects).
-              </p>
-            </div>
-
-            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-[#e0e0db]/60">
-              <button
-                type="button"
-                onClick={() => setListToDeleteModal(null)}
-                className="px-4 py-2.5 rounded-xl border border-[#e0e0db] text-xs font-semibold text-[#5f5f69] hover:bg-[#f5f5f7] transition-all cursor-pointer"
-              >
-                Annuler
-              </button>
-              <button
-                type="button"
-                disabled={isDeletingList}
-                onClick={confirmDeleteList}
-                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md shadow-rose-600/25 flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 active:scale-95"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>{isDeletingList ? "Suppression..." : "Supprimer définitivement"}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* DELETE PROSPECTS CONFIRMATION MODAL (ADORA STYLE) */}
+      <ConfirmModal
+        isOpen={Boolean(prospectsToDelete)}
+        onClose={() => {
+          if (!isDeletingProspects) setProspectsToDelete(null);
+        }}
+        onConfirm={handleConfirmDeleteProspects}
+        isLoading={isDeletingProspects}
+        variant="danger"
+        title={
+          prospectsToDelete?.ids.length === 1
+            ? "Supprimer le prospect"
+            : `Supprimer les ${prospectsToDelete?.ids.length} prospects`
+        }
+        description={
+          prospectsToDelete?.ids.length === 1
+            ? "Êtes-vous sûr de vouloir supprimer définitivement ce prospect ? Cette action retirera également ce contact de vos campagnes et de vos listes."
+            : `Êtes-vous sûr de vouloir supprimer définitivement ces ${prospectsToDelete?.ids.length} prospects sélectionnés ? Cette action retirera également ces contacts de vos campagnes et de vos listes.`
+        }
+        itemName={
+          prospectsToDelete?.singleProspect
+            ? `${prospectsToDelete.singleProspect.firstName || ""} ${prospectsToDelete.singleProspect.lastName || ""}`.trim() ||
+              prospectsToDelete.singleProspect.headline ||
+              "Prospect"
+            : prospectsToDelete
+            ? `${prospectsToDelete.ids.length} prospects sélectionnés`
+            : undefined
+        }
+        itemType={prospectsToDelete?.ids.length === 1 ? "Prospect" : "Sélection"}
+        confirmText={
+          prospectsToDelete?.ids.length === 1
+            ? "Supprimer définitivement"
+            : `Supprimer les ${prospectsToDelete?.ids.length} prospects`
+        }
+        cancelText="Annuler"
+        warningMessage="Cette action est irréversible. Les prospects supprimés seront retirés de toutes les campagnes en cours et de vos listes."
+      />
 
       {/* EXCEL IMPORT MODAL */}
       <ExcelImportModal
@@ -1820,6 +1866,12 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
         onClose={() => setSelectedProspect(null)}
         onUpdate={() => {
           fetchProspects();
+        }}
+        onDelete={(p) => {
+          setProspectsToDelete({
+            ids: [p.id],
+            singleProspect: p,
+          });
         }}
       />
 

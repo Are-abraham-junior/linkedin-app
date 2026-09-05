@@ -208,10 +208,12 @@ export async function bulkImportProspects(req, res) {
                 },
             });
             for (const op of allOrgProspects) {
-                orgUrlsMap.set(op.linkedinUrl.toLowerCase().trim(), {
-                    ownerId: op.list.userId,
-                    ownerName: op.list.user.name || op.list.user.email,
-                });
+                if (op.list) {
+                    orgUrlsMap.set(op.linkedinUrl.toLowerCase().trim(), {
+                        ownerId: op.list.userId,
+                        ownerName: op.list.user.name || op.list.user.email,
+                    });
+                }
             }
         }
         let createdCount = 0;
@@ -302,15 +304,18 @@ export async function deleteProspect(req, res) {
     try {
         const id = req.params.id;
         const userId = req.user.id;
-        let prospectWhere = { id };
+        const userOrWhere = [
+            { list: { userId } },
+            { userId: userId },
+        ];
         if (req.user.role === "SUPER_ADMIN" && req.user.organizationId) {
-            prospectWhere.list = { user: { organizationId: req.user.organizationId } };
-        }
-        else {
-            prospectWhere.list = { userId };
+            userOrWhere.push({ list: { user: { organizationId: req.user.organizationId } } }, { user: { organizationId: req.user.organizationId } });
         }
         const existing = await prisma.prospect.findFirst({
-            where: prospectWhere,
+            where: {
+                id,
+                OR: userOrWhere,
+            },
         });
         if (!existing) {
             res.status(404).json({ success: false, error: "Prospect introuvable." });
@@ -331,14 +336,17 @@ export async function bulkDeleteProspects(req, res) {
             res.status(400).json({ success: false, error: "Liste d'identifiants requise." });
             return;
         }
-        let listClause = { userId };
+        const userOrWhere = [
+            { list: { userId } },
+            { userId: userId },
+        ];
         if (req.user.role === "SUPER_ADMIN" && req.user.organizationId) {
-            listClause = { user: { organizationId: req.user.organizationId } };
+            userOrWhere.push({ list: { user: { organizationId: req.user.organizationId } } }, { user: { organizationId: req.user.organizationId } });
         }
         await prisma.prospect.deleteMany({
             where: {
                 id: { in: ids },
-                list: listClause,
+                OR: userOrWhere,
             },
         });
         res.json({ success: true, message: `${ids.length} prospect(s) supprimé(s).` });
@@ -497,14 +505,21 @@ export async function checkProspectCollision(req, res) {
             linkedinUrl: p.linkedinUrl,
             name: `${p.firstName} ${p.lastName}`.trim(),
             company: p.company,
-            ownedByMe: p.list.userId === userId,
-            owner: {
-                id: p.list.user.id,
-                name: p.list.user.name,
-                email: p.list.user.email,
-                avatarUrl: p.list.user.avatarUrl,
-            },
-            listName: p.list.name,
+            ownedByMe: p.list?.userId === userId || p.userId === userId,
+            owner: p.list
+                ? {
+                    id: p.list.user.id,
+                    name: p.list.user.name,
+                    email: p.list.user.email,
+                    avatarUrl: p.list.user.avatarUrl,
+                }
+                : {
+                    id: p.userId || "",
+                    name: "Messagerie",
+                    email: "",
+                    avatarUrl: null,
+                },
+            listName: p.list?.name || "Messagerie",
         }));
         res.json({
             success: true,

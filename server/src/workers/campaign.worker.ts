@@ -72,33 +72,79 @@ const DAY_MAP: Record<number, string> = {
   6: "SAT",
 };
 
+const WEEKDAY_ABBR: Record<string, string> = {
+  Sun: "SUN",
+  Mon: "MON",
+  Tue: "TUE",
+  Wed: "WED",
+  Thu: "THU",
+  Fri: "FRI",
+  Sat: "SAT",
+};
+
 /**
  * Vérifie si l'heure actuelle est dans les jours et heures ouvrées configurés par l'utilisateur
+ * en respectant scrupuleusement son fuseau horaire (ex: Africa/Abidjan, Europe/Paris, etc.)
  */
 function isUserInWorkingHours(user: any): boolean {
   if (!user) return true;
 
-  const now = new Date();
-  const currentDay = DAY_MAP[now.getDay()];
   const workingDays: string[] = user.workingDays?.length
     ? user.workingDays
     : ["MON", "TUE", "WED", "THU", "FRI"];
 
-  // Vérifier si le jour actuel est actif
-  if (!workingDays.includes(currentDay)) {
-    return false;
+  const timezone = user.timezone || "Africa/Abidjan";
+
+  try {
+    const now = new Date();
+    // Convertir l'heure actuelle dans le fuseau horaire configuré par l'utilisateur
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      weekday: "short",
+      hour: "numeric",
+      minute: "numeric",
+      hour12: false,
+    });
+
+    const parts = formatter.formatToParts(now);
+    let weekdayStr = "";
+    let hour = 0;
+    let minute = 0;
+
+    for (const part of parts) {
+      if (part.type === "weekday") {
+        weekdayStr = WEEKDAY_ABBR[part.value] || part.value.toUpperCase().slice(0, 3);
+      } else if (part.type === "hour") {
+        hour = parseInt(part.value, 10);
+      } else if (part.type === "minute") {
+        minute = parseInt(part.value, 10);
+      }
+    }
+
+    if (!weekdayStr) {
+      weekdayStr = DAY_MAP[now.getDay()] || "MON";
+      hour = now.getHours();
+      minute = now.getMinutes();
+    }
+
+    // 1. Vérifier si le jour actuel fait partie des jours autorisés
+    if (!workingDays.includes(weekdayStr)) {
+      return false;
+    }
+
+    // 2. Vérifier la plage horaire
+    const currentMinutes = hour * 60 + minute;
+    const [startH, startM] = (user.workingHoursStart || "08:00").split(":").map(Number);
+    const [endH, endM] = (user.workingHoursEnd || "19:00").split(":").map(Number);
+
+    const startTotal = (startH || 8) * 60 + (startM || 0);
+    const endTotal = (endH || 19) * 60 + (endM || 0);
+
+    return currentMinutes >= startTotal && currentMinutes <= endTotal;
+  } catch (err) {
+    console.error("[CampaignWorker] Erreur de calcul de fuseau horaire:", err);
+    return true;
   }
-
-  // Vérifier la plage horaire
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-
-  const [startH, startM] = (user.workingHoursStart || "08:00").split(":").map(Number);
-  const [endH, endM] = (user.workingHoursEnd || "19:00").split(":").map(Number);
-
-  const startTotal = (startH || 8) * 60 + (startM || 0);
-  const endTotal = (endH || 19) * 60 + (endM || 0);
-
-  return currentMinutes >= startTotal && currentMinutes <= endTotal;
 }
 
 type UnipileErrorAction = "CONTINUE" | "DEFER_ACTION" | "DISCONNECT_ACCOUNT";

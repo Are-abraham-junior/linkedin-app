@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   Send,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 import { extractCompanyFromHeadline } from "../../utils/companyExtractor";
 
@@ -21,6 +22,7 @@ interface ProspectDetailDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdate: () => void;
+  onDelete?: (prospect: any) => void;
 }
 
 export const ProspectDetailDrawer: React.FC<ProspectDetailDrawerProps> = ({
@@ -28,6 +30,7 @@ export const ProspectDetailDrawer: React.FC<ProspectDetailDrawerProps> = ({
   isOpen,
   onClose,
   onUpdate,
+  onDelete,
 }) => {
   if (!isOpen || !prospect) return null;
 
@@ -96,12 +99,25 @@ export const ProspectDetailDrawer: React.FC<ProspectDetailDrawerProps> = ({
             <span className="text-xs font-bold uppercase tracking-wider text-[#5f5f69]">
               Fiche Prospect CRM
             </span>
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded-full hover:bg-[#f5f5f7] text-[#5f5f69]"
-            >
-              <X className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-1.5">
+              {onDelete && (
+                <button
+                  type="button"
+                  onClick={() => onDelete(prospect)}
+                  className="p-1.5 rounded-xl border border-transparent hover:border-rose-200 hover:bg-rose-50 text-[#8a8a93] hover:text-rose-600 transition-colors cursor-pointer"
+                  title="Supprimer ce prospect"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-1.5 rounded-xl hover:bg-[#f5f5f7] text-[#5f5f69] transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           {/* Profile overview card */}

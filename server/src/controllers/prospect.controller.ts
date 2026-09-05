@@ -341,15 +341,22 @@ export async function deleteProspect(req: AuthenticatedRequest, res: Response) {
     const id = req.params.id as string;
     const userId = req.user!.id;
 
-    let prospectWhere: any = { id };
+    const userOrWhere: any[] = [
+      { list: { userId } },
+      { userId: userId },
+    ];
     if (req.user!.role === "SUPER_ADMIN" && req.user!.organizationId) {
-      prospectWhere.list = { user: { organizationId: req.user!.organizationId } };
-    } else {
-      prospectWhere.list = { userId };
+      userOrWhere.push(
+        { list: { user: { organizationId: req.user!.organizationId } } },
+        { user: { organizationId: req.user!.organizationId } }
+      );
     }
 
     const existing = await prisma.prospect.findFirst({
-      where: prospectWhere,
+      where: {
+        id,
+        OR: userOrWhere,
+      },
     });
 
     if (!existing) {
@@ -375,15 +382,21 @@ export async function bulkDeleteProspects(req: AuthenticatedRequest, res: Respon
       return;
     }
 
-    let listClause: any = { userId };
+    const userOrWhere: any[] = [
+      { list: { userId } },
+      { userId: userId },
+    ];
     if (req.user!.role === "SUPER_ADMIN" && req.user!.organizationId) {
-      listClause = { user: { organizationId: req.user!.organizationId } };
+      userOrWhere.push(
+        { list: { user: { organizationId: req.user!.organizationId } } },
+        { user: { organizationId: req.user!.organizationId } }
+      );
     }
 
     await prisma.prospect.deleteMany({
       where: {
         id: { in: ids },
-        list: listClause,
+        OR: userOrWhere,
       },
     });
 

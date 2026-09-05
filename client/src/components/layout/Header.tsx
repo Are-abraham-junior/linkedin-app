@@ -32,7 +32,6 @@ export const Header: React.FC<HeaderProps> = ({
     selectedMemberId,
     setSelectedMemberId,
     impersonatedOrg,
-    openLinkedInModal,
   } = useAuth();
 
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
@@ -204,17 +203,6 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Bouton CHANGER D'ESPACE (Workspace Switcher) */}
         <WorkspaceSwitcher />
-
-        {/* Bouton Rapide d'Action Contextuelle */}
-        {!user?.hasLinkedInAccount && !isSuperAdmin ? (
-          <button
-            type="button"
-            onClick={openLinkedInModal}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-[#0077b5] hover:bg-[#005f93] text-white font-bold text-xs rounded-2xl shadow-sm transition-all cursor-pointer shrink-0"
-          >
-            <span>Lier LinkedIn</span>
-          </button>
-        ) : null}
       </div>
     </header>
   );

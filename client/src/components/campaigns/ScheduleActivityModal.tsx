@@ -236,9 +236,25 @@ export const ScheduleActivityModal: React.FC<ScheduleActivityModalProps> = ({
               </div>
             </div>
 
-            <div className="mt-2 text-[11px] text-[#5f5f69] flex items-center gap-1">
-              <span>Fuseau horaire :</span>
-              <span className="font-semibold text-[#21164c]">GMT (UTC+0, Heure d'Abidjan)</span>
+            <div className="mt-3">
+              <label className="text-[11px] font-semibold text-[#5f5f69] mb-1 block">
+                Fuseau horaire de référence
+              </label>
+              <select
+                value={timezone}
+                onChange={(e) => setTimezone(e.target.value)}
+                className="w-full px-3 py-2 bg-[#f8f9fc] border border-[#e0e0db] rounded-xl text-xs font-bold text-[#21164c] focus:outline-none focus:border-[#592eff] transition-colors cursor-pointer"
+              >
+                <option value="Africa/Abidjan">Abidjan, Dakar, Accra (GMT / UTC+0)</option>
+                <option value="Europe/Paris">Paris, Bruxelles, Genève (UTC+1 / UTC+2)</option>
+                <option value="Africa/Casablanca">Casablanca, Rabat (UTC+1)</option>
+                <option value="Africa/Lagos">Lagos, Douala, Yaoundé (UTC+1)</option>
+                <option value="Africa/Nairobi">Nairobi, Addis-Abeba (UTC+3)</option>
+                <option value="Europe/London">Londres, Dublin (UTC+0 / UTC+1)</option>
+                <option value="America/Montreal">Montréal, New York, Toronto (UTC-5 / UTC-4)</option>
+                <option value="America/Chicago">Chicago, Dallas (UTC-6 / UTC-5)</option>
+                <option value="America/Los_Angeles">San Francisco, Los Angeles (UTC-8 / UTC-7)</option>
+              </select>
             </div>
           </div>
 
