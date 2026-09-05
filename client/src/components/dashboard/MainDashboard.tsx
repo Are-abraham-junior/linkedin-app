@@ -103,7 +103,7 @@ const CustomDonutTooltip = ({ active, payload }: any) => {
 };
 
 export const MainDashboard: React.FC<MainDashboardProps> = ({ onStartCampaign }) => {
-  const { user, selectedMemberId, setSelectedMemberId } = useAuth();
+  const { user, selectedMemberId, setSelectedMemberId, impersonatedOrg } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [teamMetrics, setTeamMetrics] = useState<TeamMetrics | null>(null);
@@ -143,7 +143,7 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({ onStartCampaign })
       }
     };
     loadStats();
-  }, [selectedMemberId]);
+  }, [selectedMemberId, impersonatedOrg?.id]);
 
   // Données pour le graphique Recharts
   const evolutionChartData = useMemo(() => {
@@ -397,19 +397,60 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({ onStartCampaign })
             {/* Blue-Purple LinkedIn Live Hero Card */}
             <div className="lg:col-span-2 rounded-[32px] bg-gradient-to-br from-[#3b66ff] via-[#4d40ee] to-[#592eff] text-white p-7 sm:p-8 relative overflow-hidden shadow-lg shadow-[#592eff]/20 flex flex-col justify-between">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-white/15 flex items-center justify-center">
-                    <svg className="w-4 h-4 fill-current text-white" viewBox="0 0 24 24">
-                      <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.2a1.64 1.64 0 1 0 0 3.28 1.64 1.64 0 0 0 0-3.28z" />
-                    </svg>
+                {stats?.linkedInAccount ? (
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    {/* Photo de profil LinkedIn avec badge officiel */}
+                    <div className="relative shrink-0">
+                      {stats.linkedInAccount.profilePicture ? (
+                        <img
+                          src={stats.linkedInAccount.profilePicture}
+                          alt={stats.linkedInAccount.accountName || "LinkedIn"}
+                          className="w-12 h-12 rounded-2xl object-cover border-2 border-white/40 shadow-md"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded-2xl bg-white/20 border-2 border-white/30 flex items-center justify-center text-white font-extrabold text-base shadow-sm">
+                          {stats.linkedInAccount.accountName?.charAt(0) || "L"}
+                        </div>
+                      )}
+                      <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-lg bg-[#0077b5] text-white flex items-center justify-center shadow-xs border border-white">
+                        <svg className="w-2.5 h-2.5 fill-current" viewBox="0 0 24 24">
+                          <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.2a1.64 1.64 0 1 0 0 3.28 1.64 1.64 0 0 0 0-3.28z" />
+                        </svg>
+                      </div>
+                    </div>
+
+                    {/* Nom complet du compte LinkedIn en grand titre */}
+                    <div className="min-w-0">
+                      <h2 className="font-black text-lg sm:text-xl text-white tracking-tight truncate leading-tight drop-shadow-xs">
+                        {stats.linkedInAccount.accountName}
+                      </h2>
+                      <p className="text-xs text-white/85 font-medium flex items-center gap-1.5 mt-0.5 truncate">
+                        <span className="font-bold text-[#bcf2ff]">Compte LinkedIn lié</span>
+                        {stats.linkedInAccount.headline && (
+                          <span className="text-white/60 truncate max-w-[280px] hidden sm:inline">
+                            • {stats.linkedInAccount.headline}
+                          </span>
+                        )}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <span className="font-extrabold text-sm block">Compte LinkedIn</span>
-                    <span className="text-[11px] text-white/80">
-                      {stats?.linkedInAccount?.accountName || "Aucun compte connecté"}
-                    </span>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-2xl bg-white/15 border border-white/25 flex items-center justify-center shrink-0">
+                      <svg className="w-5 h-5 fill-current text-white" viewBox="0 0 24 24">
+                        <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.2a1.64 1.64 0 1 0 0 3.28 1.64 1.64 0 0 0 0-3.28z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h2 className="font-black text-base sm:text-lg text-white leading-tight">
+                        Compte LinkedIn non lié
+                      </h2>
+                      <p className="text-xs text-white/75 font-medium mt-0.5">
+                        Associez votre compte pour activer la prospection
+                      </p>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {stats?.linkedInAccount ? (
                   <span className="text-xs bg-emerald-400/20 text-emerald-200 border border-emerald-300/30 px-3 py-1 rounded-full font-semibold flex items-center gap-1.5">
@@ -499,7 +540,7 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({ onStartCampaign })
             <div className="adora-card p-6 flex flex-col justify-between">
               <div className="flex items-center justify-between">
                 <span className="badge-tag bg-[#592eff]/10 text-[#592eff] border border-[#592eff]/20 text-[10px]">
-                  {user?.orgRole === "OWNER" ? "Propriétaire Espace" : "Membre Collaborateur"}
+                  {stats?.owner?.orgRole === "OWNER" || user?.orgRole === "OWNER" ? "Propriétaire Espace" : "Membre Collaborateur"}
                 </span>
                 <span className={`text-xs font-semibold flex items-center gap-1 ${
                   stats?.linkedInAccount ? "text-emerald-600" : "text-amber-600"
@@ -512,17 +553,18 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({ onStartCampaign })
               <div className="text-center my-3">
                 <img
                   src={
+                    stats?.owner?.avatarUrl ||
                     user?.avatarUrl ||
-                    `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || "User")}&background=592eff&color=fff`
+                    `https://ui-avatars.com/api/?name=${encodeURIComponent(stats?.owner?.name || user?.name || "User")}&background=592eff&color=fff`
                   }
                   alt="Avatar"
                   className="w-16 h-16 rounded-full mx-auto object-cover border-2 border-[#592eff] shadow-sm"
                 />
                 <h3 className="font-extrabold text-[#21164c] text-base mt-2 truncate">
-                  {user?.name || user?.email}
+                  {stats?.owner?.name || user?.name || user?.email}
                 </h3>
                 <p className="text-xs text-[#5f5f69] truncate">
-                  {user?.organization?.name || "Espace de travail"}
+                  {stats?.owner?.organizationName || user?.organization?.name || "Espace de travail"}
                 </p>
               </div>
 

@@ -37,28 +37,19 @@ export async function handleUnipileWebhook(req, res) {
                         user = acc?.user;
                     }
                     if (!user) {
-                        user = await prisma.user.findFirst();
+                        console.warn(`[Webhook Unipile] Compte LinkedIn introuvable pour accountId=${accountId}. Message ignoré pour protéger l'étanchéité des données.`);
+                        res.status(200).json({ success: true, ignored: true });
+                        return;
                     }
                     if (user) {
-                        let defaultList = await prisma.prospectList.findFirst({
-                            where: { userId: user.id },
-                        });
-                        if (!defaultList) {
-                            defaultList = await prisma.prospectList.create({
-                                data: {
-                                    userId: user.id,
-                                    name: "Messagerie LinkedIn",
-                                    color: "#592eff",
-                                },
-                            });
-                        }
                         const senderName = data.sender_name || data.name || "Contact LinkedIn";
                         const nameParts = senderName.split(" ");
                         const firstName = nameParts[0] || "Contact";
                         const lastName = nameParts.slice(1).join(" ") || "";
                         const prospect = await prisma.prospect.create({
                             data: {
-                                listId: defaultList.id,
+                                userId: user.id,
+                                listId: null,
                                 providerProfileId: senderId || `user_${Date.now()}`,
                                 firstName,
                                 lastName,
@@ -70,6 +61,7 @@ export async function handleUnipileWebhook(req, res) {
                         });
                         conv = await prisma.conversation.create({
                             data: {
+                                userId: user.id,
                                 prospectId: prospect.id,
                                 unipileChatId: chatId,
                                 lastMessageText: text,

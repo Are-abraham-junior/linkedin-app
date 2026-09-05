@@ -26,10 +26,10 @@ export async function requireAuth(req, res, next) {
                 where: { organizationId: impersonateOrgId, orgRole: "OWNER" },
             });
             req.user = {
-                id: decoded.id, // Conserve l'identité et les droits du Super Admin
-                email: decoded.email,
-                role: "SUPER_ADMIN",
-                name: decoded.name,
+                id: owner?.id || decoded.id, // ID effectif du propriétaire de l'espace supervisé
+                email: owner?.email || decoded.email,
+                role: "SUPER_ADMIN", // Conserve les prérogatives Super Admin
+                name: owner?.name || decoded.name,
                 organizationId: impersonateOrgId,
                 ownerId: owner?.id || null,
                 isImpersonating: true,

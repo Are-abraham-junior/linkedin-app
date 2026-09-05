@@ -399,7 +399,14 @@ export async function syncProspectsStatus(req, res) {
             where: { userId, status: "CONNECTED" },
             orderBy: { updatedAt: "desc" },
         });
-        const unipileAccountId = linkedInAcc?.unipileAccountId || undefined;
+        if (!linkedInAcc?.unipileAccountId) {
+            res.status(400).json({
+                success: false,
+                error: "Veuillez connecter votre compte LinkedIn avant de synchroniser les statuts des contacts.",
+            });
+            return;
+        }
+        const unipileAccountId = linkedInAcc.unipileAccountId;
         const where = { list: { userId } };
         if (Array.isArray(prospectIds) && prospectIds.length > 0) {
             where.id = { in: prospectIds };

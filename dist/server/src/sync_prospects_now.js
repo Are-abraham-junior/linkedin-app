@@ -17,14 +17,18 @@ async function main() {
         where: { userId: user.id, status: "CONNECTED" },
         orderBy: { updatedAt: "desc" }
     });
-    console.log("Using active unipileAccountId:", activeAcc?.unipileAccountId);
+    if (!activeAcc?.unipileAccountId) {
+        console.error("Aucun compte LinkedIn connecté avec un unipileAccountId valide.");
+        return;
+    }
+    console.log("Using active unipileAccountId:", activeAcc.unipileAccountId);
     const prospects = await prisma.prospect.findMany({
         where: { list: { userId: user.id } }
     });
     for (const p of prospects) {
         const identifier = p.providerProfileId || p.linkedinUrl;
         console.log(`Syncing prospect ${p.firstName} ${p.lastName} (${identifier})...`);
-        const result = await UnipileService.getProfileDetailsAndStatus(identifier, activeAcc?.unipileAccountId);
+        const result = await UnipileService.getProfileDetailsAndStatus(identifier, activeAcc.unipileAccountId);
         console.log(`Result for ${p.firstName}: connectionStatus = ${result.connectionStatus}`);
         const updateData = {
             connectionStatus: result.connectionStatus,

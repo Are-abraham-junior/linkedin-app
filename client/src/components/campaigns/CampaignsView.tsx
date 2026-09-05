@@ -14,8 +14,9 @@ import {
   ChevronRight,
   Sparkles,
   AlertCircle,
-  MoreVertical,
   CheckCircle2,
+  RotateCcw,
+  Archive,
 } from "lucide-react";
 import { Campaign, CampaignStatus } from "../../types";
 import { apiRequest } from "../../services/api";
@@ -131,14 +132,23 @@ export const CampaignsView: React.FC = () => {
     setDeleteCampaignError(null);
 
     try {
-      const res = await apiRequest(`/campaigns/${campaignToDelete.id}`, {
-        method: "DELETE",
-      });
+      const isAlreadyArchived = campaigns.find((c) => c.id === campaignToDelete.id)?.status === "ARCHIVED";
+      const query = isAlreadyArchived ? "?permanent=true" : "";
+      const res = await apiRequest<{ success: boolean; action?: string; error?: string }>(
+        `/campaigns/${campaignToDelete.id}${query}`,
+        { method: "DELETE" }
+      );
       if (res.success) {
-        setCampaigns((prev) => prev.filter((c) => c.id !== campaignToDelete.id));
+        if (res.action === "ARCHIVED") {
+          setCampaigns((prev) =>
+            prev.map((c) => (c.id === campaignToDelete.id ? { ...c, status: "ARCHIVED" } : c))
+          );
+        } else {
+          setCampaigns((prev) => prev.filter((c) => c.id !== campaignToDelete.id));
+        }
         setCampaignToDelete(null);
       } else {
-        setDeleteCampaignError(res.error || "Impossible de supprimer cette campagne.");
+        setDeleteCampaignError(res.error || "Impossible d'archiver ou supprimer cette campagne.");
       }
     } catch (err: any) {
       console.error("Erreur suppression campagne:", err);
@@ -148,33 +158,63 @@ export const CampaignsView: React.FC = () => {
     }
   };
 
+  const handleRestoreCampaign = async (campaign: Campaign, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const res = await apiRequest<{ campaign: Campaign }>(`/campaigns/${campaign.id}/toggle-status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "PAUSED" }),
+      });
+      if (res.success) {
+        setCampaigns((prev) =>
+          prev.map((c) => (c.id === campaign.id ? { ...c, status: "PAUSED" } : c))
+        );
+      }
+    } catch (err) {
+      console.error("Erreur restauration campagne:", err);
+    }
+  };
+
   const handleOpenDetail = (campaignId: string) => {
     setSelectedCampaignId(campaignId);
     setIsDetailOpen(true);
   };
 
-  // Calcul des métriques globales
-  const totalCampaigns = campaigns.length;
-  const activeCampaigns = campaigns.filter((c) => c.status === "ACTIVE").length;
-  const totalProspectsEnrolled = campaigns.reduce(
-    (sum, c) => sum + (c.stats?.totalProspects || 0),
-    0
-  );
-  const totalAccepted = campaigns.reduce(
-    (sum, c) => sum + (c.stats?.acceptedCount || 0),
-    0
-  );
-  const totalReplied = campaigns.reduce(
-    (sum, c) => sum + (c.stats?.repliedCount || 0),
-    0
-  );
+  // Décomptes par statut pour afficher les nombres sur chaque bouton
+  const countAll = campaigns.filter((c) => c.status !== "ARCHIVED").length;
+  const countActive = campaigns.filter((c) => c.status === "ACTIVE").length;
+  const countPaused = campaigns.filter((c) => c.status === "PAUSED").length;
+  const countDraft = campaigns.filter((c) => c.status === "DRAFT").length;
+  const countArchived = campaigns.filter((c) => c.status === "ARCHIVED" || c.status === "COMPLETED").length;
+
+  // Calcul des métriques globales (sur campagnes non archivées)
+  const totalCampaigns = countAll;
+  const activeCampaigns = countActive;
+  const totalProspectsEnrolled = campaigns
+    .filter((c) => c.status !== "ARCHIVED")
+    .reduce((sum, c) => sum + (c.stats?.totalProspects || 0), 0);
+  const totalAccepted = campaigns
+    .filter((c) => c.status !== "ARCHIVED")
+    .reduce((sum, c) => sum + (c.stats?.acceptedCount || 0), 0);
+  const totalReplied = campaigns
+    .filter((c) => c.status !== "ARCHIVED")
+    .reduce((sum, c) => sum + (c.stats?.repliedCount || 0), 0);
   const averageAcceptanceRate =
     totalProspectsEnrolled > 0
       ? Math.round((totalAccepted / totalProspectsEnrolled) * 100)
       : 0;
 
+  const filterTabs = [
+    { key: "ALL", label: "Toutes les campagnes", count: countAll },
+    { key: "ACTIVE", label: "En cours", count: countActive },
+    { key: "PAUSED", label: "En pause", count: countPaused },
+    { key: "DRAFT", label: "Brouillons", count: countDraft },
+    { key: "ARCHIVED", label: "Archivées", count: countArchived },
+  ];
+
   const filteredCampaigns = campaigns.filter((c) => {
-    if (filterStatus === "ALL") return true;
+    if (filterStatus === "ALL") return c.status !== "ARCHIVED";
+    if (filterStatus === "ARCHIVED") return c.status === "ARCHIVED" || c.status === "COMPLETED";
     return c.status === filterStatus;
   });
 
@@ -303,28 +343,34 @@ export const CampaignsView: React.FC = () => {
         </div>
       </div>
 
-      {/* Filtres par statut & Collaborateur (Vue 360°) */}
+      {/* Filtres par statut avec badges de comptage & Collaborateur (Vue 360°) */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#f0f0ed] pb-3">
         <div className="flex flex-wrap items-center gap-2">
-          {[
-            { key: "ALL", label: "Toutes les campagnes" },
-            { key: "ACTIVE", label: "En cours" },
-            { key: "PAUSED", label: "En pause" },
-            { key: "DRAFT", label: "Brouillons" },
-            { key: "COMPLETED", label: "Terminées" },
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setFilterStatus(tab.key)}
-              className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                filterStatus === tab.key
-                  ? "bg-[#592eff] text-white shadow-sm shadow-[#592eff]/25"
-                  : "text-[#5f5f69] hover:text-[#21164c] hover:bg-slate-100/70"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+          {filterTabs.map((tab) => {
+            const isSelected = filterStatus === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setFilterStatus(tab.key)}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                  isSelected
+                    ? "bg-[#592eff] text-white shadow-sm shadow-[#592eff]/25"
+                    : "text-[#5f5f69] hover:text-[#21164c] hover:bg-slate-100/70"
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span
+                  className={`px-1.5 py-0.5 min-w-[20px] text-center text-[10px] font-extrabold rounded-full transition-colors ${
+                    isSelected
+                      ? "bg-white/25 text-white"
+                      : "bg-[#e8e8ed] text-[#5f5f69]"
+                  }`}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         {/* Sélecteur Collaborateur (Super Admin 360° ou Owner) */}
@@ -355,25 +401,40 @@ export const CampaignsView: React.FC = () => {
         </div>
       ) : filteredCampaigns.length === 0 ? (
         <div className="p-12 text-center border-2 border-dashed border-[#e0e0db] rounded-[32px] bg-white">
-          <Rocket className="w-12 h-12 text-[#592eff] mx-auto mb-3 opacity-60" />
-          <h3 className="text-base font-bold text-[#21164c] mb-1">
-            Aucune campagne trouvée
-          </h3>
-          <p className="text-xs text-[#5f5f69] max-w-sm mx-auto mb-5 leading-relaxed">
-            Créez votre première séquence automatisée d'invitations et de messages pour engager vos prospects LinkedIn.
-          </p>
-          <button
-            onClick={handleOpenWizard}
-            className="px-6 py-2.5 rounded-full bg-[#592eff] text-white text-xs font-bold shadow-md shadow-[#592eff]/25 hover:bg-[#4d25e0] transition-all cursor-pointer"
-          >
-            Créer ma première campagne
-          </button>
+          {filterStatus === "ARCHIVED" ? (
+            <>
+              <Archive className="w-12 h-12 text-slate-400 mx-auto mb-3 opacity-60" />
+              <h3 className="text-base font-bold text-[#21164c] mb-1">
+                Aucune campagne archivée
+              </h3>
+              <p className="text-xs text-[#5f5f69] max-w-sm mx-auto mb-2 leading-relaxed">
+                Les campagnes supprimées ou archivées apparaîtront ici pour conserver vos historiques.
+              </p>
+            </>
+          ) : (
+            <>
+              <Rocket className="w-12 h-12 text-[#592eff] mx-auto mb-3 opacity-60" />
+              <h3 className="text-base font-bold text-[#21164c] mb-1">
+                Aucune campagne trouvée
+              </h3>
+              <p className="text-xs text-[#5f5f69] max-w-sm mx-auto mb-5 leading-relaxed">
+                Créez votre première séquence automatisée d'invitations et de messages pour engager vos prospects LinkedIn.
+              </p>
+              <button
+                onClick={handleOpenWizard}
+                className="px-6 py-2.5 rounded-full bg-[#592eff] text-white text-xs font-bold shadow-md shadow-[#592eff]/25 hover:bg-[#4d25e0] transition-all cursor-pointer"
+              >
+                Créer ma première campagne
+              </button>
+            </>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredCampaigns.map((camp) => {
             const isActive = camp.status === "ACTIVE";
             const isPaused = camp.status === "PAUSED";
+            const isArchived = camp.status === "ARCHIVED" || camp.status === "COMPLETED";
             const totalP = camp.stats?.totalProspects || 0;
             const acceptRate = camp.stats?.acceptanceRate || 0;
             const replyRate = camp.stats?.replyRate || 0;
@@ -382,7 +443,11 @@ export const CampaignsView: React.FC = () => {
               <div
                 key={camp.id}
                 onClick={() => handleOpenDetail(camp.id)}
-                className="adora-card bg-white border border-[#e0e0db] hover:border-[#592eff]/40 rounded-[28px] p-6 shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group"
+                className={`adora-card bg-white border rounded-[28px] p-6 shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group ${
+                  isArchived
+                    ? "border-[#e0e0db] opacity-85 hover:opacity-100"
+                    : "border-[#e0e0db] hover:border-[#592eff]/40"
+                }`}
               >
                 <div>
                   {/* Top bar de la carte */}
@@ -394,7 +459,9 @@ export const CampaignsView: React.FC = () => {
                             ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                             : isPaused
                             ? "bg-amber-50 text-amber-700 border border-amber-200"
-                            : "bg-slate-100 text-slate-700 border border-slate-200"
+                            : isArchived
+                            ? "bg-slate-100 text-slate-600 border border-slate-300"
+                            : "bg-purple-50 text-[#592eff] border border-[#592eff]/20"
                         }`}
                       >
                         <span
@@ -403,10 +470,12 @@ export const CampaignsView: React.FC = () => {
                               ? "bg-emerald-500 animate-pulse"
                               : isPaused
                               ? "bg-amber-500"
-                              : "bg-slate-400"
+                              : isArchived
+                              ? "bg-slate-400"
+                              : "bg-[#592eff]"
                           }`}
                         />
-                        {isActive ? "En cours" : isPaused ? "En pause" : "Brouillon"}
+                        {isActive ? "En cours" : isPaused ? "En pause" : isArchived ? "Archivée" : "Brouillon"}
                       </span>
 
                       {(camp as any).author && (
@@ -418,26 +487,38 @@ export const CampaignsView: React.FC = () => {
                     </div>
 
                     <div className="flex items-center gap-1">
-                      <button
-                        onClick={(e) => handleToggleStatus(camp, e)}
-                        disabled={togglingId === camp.id}
-                        className={`p-1.5 rounded-xl border transition-colors ${
-                          isActive
-                            ? "text-amber-600 hover:bg-amber-50 border-amber-200"
-                            : "text-[#592eff] hover:bg-[#592eff]/10 border-[#592eff]/20"
-                        }`}
-                        title={isActive ? "Mettre en pause" : "Reprendre"}
-                      >
-                        {isActive ? (
-                          <Pause className="w-3.5 h-3.5" />
-                        ) : (
-                          <Play className="w-3.5 h-3.5" />
-                        )}
-                      </button>
+                      {isArchived ? (
+                        <button
+                          onClick={(e) => handleRestoreCampaign(camp, e)}
+                          className="p-1.5 rounded-xl text-emerald-700 hover:bg-emerald-50 border border-emerald-200 transition-colors cursor-pointer flex items-center gap-1 text-[11px] font-bold px-2.5"
+                          title="Restaurer la campagne"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span className="hidden sm:inline">Restaurer</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={(e) => handleToggleStatus(camp, e)}
+                          disabled={togglingId === camp.id}
+                          className={`p-1.5 rounded-xl border transition-colors ${
+                            isActive
+                              ? "text-amber-600 hover:bg-amber-50 border-amber-200"
+                              : "text-[#592eff] hover:bg-[#592eff]/10 border-[#592eff]/20"
+                          }`}
+                          title={isActive ? "Mettre en pause" : "Reprendre"}
+                        >
+                          {isActive ? (
+                            <Pause className="w-3.5 h-3.5" />
+                          ) : (
+                            <Play className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      )}
+
                       <button
                         onClick={(e) => handleOpenDeleteCampaign(camp.id, camp.name, e)}
                         className="p-1.5 rounded-xl text-[#5f5f69] hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-colors cursor-pointer"
-                        title="Supprimer la campagne"
+                        title={isArchived ? "Supprimer définitivement" : "Archiver la campagne"}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -518,7 +599,7 @@ export const CampaignsView: React.FC = () => {
         featureName={requiredFeatureName}
       />
 
-      {/* Modale de Confirmation de Suppression de Campagne */}
+      {/* Modale de Confirmation d'Archivage ou de Suppression Définitive */}
       <ConfirmModal
         isOpen={Boolean(campaignToDelete)}
         onClose={() => {
@@ -528,17 +609,31 @@ export const CampaignsView: React.FC = () => {
           }
         }}
         onConfirm={handleConfirmDeleteCampaign}
-        title="Supprimer la campagne"
-        description="Cette action arrêtera tous les envois programmés et supprimera définitivement cette campagne."
+        title={
+          campaigns.find((c) => c.id === campaignToDelete?.id)?.status === "ARCHIVED"
+            ? "Supprimer définitivement la campagne"
+            : "Archiver la campagne"
+        }
+        description={
+          campaigns.find((c) => c.id === campaignToDelete?.id)?.status === "ARCHIVED"
+            ? "Cette action supprimera définitivement cette campagne ainsi que toutes ses données associées de l'application."
+            : "Cette action mettra la campagne en pause, annulera les actions programmées restantes et la déplacera dans l'onglet « Archivées »."
+        }
         itemName={campaignToDelete?.name}
         itemType="Campagne"
         variant="danger"
-        confirmText="Supprimer la campagne"
+        confirmText={
+          campaigns.find((c) => c.id === campaignToDelete?.id)?.status === "ARCHIVED"
+            ? "Supprimer définitivement"
+            : "Archiver la campagne"
+        }
         cancelText="Conserver la campagne"
         isLoading={isDeletingCampaign}
         warningMessage={
           deleteCampaignError ||
-          "Les prospects en cours d'exécution dans cette séquence ne recevront plus les messages prévus."
+          (campaigns.find((c) => c.id === campaignToDelete?.id)?.status === "ARCHIVED"
+            ? "Attention : Cette suppression est irréversible."
+            : "Les prospects en cours d'exécution dans cette séquence ne recevront plus les messages prévus.")
         }
       />
     </div>

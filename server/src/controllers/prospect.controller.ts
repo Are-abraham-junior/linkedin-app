@@ -232,10 +232,12 @@ export async function bulkImportProspects(req: AuthenticatedRequest, res: Respon
       });
 
       for (const op of allOrgProspects) {
-        orgUrlsMap.set(op.linkedinUrl.toLowerCase().trim(), {
-          ownerId: op.list.userId,
-          ownerName: op.list.user.name || op.list.user.email,
-        });
+        if (op.list) {
+          orgUrlsMap.set(op.linkedinUrl.toLowerCase().trim(), {
+            ownerId: op.list.userId,
+            ownerName: op.list.user.name || op.list.user.email,
+          });
+        }
       }
     }
 
@@ -450,7 +452,15 @@ export async function syncProspectsStatus(req: AuthenticatedRequest, res: Respon
       orderBy: { updatedAt: "desc" },
     });
 
-    const unipileAccountId = linkedInAcc?.unipileAccountId || undefined;
+    if (!linkedInAcc?.unipileAccountId) {
+      res.status(400).json({
+        success: false,
+        error: "Veuillez connecter votre compte LinkedIn avant de synchroniser les statuts des contacts.",
+      });
+      return;
+    }
+
+    const unipileAccountId = linkedInAcc.unipileAccountId;
 
     const where: any = { list: { userId } };
 
@@ -557,14 +567,21 @@ export async function checkProspectCollision(req: AuthenticatedRequest, res: Res
       linkedinUrl: p.linkedinUrl,
       name: `${p.firstName} ${p.lastName}`.trim(),
       company: p.company,
-      ownedByMe: p.list.userId === userId,
-      owner: {
-        id: p.list.user.id,
-        name: p.list.user.name,
-        email: p.list.user.email,
-        avatarUrl: p.list.user.avatarUrl,
-      },
-      listName: p.list.name,
+      ownedByMe: p.list?.userId === userId || p.userId === userId,
+      owner: p.list
+        ? {
+            id: p.list.user.id,
+            name: p.list.user.name,
+            email: p.list.user.email,
+            avatarUrl: p.list.user.avatarUrl,
+          }
+        : {
+            id: p.userId || "",
+            name: "Messagerie",
+            email: "",
+            avatarUrl: null,
+          },
+      listName: p.list?.name || "Messagerie",
     }));
 
     res.json({

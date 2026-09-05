@@ -83,7 +83,7 @@ interface ProspectsViewProps {
 }
 
 export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign }) => {
-  const { user, selectedMemberId, setSelectedMemberId, openLinkedInModal } = useAuth();
+  const { user, selectedMemberId, setSelectedMemberId, openLinkedInModal, impersonatedOrg } = useAuth();
   const [lists, setLists] = useState<any[]>([]);
   const [selectedListId, setSelectedListId] = useState<string>("ALL");
   const [prospects, setProspects] = useState<any[]>([]);
@@ -108,14 +108,14 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
           if (res.success && res.members) {
             setTeamMembers(res.members);
             if (res.members.length > 0) {
-              const other = res.members.find((m) => m.id !== user.id);
+              const other = res.members.find((m: any) => m.id !== user.id);
               if (other) setTargetMemberId(other.id);
             }
           }
         })
         .catch(() => {});
     }
-  }, [user?.id, user?.orgRole]);
+  }, [user?.id, user?.orgRole, impersonatedOrg?.id]);
 
   // Pagination state (Waalaxy style)
   const [currentPage, setCurrentPage] = useState(1);
@@ -163,6 +163,10 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
   const [renameInputText, setRenameInputText] = useState("");
   const [isInlineEditingTitle, setIsInlineEditingTitle] = useState(false);
   const [inlineTitleText, setInlineTitleText] = useState("");
+
+  // Delete list modal state (Adora popup)
+  const [listToDeleteModal, setListToDeleteModal] = useState<{ id: string; name: string } | null>(null);
+  const [isDeletingList, setIsDeletingList] = useState(false);
 
   // Import dropdown menu
   const [isImportDropdownOpen, setIsImportDropdownOpen] = useState(false);
@@ -361,16 +365,16 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
 
   useEffect(() => {
     fetchLists();
-  }, [selectedMemberId]);
+  }, [selectedMemberId, impersonatedOrg?.id]);
 
   // Reset to page 1 whenever any filter or list changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedListId, statusFilter, hasEmailFilter, campaignFilter, searchTerm, selectedMemberId]);
+  }, [selectedListId, statusFilter, hasEmailFilter, campaignFilter, searchTerm, selectedMemberId, impersonatedOrg?.id]);
 
   useEffect(() => {
     fetchProspects();
-  }, [selectedListId, statusFilter, hasEmailFilter, campaignFilter, currentPage, pageSize, selectedMemberId]);
+  }, [selectedListId, statusFilter, hasEmailFilter, campaignFilter, currentPage, pageSize, selectedMemberId, impersonatedOrg?.id]);
 
   // GSAP Stagger animation on prospects table rows
   useEffect(() => {
@@ -435,20 +439,32 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
     }
   };
 
-  const handleDeleteList = async (listId: string) => {
-    if (!window.confirm("Êtes-vous sûr de vouloir supprimer cette liste ? Les prospects resteront dans la base générale.")) return;
+  const handleDeleteList = (listId: string) => {
+    const target = lists.find((l) => l.id === listId);
+    setListToDeleteModal({
+      id: listId,
+      name: target?.name || "cette liste",
+    });
+  };
+
+  const confirmDeleteList = async () => {
+    if (!listToDeleteModal) return;
+    setIsDeletingList(true);
     try {
-      const res = await apiRequest(`/lists/${listId}`, {
+      const res = await apiRequest(`/lists/${listToDeleteModal.id}`, {
         method: "DELETE",
       });
       if (res.success) {
-        if (selectedListId === listId) {
+        if (selectedListId === listToDeleteModal.id) {
           setSelectedListId("ALL");
         }
         fetchLists();
+        setListToDeleteModal(null);
       }
     } catch (e) {
       console.error(e);
+    } finally {
+      setIsDeletingList(false);
     }
   };
 
@@ -1138,7 +1154,7 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
             {/* Scrollable Container with Custom Scrollbar */}
             <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto custom-scrollbar">
               <table className="w-full text-left text-xs border-collapse">
-                <thead className="sticky top-0 bg-[#fbfbfe] z-20 shadow-2xs border-b border-[#e0e0db]">
+                <thead className="sticky top-0 bg-[#fbfbfe] z-10 shadow-2xs border-b border-[#e0e0db]">
                   <tr className="text-[#5f5f69] uppercase font-bold tracking-wider select-none text-[11px]">
                     <th className="py-2 px-3 w-10">
                       <button onClick={toggleSelectAll}>
@@ -1708,6 +1724,58 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                   )}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE LIST CONFIRMATION MODAL (ADORA STYLE) */}
+      {listToDeleteModal && (
+        <div className="fixed inset-0 bg-[#21164c]/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="adora-card bg-white w-full max-w-md p-6 sm:p-7 shadow-2xl relative animate-in zoom-in-95">
+            <button
+              onClick={() => setListToDeleteModal(null)}
+              className="absolute right-5 top-5 p-2 rounded-full hover:bg-[#f5f5f7] text-[#5f5f69] transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-3.5 mb-4">
+              <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-100 shadow-sm">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-extrabold text-[#21164c]">Supprimer la liste</h3>
+                <p className="text-xs text-[#5f5f69]">Action irréversible sur l'organisation</p>
+              </div>
+            </div>
+
+            <div className="p-4 bg-rose-50/70 rounded-2xl border border-rose-100/80 text-xs text-rose-950 mb-5 space-y-1.5">
+              <p className="font-semibold">
+                Êtes-vous sûr de vouloir supprimer la liste <strong className="font-extrabold text-rose-600">« {listToDeleteModal.name} »</strong> ?
+              </p>
+              <p className="text-[11px] text-rose-800 leading-relaxed">
+                ℹ️ Les prospects associés ne seront pas supprimés et resteront conservés dans votre base générale (Tous les prospects).
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-[#e0e0db]/60">
+              <button
+                type="button"
+                onClick={() => setListToDeleteModal(null)}
+                className="px-4 py-2.5 rounded-xl border border-[#e0e0db] text-xs font-semibold text-[#5f5f69] hover:bg-[#f5f5f7] transition-all cursor-pointer"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingList}
+                onClick={confirmDeleteList}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md shadow-rose-600/25 flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 active:scale-95"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{isDeletingList ? "Suppression..." : "Supprimer définitivement"}</span>
+              </button>
             </div>
           </div>
         </div>

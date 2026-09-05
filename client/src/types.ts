@@ -210,6 +210,14 @@ export interface DailyEvolutionPoint {
 }
 
 export interface DashboardStats {
+  owner?: {
+    id: string;
+    name: string | null;
+    email: string;
+    avatarUrl: string | null;
+    orgRole: string | null;
+    organizationName?: string | null;
+  } | null;
   listsCount: number;
   prospectsCount: number;
   connectedProspects: number;

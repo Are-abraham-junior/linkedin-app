@@ -107,7 +107,11 @@ export async function getUserDashboardStats(req, res) {
         }
         const userId = req.user.id;
         // 1. Métriques globales réelles
-        const [listsCount, prospectsCount, connectedProspects, pendingProspects, notConnectedProspects, doNotContactProspects, repliedProspects, activeCampaignsCount, totalCampaignsCount, queuedActionsCount, executedActionsCount, emailsFoundCount, phonesFoundCount, linkedInAccount,] = await Promise.all([
+        const [targetUser, listsCount, prospectsCount, connectedProspects, pendingProspects, notConnectedProspects, doNotContactProspects, repliedProspects, activeCampaignsCount, totalCampaignsCount, queuedActionsCount, executedActionsCount, emailsFoundCount, phonesFoundCount, linkedInAccount,] = await Promise.all([
+            prisma.user.findUnique({
+                where: { id: userId },
+                include: { organization: true },
+            }),
             prisma.prospectList.count({ where: { userId } }),
             prisma.prospect.count({ where: { list: { userId } } }),
             prisma.prospect.count({ where: { list: { userId }, connectionStatus: "CONNECTED" } }),
@@ -118,7 +122,7 @@ export async function getUserDashboardStats(req, res) {
             prisma.campaign.count({ where: { userId, status: "ACTIVE" } }),
             prisma.campaign.count({ where: { userId } }),
             prisma.actionQueue.count({ where: { campaign: { userId }, status: "QUEUED" } }),
-            prisma.actionQueue.count({ where: { campaign: { userId }, status: "EXECUTED" } }),
+            prisma.actionQueue.count({ where: { campaign: { userId }, status: { in: ["EXECUTED", "SUCCESS"] } } }),
             prisma.prospect.count({ where: { list: { userId }, email: { not: null } } }),
             prisma.prospect.count({ where: { list: { userId }, phone: { not: null } } }),
             prisma.linkedInAccount.findFirst({ where: { userId } }),
@@ -146,13 +150,13 @@ export async function getUserDashboardStats(req, res) {
                     where: { list: { userId }, createdAt: { gte: start, lte: end } },
                 }),
                 prisma.actionQueue.count({
-                    where: { campaign: { userId }, status: "EXECUTED", executedAt: { gte: start, lte: end } },
+                    where: { campaign: { userId }, status: { in: ["EXECUTED", "SUCCESS"] }, executedAt: { gte: start, lte: end } },
                 }),
                 prisma.actionQueue.count({
-                    where: { campaign: { userId }, actionType: "INVITATION", status: "EXECUTED", executedAt: { gte: start, lte: end } },
+                    where: { campaign: { userId }, actionType: "INVITATION", status: { in: ["EXECUTED", "SUCCESS"] }, executedAt: { gte: start, lte: end } },
                 }),
                 prisma.actionQueue.count({
-                    where: { campaign: { userId }, actionType: "MESSAGE", status: "EXECUTED", executedAt: { gte: start, lte: end } },
+                    where: { campaign: { userId }, actionType: "MESSAGE", status: { in: ["EXECUTED", "SUCCESS"] }, executedAt: { gte: start, lte: end } },
                 }),
                 prisma.message.count({
                     where: {
@@ -186,13 +190,13 @@ export async function getUserDashboardStats(req, res) {
                     where: { list: { userId }, createdAt: { gte: start, lte: end } },
                 }),
                 prisma.actionQueue.count({
-                    where: { campaign: { userId }, status: "EXECUTED", executedAt: { gte: start, lte: end } },
+                    where: { campaign: { userId }, status: { in: ["EXECUTED", "SUCCESS"] }, executedAt: { gte: start, lte: end } },
                 }),
                 prisma.actionQueue.count({
-                    where: { campaign: { userId }, actionType: "INVITATION", status: "EXECUTED", executedAt: { gte: start, lte: end } },
+                    where: { campaign: { userId }, actionType: "INVITATION", status: { in: ["EXECUTED", "SUCCESS"] }, executedAt: { gte: start, lte: end } },
                 }),
                 prisma.actionQueue.count({
-                    where: { campaign: { userId }, actionType: "MESSAGE", status: "EXECUTED", executedAt: { gte: start, lte: end } },
+                    where: { campaign: { userId }, actionType: "MESSAGE", status: { in: ["EXECUTED", "SUCCESS"] }, executedAt: { gte: start, lte: end } },
                 }),
             ]).then(([prospectsAdded, actionsExecuted, invitesSent, messagesSent]) => ({
                 date: fullDate,
@@ -207,6 +211,16 @@ export async function getUserDashboardStats(req, res) {
         res.json({
             success: true,
             stats: {
+                owner: targetUser
+                    ? {
+                        id: targetUser.id,
+                        name: targetUser.name,
+                        email: targetUser.email,
+                        avatarUrl: targetUser.avatarUrl,
+                        orgRole: targetUser.orgRole,
+                        organizationName: targetUser.organization?.name || null,
+                    }
+                    : null,
                 listsCount,
                 prospectsCount,
                 connectedProspects,

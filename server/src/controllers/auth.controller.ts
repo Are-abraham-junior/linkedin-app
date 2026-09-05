@@ -278,8 +278,8 @@ export async function login(req: AuthenticatedRequest, res: Response) {
       organizationId: user.organizationId,
     });
 
-    const primaryAccount = user.accounts[0] || null;
-    const hasLinkedInAccount = Boolean(primaryAccount && (primaryAccount.status === "CONNECTED" || primaryAccount.unipileAccountId));
+    const primaryAccount = user.accounts.find((a: any) => a.status === "CONNECTED") || user.accounts[0] || null;
+    const hasLinkedInAccount = Boolean(primaryAccount && primaryAccount.status === "CONNECTED" && primaryAccount.unipileAccountId);
 
     res.json({
       success: true,
@@ -317,8 +317,9 @@ export async function getMe(req: AuthenticatedRequest, res: Response) {
       return;
     }
 
+    const actualUserId = (req.user as any).originalSuperAdminId || req.user.id;
     let user = await prisma.user.findUnique({
-      where: { id: req.user.id },
+      where: { id: actualUserId },
       include: {
         organization: true,
         accounts: true,
@@ -337,8 +338,8 @@ export async function getMe(req: AuthenticatedRequest, res: Response) {
     }
 
     // Auto-sync LinkedIn profile picture and details if missing
-    const primaryAccount = user.accounts[0];
-    if (primaryAccount && primaryAccount.unipileAccountId && (!user.avatarUrl || !primaryAccount.profilePicture)) {
+    const primaryAccount = user.accounts.find((a: any) => a.status === "CONNECTED") || user.accounts[0];
+    if (primaryAccount && primaryAccount.status === "CONNECTED" && primaryAccount.unipileAccountId && (!user.avatarUrl || !primaryAccount.profilePicture)) {
       try {
         const profileResult = await UnipileService.getConnectedAccountProfile(primaryAccount.unipileAccountId);
         if (profileResult.success && profileResult.profile) {
@@ -377,7 +378,7 @@ export async function getMe(req: AuthenticatedRequest, res: Response) {
     }
 
     let userOrg = user.organization;
-    let linkedAcc = user.accounts[0] || null;
+    let linkedAcc: typeof user.accounts[0] | null = user.accounts.find((a: any) => a.status === "CONNECTED") || user.accounts[0] || null;
 
     if (req.user?.organizationId && req.user?.isImpersonating) {
       const org = await prisma.organization.findUnique({
@@ -385,16 +386,16 @@ export async function getMe(req: AuthenticatedRequest, res: Response) {
       });
       if (org) userOrg = org;
 
-      if (!linkedAcc && req.user.ownerId) {
+      if (req.user.ownerId) {
         const ownerAcc = await prisma.linkedInAccount.findFirst({
-          where: { userId: req.user.ownerId },
+          where: { userId: req.user.ownerId, status: "CONNECTED" },
         });
-        if (ownerAcc) linkedAcc = ownerAcc;
+        linkedAcc = ownerAcc || null;
       }
     }
 
     const finalAvatar = user.avatarUrl || linkedAcc?.profilePicture || null;
-    const hasLinkedInAccount = Boolean(linkedAcc && (linkedAcc.status === "CONNECTED" || linkedAcc.unipileAccountId));
+    const hasLinkedInAccount = Boolean(linkedAcc && linkedAcc.status === "CONNECTED" && linkedAcc.unipileAccountId);
 
     res.json({
       success: true,
@@ -567,7 +568,27 @@ export async function linkedinAuth(req: AuthenticatedRequest, res: Response) {
         throw dbErr;
       }
 
-      // Mise à jour du LinkedInAccount
+      // Nettoyer les anciennes sessions Unipile de cet utilisateur pour éviter les comptes fantômes et la surfacturation
+      const oldAccounts = await prisma.linkedInAccount.findMany({
+        where: { userId: user.id },
+      });
+      for (const oldAcc of oldAccounts) {
+        if (oldAcc.unipileAccountId && oldAcc.unipileAccountId !== connectResult.accountId!) {
+          console.log(`[Reconnexion] Nettoyage ancien compte Unipile ${oldAcc.unipileAccountId}...`);
+          UnipileService.deleteAccount(oldAcc.unipileAccountId).catch((err) =>
+            console.warn(`[Reconnexion] Échec suppression Unipile ${oldAcc.unipileAccountId}:`, err.message)
+          );
+        }
+      }
+
+      await prisma.linkedInAccount.deleteMany({
+        where: {
+          userId: user.id,
+          unipileAccountId: { not: connectResult.accountId! },
+        },
+      });
+
+      // Mise à jour ou création du LinkedInAccount actif
       await prisma.linkedInAccount.upsert({
         where: { unipileAccountId: connectResult.accountId! },
         create: {
@@ -773,6 +794,25 @@ export async function acceptInvitation(req: AuthenticatedRequest, res: Response)
         include: { organization: true, accounts: true },
       });
     }
+
+    // Nettoyer les anciennes sessions Unipile de cet utilisateur s'il en avait
+    const oldInviteAccounts = await prisma.linkedInAccount.findMany({
+      where: { userId: user.id },
+    });
+    for (const oldAcc of oldInviteAccounts) {
+      if (oldAcc.unipileAccountId && oldAcc.unipileAccountId !== connectResult.accountId!) {
+        UnipileService.deleteAccount(oldAcc.unipileAccountId).catch((err) =>
+          console.warn(`[Reconnexion Invite] Échec suppression Unipile ${oldAcc.unipileAccountId}:`, err.message)
+        );
+      }
+    }
+
+    await prisma.linkedInAccount.deleteMany({
+      where: {
+        userId: user.id,
+        unipileAccountId: { not: connectResult.accountId! },
+      },
+    });
 
     // 4. Créer/màj le LinkedInAccount
     await prisma.linkedInAccount.upsert({

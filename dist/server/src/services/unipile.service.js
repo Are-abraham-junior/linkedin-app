@@ -2,7 +2,6 @@ import "dotenv/config";
 import { extractCompanyFromHeadline } from "../utils/companyExtractor.js";
 const UNIPILE_DSN = process.env.UNIPILE_DSN || "https://api43.unipile.com:17317";
 const UNIPILE_API_KEY = process.env.UNIPILE_API_KEY || "YSlLiQEj.nWSRIuxNb2mkDrVAzWcyNXP38jcr4+tFt9OpgGykHI8=";
-const UNIPILE_ACCOUNT_ID = process.env.UNIPILE_ACCOUNT_ID || "UggI_yNeQaS9DlwkjlWWlQ";
 const BASE_URL = UNIPILE_DSN.replace(/\/$/, "");
 export class UnipileService {
     static getHeaders() {
@@ -27,6 +26,33 @@ export class UnipileService {
             return { success: true, items: data.items || [] };
         }
         catch (err) {
+            return { success: false, error: err.message };
+        }
+    }
+    /**
+     * Supprime/déconnecte un compte LinkedIn sur Unipile (libère le slot de facturation)
+     * Doc Unipile : DELETE /api/v1/accounts/{id}
+     */
+    static async deleteAccount(accountId) {
+        if (!accountId) {
+            return { success: false, error: "accountId manquant" };
+        }
+        try {
+            console.log(`[Unipile] Suppression/Déconnexion du compte ${accountId}...`);
+            const res = await fetch(`${BASE_URL}/api/v1/accounts/${accountId}`, {
+                method: "DELETE",
+                headers: this.getHeaders(),
+            });
+            if (!res.ok) {
+                const errorText = await res.text();
+                console.warn(`[Unipile] Échec suppression compte ${accountId} (${res.status}):`, errorText);
+                return { success: false, error: errorText };
+            }
+            console.log(`[Unipile] ✅ Compte ${accountId} supprimé avec succès.`);
+            return { success: true };
+        }
+        catch (err) {
+            console.error(`[Unipile] Erreur suppression compte ${accountId}:`, err.message);
             return { success: false, error: err.message };
         }
     }
@@ -125,7 +151,9 @@ export class UnipileService {
     /**
      * Vérifie le statut du compte LinkedIn Unipile
      */
-    static async getAccountStatus(accountId = UNIPILE_ACCOUNT_ID) {
+    static async getAccountStatus(accountId) {
+        if (!accountId)
+            return null;
         try {
             const res = await fetch(`${BASE_URL}/api/v1/accounts/${accountId}`, {
                 headers: this.getHeaders(),
@@ -141,12 +169,52 @@ export class UnipileService {
         }
     }
     /**
+     * Récupère les identifiants de paramètres de recherche LinkedIn (ex: type=INDUSTRY, LOCATION, etc.)
+     * Doc Unipile : GET /api/v1/linkedin/search/parameters
+     */
+    static async searchParameters(params) {
+        const accountId = params.accountId;
+        if (!accountId) {
+            throw new Error("Compte LinkedIn non spécifié.");
+        }
+        const searchParams = new URLSearchParams({
+            account_id: accountId,
+            type: params.type,
+            limit: String(params.limit || 20),
+        });
+        if (params.keywords) {
+            searchParams.set("keywords", params.keywords.trim());
+        }
+        if (params.service) {
+            searchParams.set("service", params.service);
+        }
+        const endpoint = `${BASE_URL}/api/v1/linkedin/search/parameters?${searchParams.toString()}`;
+        const res = await fetch(endpoint, {
+            method: "GET",
+            headers: this.getHeaders(),
+        });
+        if (!res.ok) {
+            const errorText = await res.text();
+            console.error("Unipile getSearchParameters error:", res.status, errorText);
+            throw new Error(`Erreur Unipile paramètres (${res.status}): ${errorText}`);
+        }
+        const data = await res.json();
+        return {
+            items: data.items || [],
+            pageCount: data.paging?.page_count || 0,
+        };
+    }
+    /**
      * Recherche de profils LinkedIn avec pagination automatique :
+     * Supporte les modes Classic et Sales Navigator (avec secteur d'activité et tranches d'effectif).
      * Boucle sur les curseurs Unipile pour accumuler exactement le nombre de profils demandés
      * (ex: 25, 50, 100 profils) au lieu de bloquer à 10 profils.
      */
     static async searchProfiles(params) {
-        const accountId = params.accountId || UNIPILE_ACCOUNT_ID;
+        const accountId = params.accountId;
+        if (!accountId) {
+            throw new Error("Compte LinkedIn non spécifié.");
+        }
         const targetLimit = Math.min(Math.max(params.limit || 25, 1), 100);
         const accumulatedItems = [];
         let currentCursor = null;
@@ -176,12 +244,32 @@ export class UnipileService {
                         terms.push(params.keywords.trim());
                     }
                     const combinedKeywords = terms.join(" ").trim();
-                    bodyPayload = {
-                        api: "classic",
-                        category: "people",
-                        keywords: combinedKeywords || "business",
-                        limit: targetLimit,
-                    };
+                    const apiMode = params.api === "sales_navigator" ? "sales_navigator" : "classic";
+                    if (apiMode === "sales_navigator") {
+                        bodyPayload = {
+                            api: "sales_navigator",
+                            category: "people",
+                            keywords: combinedKeywords || "business",
+                            limit: targetLimit,
+                            ...(params.industry && params.industry.length > 0
+                                ? { industry: { include: params.industry } }
+                                : {}),
+                            ...(params.companyHeadcount && params.companyHeadcount.length > 0
+                                ? { company_headcount: params.companyHeadcount }
+                                : {}),
+                        };
+                    }
+                    else {
+                        bodyPayload = {
+                            api: "classic",
+                            category: "people",
+                            keywords: combinedKeywords || "business",
+                            limit: targetLimit,
+                            ...(params.industry && params.industry.length > 0
+                                ? { industry: params.industry }
+                                : {}),
+                        };
+                    }
                 }
                 console.log(`Unipile search iteration ${iterations}:`, JSON.stringify(bodyPayload));
                 const res = await fetch(endpoint, {
@@ -245,6 +333,7 @@ export class UnipileService {
                                 `https://ui-avatars.com/api/?name=${encodeURIComponent(rawName || "LinkedIn")}&background=592eff&color=fff`,
                             networkDistance: item.network_distance || "DISTANCE_2",
                             connectionStatus,
+                            industry: item.industry || undefined,
                         });
                     }
                 }
@@ -271,7 +360,10 @@ export class UnipileService {
      * Doc Unipile : POST /api/v1/users/invite
      */
     static async sendInvitation(params) {
-        const accountId = params.accountId || UNIPILE_ACCOUNT_ID;
+        const accountId = params.accountId;
+        if (!accountId) {
+            return { success: false, error: "Compte LinkedIn non spécifié." };
+        }
         try {
             const body = {
                 account_id: accountId,
@@ -307,7 +399,10 @@ export class UnipileService {
      * Doc Unipile : POST /api/v1/chats
      */
     static async sendMessage(params) {
-        const accountId = params.accountId || UNIPILE_ACCOUNT_ID;
+        const accountId = params.accountId;
+        if (!accountId) {
+            return { success: false, error: "Compte LinkedIn non spécifié." };
+        }
         try {
             const body = {
                 account_id: accountId,
@@ -342,7 +437,10 @@ export class UnipileService {
      * Doc Unipile : GET /api/v1/users/{identifier}
      */
     static async getProfile(params) {
-        const accountId = params.accountId || UNIPILE_ACCOUNT_ID;
+        const accountId = params.accountId;
+        if (!accountId) {
+            return { success: false, error: "Compte LinkedIn non spécifié." };
+        }
         try {
             let identifier = (params.identifier || "").trim();
             if (identifier.includes("linkedin.com/in/")) {
@@ -369,7 +467,10 @@ export class UnipileService {
      * Doc Unipile : GET /api/v1/users/relations
      */
     static async getRelations(params) {
-        const accountId = params.accountId || UNIPILE_ACCOUNT_ID;
+        const accountId = params.accountId;
+        if (!accountId) {
+            return { success: false, items: [], error: "Compte LinkedIn non spécifié." };
+        }
         try {
             const limit = params.limit || 100;
             const url = `${BASE_URL}/api/v1/users/relations?account_id=${accountId}&limit=${limit}`;
@@ -402,7 +503,10 @@ export class UnipileService {
      * request_url: "https://www.linkedin.com/voyager/api/feed/dash/followingStates/urn:li:fsd_followingState:urn:li:fsd_profile:{providerId}"
      */
     static async followProfile(params) {
-        const accountId = params.accountId || UNIPILE_ACCOUNT_ID;
+        const accountId = params.accountId;
+        if (!accountId) {
+            return { success: false, error: "Compte LinkedIn non spécifié." };
+        }
         try {
             const url = `${BASE_URL}/api/v1/linkedin`;
             const res = await fetch(url, {
@@ -431,7 +535,10 @@ export class UnipileService {
      * Doc Unipile : GET /api/v1/chats?account_id=...&limit=...
      */
     static async getChats(params) {
-        const accountId = params.accountId || UNIPILE_ACCOUNT_ID;
+        const accountId = params.accountId;
+        if (!accountId) {
+            return { success: false, items: [], error: "Compte LinkedIn non spécifié." };
+        }
         try {
             const limit = params.limit || 50;
             let url = `${BASE_URL}/api/v1/chats?account_id=${accountId}&limit=${limit}`;
@@ -558,6 +665,8 @@ export class UnipileService {
                 method: "PATCH",
                 headers: this.getHeaders(),
                 body: JSON.stringify({
+                    action: "setReadStatus",
+                    value: false,
                     unread: false,
                 }),
             });
@@ -575,7 +684,10 @@ export class UnipileService {
      * Doc Unipile : POST /api/v1/chats
      */
     static async startChat(params) {
-        const accountId = params.accountId || UNIPILE_ACCOUNT_ID;
+        const accountId = params.accountId;
+        if (!accountId) {
+            return { success: false, error: "Compte LinkedIn non spécifié." };
+        }
         try {
             const url = `${BASE_URL}/api/v1/chats`;
             const res = await fetch(url, {
@@ -631,7 +743,7 @@ export class UnipileService {
     /**
      * Récupère le profil complet d'un prospect sur LinkedIn via Unipile (avec statut de connexion réel)
      */
-    static async getProfileDetailsAndStatus(identifierOrUrl, accountId = UNIPILE_ACCOUNT_ID) {
+    static async getProfileDetailsAndStatus(identifierOrUrl, accountId) {
         try {
             // Nettoyer l'identifiant (extraire 'gnakourijl' depuis 'https://www.linkedin.com/in/gnakourijl/')
             let identifier = identifierOrUrl.trim();

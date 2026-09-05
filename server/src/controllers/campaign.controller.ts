@@ -288,8 +288,16 @@ export async function createCampaign(req: AuthenticatedRequest, res: Response) {
 
     // Récupérer le compte LinkedIn de l'utilisateur ou le compte par défaut
     const account = await prisma.linkedInAccount.findFirst({
-      where: { userId: targetOwnerId },
+      where: { userId: targetOwnerId, status: "CONNECTED" },
     });
+
+    if (body.startImmediately && (!account || !account.unipileAccountId)) {
+      res.status(400).json({
+        success: false,
+        error: "Impossible de lancer la campagne : aucun compte LinkedIn connecté n'est associé à cet utilisateur. Veuillez connecter votre compte LinkedIn d'abord.",
+      });
+      return;
+    }
 
     const campaignStatus = body.startImmediately ? "ACTIVE" : "DRAFT";
 
@@ -391,8 +399,8 @@ export async function createCampaign(req: AuthenticatedRequest, res: Response) {
         if (firstActionType === "MESSAGE") {
           // Campagne de message direct -> DOIT être déjà connecté
           return p.connectionStatus === "CONNECTED";
-        } else if (firstActionType === "INVITATION" || firstActionType === "VISIT_PROFILE" || firstActionType === "FOLLOW") {
-          // Campagne d'invitation/visite -> NE DOIT PAS être déjà connecté
+        } else if (firstActionType === "INVITATION") {
+          // Campagne d'invitation -> NE DOIT PAS être déjà connecté
           return p.connectionStatus !== "CONNECTED";
         }
         return true;
@@ -471,8 +479,15 @@ export async function toggleCampaignStatus(req: AuthenticatedRequest, res: Respo
     const userId = req.user!.id;
     const { status } = req.body;
 
+    let whereClause: any = { id };
+    if (req.user!.role === "SUPER_ADMIN" && req.user!.organizationId) {
+      whereClause.user = { organizationId: req.user!.organizationId };
+    } else {
+      whereClause.userId = userId;
+    }
+
     const existing = await prisma.campaign.findFirst({
-      where: { id, userId },
+      where: whereClause,
     });
 
     if (!existing) {
@@ -509,8 +524,15 @@ export async function updateCampaign(req: AuthenticatedRequest, res: Response) {
     const userId = req.user!.id;
     const body = UpdateCampaignSchema.parse(req.body);
 
+    let whereClause: any = { id };
+    if (req.user!.role === "SUPER_ADMIN" && req.user!.organizationId) {
+      whereClause.user = { organizationId: req.user!.organizationId };
+    } else {
+      whereClause.userId = userId;
+    }
+
     const existing = await prisma.campaign.findFirst({
-      where: { id, userId },
+      where: whereClause,
     });
 
     if (!existing) {
@@ -650,6 +672,7 @@ export async function deleteCampaign(req: AuthenticatedRequest, res: Response) {
   try {
     const id = req.params.id as string;
     const userId = req.user!.id;
+    const permanent = req.query.permanent === "true";
 
     let whereClause: any = { id };
     if (req.user!.role === "SUPER_ADMIN" && req.user!.organizationId) {
@@ -667,18 +690,39 @@ export async function deleteCampaign(req: AuthenticatedRequest, res: Response) {
       return;
     }
 
-    // Supprimer les éléments associés en queue
+    // Supprimer les actions en attente dans la file d'attente (QUEUED)
     await prisma.actionQueue.deleteMany({
-      where: { campaignId: id },
+      where: { campaignId: id, status: "QUEUED" },
     });
 
-    await prisma.campaign.delete({
+    // Si la campagne est déjà archivée ou si suppression permanente demandée explicitement
+    if (existing.status === "ARCHIVED" || permanent) {
+      await prisma.actionQueue.deleteMany({
+        where: { campaignId: id },
+      });
+      await prisma.campaign.delete({
+        where: { id },
+      });
+
+      res.json({
+        success: true,
+        message: "Campagne définitivement supprimée avec succès.",
+        action: "DELETED",
+      });
+      return;
+    }
+
+    // Sinon, archiver la campagne (permettant à l'utilisateur de la retrouver dans l'onglet Archivées)
+    const updated = await prisma.campaign.update({
       where: { id },
+      data: { status: "ARCHIVED" },
     });
 
     res.json({
       success: true,
-      message: "Campagne supprimée avec succès.",
+      message: "Campagne archivée avec succès.",
+      campaign: updated,
+      action: "ARCHIVED",
     });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
