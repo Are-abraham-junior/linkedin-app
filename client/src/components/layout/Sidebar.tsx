@@ -15,6 +15,7 @@ import {
   Sparkles,
   X,
   Layers,
+  Settings,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -128,6 +129,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
             ],
           },
         ]),
+    {
+      category: "Configuration",
+      items: [
+        {
+          id: "settings",
+          label: "Paramètres",
+          path: "/settings",
+          icon: Settings,
+        },
+      ],
+    },
   ];
 
   const handleNavigate = (path: string) => {
@@ -288,12 +300,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className={`border-t border-[#e0e0db]/70 shrink-0 bg-white ${isCollapsed ? "p-2" : "p-3"}`}>
         {!isCollapsed ? (
           <div className="p-2.5 rounded-2xl bg-[#f8f9fc] border border-[#e0e0db]/80 flex items-center justify-between gap-2">
+            {/* Utilisateur connecté & profil */}
             <div
-              className="flex items-center gap-2.5 truncate cursor-pointer flex-1"
-              onClick={onOpenProfile}
-              title="Voir mon profil"
+              onClick={() => handleNavigate("/settings")}
+              className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer group"
+              title="Accéder aux Paramètres"
             >
-              {/* Avatar */}
+              {/* Photo de profil */}
               <img
                 src={
                   user.avatarUrl ||
@@ -302,11 +315,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   )}&background=592eff&color=fff`
                 }
                 alt={user.name || user.email}
-                className="w-8 h-8 rounded-full object-cover border border-[#592eff]/30 shrink-0"
+                className="w-8 h-8 rounded-full object-cover border border-[#592eff]/30 shrink-0 group-hover:ring-2 group-hover:ring-[#592eff]/40 transition-all"
               />
               {/* Infos */}
               <div className="truncate text-left">
-                <p className="text-xs font-bold text-[#21164c] truncate">
+                <p className="text-xs font-bold text-[#21164c] group-hover:text-[#592eff] transition-colors truncate">
                   {user.name || user.email.split("@")[0]}
                 </p>
                 <p className="text-[10px] text-[#5f5f69] font-medium truncate">
@@ -323,11 +336,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="flex items-center gap-1 shrink-0">
               <button
                 type="button"
-                onClick={onOpenProfile}
+                onClick={() => handleNavigate("/settings")}
                 className="p-1.5 rounded-lg text-[#5f5f69] hover:text-[#592eff] hover:bg-white transition-colors cursor-pointer"
-                title="Mon profil & Quotas"
+                title="Paramètres & Profil"
               >
-                <UserCheck className="w-3.5 h-3.5" />
+                <Settings className="w-3.5 h-3.5" />
               </button>
               <button
                 type="button"
@@ -344,9 +357,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="flex flex-col items-center gap-2">
             <button
               type="button"
-              onClick={onOpenProfile}
+              onClick={() => handleNavigate("/settings")}
               className="relative group p-1 rounded-2xl hover:ring-2 hover:ring-[#592eff]/30 transition-all cursor-pointer"
-              title={user.name || user.email}
+              title="Paramètres"
             >
               <img
                 src={

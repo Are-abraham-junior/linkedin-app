@@ -478,6 +478,41 @@ export async function processActionQueue() {
                             where: { id: action.id },
                             data: { status: "SUCCESS", executedAt: new Date() },
                         });
+                        // Enrichissement automatique du prospect (coordonnées LinkedIn)
+                        if (result.profile) {
+                            const profileData = result.profile;
+                            const contactInfo = profileData?.contact_info;
+                            const extractedEmail = contactInfo?.emails?.[0]?.address ||
+                                contactInfo?.emails?.[0] ||
+                                profileData?.email;
+                            const rawPhone = contactInfo?.phones?.[0]?.number ||
+                                contactInfo?.phones?.[0] ||
+                                contactInfo?.phone_numbers?.[0]?.number ||
+                                contactInfo?.phone_numbers?.[0] ||
+                                profileData?.phone;
+                            const extractedPhone = typeof rawPhone === "string" ? rawPhone.trim() : rawPhone ? String(rawPhone) : undefined;
+                            const enrichData = {};
+                            if (extractedEmail && !prospect.email)
+                                enrichData.email = extractedEmail;
+                            if (extractedPhone && !prospect.phone)
+                                enrichData.phone = extractedPhone;
+                            if (profileData?.profile_picture_url && (!prospect.avatarUrl || prospect.avatarUrl.includes("ui-avatars.com"))) {
+                                enrichData.avatarUrl = profileData.profile_picture_url;
+                            }
+                            if (profileData?.headline && (!prospect.headline || prospect.headline === "Professionnel")) {
+                                enrichData.headline = profileData.headline;
+                            }
+                            if (profileData?.company && (!prospect.company || prospect.company === "—")) {
+                                enrichData.company = profileData.company;
+                            }
+                            if (Object.keys(enrichData).length > 0) {
+                                await prisma.prospect.update({
+                                    where: { id: prospect.id },
+                                    data: enrichData,
+                                });
+                                console.log(`[CampaignWorker] Prospect ${prospect.firstName} ${prospect.lastName} enrichi via visite :`, Object.keys(enrichData).join(", "));
+                            }
+                        }
                         // Trouver l'étape suivante dans la séquence
                         const currentStep = await prisma.campaignStep.findFirst({
                             where: { campaignId: action.campaignId, id: payload.stepId },
@@ -676,10 +711,38 @@ export async function checkAcceptedInvitations() {
                     profileRes.profile.connection_status === "CONNECTED";
                 if (isConnected) {
                     console.log(`[CampaignWorker] Connexion acceptée confirmée pour ${state.prospect.firstName} ${state.prospect.lastName} !`);
+                    // Extraction automatique des coordonnées du prospect (1er degré)
+                    const contactInfo = profileRes.profile.contact_info;
+                    const extractedEmail = contactInfo?.emails?.[0]?.address ||
+                        contactInfo?.emails?.[0] ||
+                        profileRes.profile.email;
+                    const rawPhone = contactInfo?.phones?.[0]?.number ||
+                        contactInfo?.phones?.[0] ||
+                        contactInfo?.phone_numbers?.[0]?.number ||
+                        contactInfo?.phone_numbers?.[0] ||
+                        profileRes.profile.phone;
+                    const extractedPhone = typeof rawPhone === "string" ? rawPhone.trim() : rawPhone ? String(rawPhone) : undefined;
+                    const updateData = { connectionStatus: "CONNECTED" };
+                    if (extractedEmail && !state.prospect.email)
+                        updateData.email = extractedEmail;
+                    if (extractedPhone && !state.prospect.phone)
+                        updateData.phone = extractedPhone;
+                    if (profileRes.profile.headline && (!state.prospect.headline || state.prospect.headline === "Professionnel")) {
+                        updateData.headline = profileRes.profile.headline;
+                    }
+                    if (profileRes.profile.company && (!state.prospect.company || state.prospect.company === "—")) {
+                        updateData.company = profileRes.profile.company;
+                    }
+                    if (profileRes.profile.profile_picture_url && (!state.prospect.avatarUrl || state.prospect.avatarUrl.includes("ui-avatars.com"))) {
+                        updateData.avatarUrl = profileRes.profile.profile_picture_url;
+                    }
                     await prisma.prospect.update({
                         where: { id: state.prospect.id },
-                        data: { connectionStatus: "CONNECTED" },
+                        data: updateData,
                     });
+                    if (extractedEmail || extractedPhone) {
+                        console.log(`[CampaignWorker] Coordonnées extraites pour ${state.prospect.firstName} : email=${extractedEmail || "non"}, phone=${extractedPhone || "non"}`);
+                    }
                     // Trouver l'étape suivant l'invitation dans cette campagne
                     const currentStep = state.campaign.steps.find((s) => s.id === state.currentStepId) ||
                         state.campaign.steps.find((s) => s.actionType === "INVITATION");

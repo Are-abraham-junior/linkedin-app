@@ -261,6 +261,27 @@ export async function bulkImportProspects(req, res) {
                 skipDuplicates: true,
             });
         }
+        // Journalisation automatique dans l'historique des importations
+        try {
+            await prisma.importHistory.create({
+                data: {
+                    userId,
+                    organizationId: currentUser?.organizationId || null,
+                    listId: body.listId,
+                    listName: list.name,
+                    source: body.source || (body.prospects[0]?.providerProfileId ? "LINKEDIN_SEARCH" : "FICHIER"),
+                    filename: body.filename || `Import_${list.name}_${new Date().toLocaleDateString("fr-FR").replace(/\//g, "-")}`,
+                    totalRows: body.prospects.length,
+                    importedCount: createdCount,
+                    duplicateCount,
+                    collisionCount: teamCollisions.length,
+                    status: "COMPLETED",
+                },
+            });
+        }
+        catch (histErr) {
+            console.warn("[bulkImportProspects] Erreur d'enregistrement dans l'historique:", histErr.message);
+        }
         res.status(201).json({
             success: true,
             message: `${createdCount} prospect(s) importé(s) avec succès.${teamCollisions.length > 0 ? ` (${teamCollisions.length} collision(s) d'équipe bloquée(s))` : duplicateCount > 0 ? ` (${duplicateCount} doublon(s) ignoré(s))` : ""}`,
@@ -441,6 +462,9 @@ export async function syncProspectsStatus(req, res) {
             }
             if (result.profile?.email && !p.email) {
                 updateData.email = result.profile.email;
+            }
+            if (result.profile?.phone && !p.phone) {
+                updateData.phone = result.profile.phone;
             }
             if (result.profile?.company && (!p.company || p.company === "—")) {
                 updateData.company = result.profile.company;

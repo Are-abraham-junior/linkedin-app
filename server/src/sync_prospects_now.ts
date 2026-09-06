@@ -50,6 +50,9 @@ async function main() {
     if (result.profile?.email && !p.email) {
       updateData.email = result.profile.email;
     }
+    if (result.profile?.phone && !p.phone) {
+      updateData.phone = result.profile.phone;
+    }
     if (result.profile?.company && (!p.company || p.company === "—")) {
       updateData.company = result.profile.company;
     }
