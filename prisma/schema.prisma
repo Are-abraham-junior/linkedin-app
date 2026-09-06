@@ -59,8 +59,12 @@ model Organization {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  users       User[]
-  invitations TeamInvitation[]
+  users           User[]
+  invitations     TeamInvitation[]
+  importHistories ImportHistory[]
+  apiKeys         ApiKey[]
+  integrations    IntegrationConfig[]
+  invoices        Invoice[]
 }
 
 model User {
@@ -100,6 +104,8 @@ model User {
   sentInvitations  TeamInvitation[]  @relation("InvitedBy")
   prospects        Prospect[]
   conversations    Conversation[]
+  importHistories  ImportHistory[]
+  apiKeys          ApiKey[]
 }
 
 model TeamInvitation {
@@ -280,3 +286,73 @@ model MessageTemplate {
   content   String
   createdAt DateTime @default(now())
 }
+
+model ImportHistory {
+  id             String        @id @default(uuid())
+  userId         String
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  listId         String?
+  listName       String?
+  source         String        @default("CSV") // CSV, XLSX, LINKEDIN_SEARCH, API
+  filename       String?
+  totalRows      Int           @default(0)
+  importedCount  Int           @default(0)
+  duplicateCount Int           @default(0)
+  collisionCount Int           @default(0)
+  status         String        @default("COMPLETED") // COMPLETED, FAILED, IN_PROGRESS
+  createdAt      DateTime      @default(now())
+
+  @@index([userId])
+  @@index([organizationId])
+}
+
+model ApiKey {
+  id             String        @id @default(uuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String        @default("Clé API Principale")
+  key            String        @unique
+  prefix         String
+  lastUsedAt     DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime      @default(now())
+
+  @@index([userId])
+  @@index([key])
+}
+
+model IntegrationConfig {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  provider       String       // BREVO, HUBSPOT, GOOGLESHEETS
+  config         Json
+  status         String       @default("DISCONNECTED") // CONNECTED, DISCONNECTED, ERROR
+  lastSyncAt     DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, provider])
+}
+
+model Invoice {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  number         String       @unique // INV-2026-001
+  amount         Float
+  currency       String       @default("EUR")
+  plan           String       @default("ENTERPRISE")
+  status         String       @default("PAID") // PAID, PENDING
+  periodStart    DateTime
+  periodEnd      DateTime
+  pdfUrl         String?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId])
+}
+

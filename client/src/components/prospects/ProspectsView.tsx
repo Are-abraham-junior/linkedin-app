@@ -689,7 +689,27 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                   </a>
                 )}
               </div>
-              <p className="text-[10px] text-[#5f5f69] truncate">{p.location || "Non renseigné"}</p>
+              <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                <p className="text-[10px] text-[#5f5f69] truncate">{p.location || "Non renseigné"}</p>
+                {p.email && (
+                  <span
+                    className="inline-flex items-center gap-1 text-[9px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-full border border-emerald-200 font-medium shrink-0"
+                    title={`Email : ${p.email}`}
+                  >
+                    <Mail className="w-2.5 h-2.5" />
+                    <span className="max-w-[120px] truncate">{p.email}</span>
+                  </span>
+                )}
+                {p.phone && (
+                  <span
+                    className="inline-flex items-center gap-1 text-[9px] text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded-full border border-blue-200 font-medium shrink-0"
+                    title={`Téléphone : ${p.phone}`}
+                  >
+                    <Phone className="w-2.5 h-2.5" />
+                    <span className="max-w-[100px] truncate">{p.phone}</span>
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         );

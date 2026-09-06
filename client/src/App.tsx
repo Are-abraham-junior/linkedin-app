@@ -23,6 +23,7 @@ import { CampaignsView } from "./components/campaigns/CampaignsView";
 import { InboxView } from "./components/inbox/InboxView";
 import { ProfileModal } from "./components/profile/ProfileModal";
 import { LinkedInOnboardingWall } from "./components/auth/LinkedInOnboardingWall";
+import { SettingsView } from "./components/settings/SettingsView";
 import { Sparkles, ArrowRight } from "lucide-react";
 
 /**
@@ -193,6 +194,7 @@ export const App: React.FC = () => {
         />
         <Route path="/inbox" element={<InboxView />} />
         <Route path="/team" element={<TeamPage />} />
+        <Route path="/settings" element={<SettingsView />} />
 
         {/* Routes Super Admin */}
         <Route

@@ -12,6 +12,7 @@ import campaignRoutes from "./routes/campaign.routes.js";
 import inboxRoutes from "./routes/inbox.routes.js";
 import teamRoutes from "./routes/team.routes.js";
 import queueRoutes from "./routes/queue.routes.js";
+import settingsRoutes from "./routes/settings.routes.js";
 import { handleUnipileWebhook } from "./controllers/webhook.controller.js";
 import { startCampaignScheduler } from "./workers/campaign.worker.js";
 
@@ -47,6 +48,7 @@ app.use("/api/campaigns", campaignRoutes);
 app.use("/api/inbox", inboxRoutes);
 app.use("/api/team", teamRoutes);
 app.use("/api/queue", queueRoutes);
+app.use("/api/settings", settingsRoutes);
 app.post("/api/webhooks/unipile", handleUnipileWebhook);
 
 // Serve static client assets and SPA fallback (Production / Render)

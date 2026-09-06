@@ -539,20 +539,22 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({ onStartCampaign })
 
             {/* Right Card: Real User Identity & Contacts Counter */}
             <div className="adora-card p-6 flex flex-col justify-between">
-              <div className="flex items-center justify-between">
-                <span className="badge-tag bg-[#592eff]/10 text-[#592eff] border border-[#592eff]/20 text-[10px]">
-                  {stats?.owner?.orgRole === "OWNER" || user?.orgRole === "OWNER" ? "Propriétaire Espace" : "Membre Collaborateur"}
+              <div className="flex items-center justify-between gap-2">
+                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[#f5f5f7] text-[#5f5f69] border border-[#e0e0db] tracking-wide">
+                  {stats?.owner?.orgRole === "OWNER" || user?.orgRole === "OWNER" ? "Propriétaire" : "Collaborateur"}
                 </span>
                 <button
                   type="button"
                   onClick={() => !stats?.linkedInAccount && (openLinkedInModal ? openLinkedInModal() : navigate("/team"))}
-                  className={`text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                    stats?.linkedInAccount ? "text-emerald-600 cursor-default" : "text-amber-600 hover:text-amber-700 cursor-pointer"
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
+                    stats?.linkedInAccount
+                      ? "bg-emerald-50/80 text-emerald-700 border-emerald-200 cursor-default"
+                      : "bg-[#fffaf0] text-amber-700 border-amber-200/80 hover:border-amber-300 hover:bg-[#fff4e0] cursor-pointer shadow-2xs"
                   }`}
                   title={stats?.linkedInAccount ? "Compte LinkedIn synchronisé" : "Cliquer pour associer votre compte LinkedIn"}
                 >
-                  <span className={`w-2 h-2 rounded-full ${stats?.linkedInAccount ? "bg-emerald-500" : "bg-amber-500 animate-pulse"}`}></span>
-                  {stats?.linkedInAccount ? "LinkedIn Actif" : "LinkedIn déconnecté"}
+                  <span className={`w-1.5 h-1.5 rounded-full ${stats?.linkedInAccount ? "bg-emerald-500" : "bg-amber-500 animate-pulse"}`}></span>
+                  <span>{stats?.linkedInAccount ? "LinkedIn connecté" : "LinkedIn non connecté"}</span>
                 </button>
               </div>
 

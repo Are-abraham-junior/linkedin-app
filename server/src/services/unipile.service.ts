@@ -559,7 +559,7 @@ export class UnipileService {
         identifier = identifier.split("linkedin.com/in/")[1].split("/")[0].split("?")[0];
       }
 
-      const url = `${BASE_URL}/api/v1/users/${encodeURIComponent(identifier)}?account_id=${accountId}`;
+      const url = `${BASE_URL}/api/v1/users/${encodeURIComponent(identifier)}?account_id=${accountId}&linkedin_sections=contact_info`;
       const res = await fetch(url, {
         method: "GET",
         headers: this.getHeaders(),
@@ -924,6 +924,7 @@ export class UnipileService {
       company?: string;
       location?: string;
       email?: string;
+      phone?: string;
     };
   }> {
     try {
@@ -933,7 +934,7 @@ export class UnipileService {
         identifier = identifier.split("linkedin.com/in/")[1].split("/")[0].split("?")[0];
       }
 
-      const res = await fetch(`${BASE_URL}/api/v1/users/${identifier}?account_id=${accountId}`, {
+      const res = await fetch(`${BASE_URL}/api/v1/users/${encodeURIComponent(identifier)}?account_id=${accountId}&linkedin_sections=contact_info`, {
         headers: this.getHeaders(),
       });
 
@@ -944,7 +945,21 @@ export class UnipileService {
       const data: any = await res.json();
       const connectionStatus = this.parseLinkedInConnectionStatus(data);
 
-      const email = data?.contact_info?.emails?.[0] || data?.email || undefined;
+      const email =
+        data?.contact_info?.emails?.[0]?.address ||
+        data?.contact_info?.emails?.[0] ||
+        data?.email ||
+        undefined;
+
+      const rawPhone =
+        data?.contact_info?.phones?.[0]?.number ||
+        data?.contact_info?.phones?.[0] ||
+        data?.contact_info?.phone_numbers?.[0]?.number ||
+        data?.contact_info?.phone_numbers?.[0] ||
+        data?.phone ||
+        undefined;
+      const phone = typeof rawPhone === "string" ? rawPhone.trim() : rawPhone ? String(rawPhone) : undefined;
+
       const company = data?.experience?.[0]?.company_name || data?.company || undefined;
 
       return {
@@ -960,6 +975,7 @@ export class UnipileService {
           company,
           location: data?.location || undefined,
           email,
+          phone,
         },
       };
     } catch (err: any) {
