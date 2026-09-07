@@ -35,12 +35,13 @@ async function getValidLinkedInAccountId(userId: string): Promise<string | null>
 /**
  * Arrêt automatique de la campagne dès qu'une réponse est détectée
  */
-export async function handleProspectReply(prospectId: string, text?: string) {
+export async function handleProspectReply(prospectId: string, text?: string, targetUserId?: string) {
   try {
     const activeStates = await prisma.prospectCampaignState.findMany({
       where: {
         prospectId,
         status: { in: ["PENDING", "WAITING_CONDITION", "WAITING_DELAY", "IN_PROGRESS"] },
+        ...(targetUserId ? { campaign: { userId: targetUserId } } : {}),
       },
       include: { campaign: true },
     });
@@ -580,7 +581,7 @@ export async function getMessages(req: AuthenticatedRequest, res: Response) {
 
             // Si c'est un message du prospect, vérifier l'arrêt automatique de la campagne
             if (senderType === "PROSPECT") {
-              await handleProspectReply(conversation.prospectId, text);
+              await handleProspectReply(conversation.prospectId, text, conversation.userId || undefined);
             }
           }
         }
@@ -621,6 +622,7 @@ export async function getMessages(req: AuthenticatedRequest, res: Response) {
         senderType: m.senderType,
         text: m.text,
         sentAt: m.sentAt,
+        status: m.unipileMessageId?.startsWith("failed_") ? "error" : "sent",
       })),
     });
   } catch (error: any) {
@@ -677,9 +679,49 @@ export async function sendMessage(req: AuthenticatedRequest, res: Response) {
       });
     }
 
-    // 2. Si pas de targetChatId OU si l'envoi a retourné 404 (chat introuvable / expiré sur Unipile)
-    if (!targetChatId || (!sendRes?.success && sendRes?.error?.includes("404"))) {
-      console.log(`[Inbox] Chat ID ${targetChatId} introuvable ou invalide. Auto-résolution sur le compte Unipile ${accountId}...`);
+    // 2. Si pas de targetChatId OU si l'envoi direct a échoué
+    const isServiceUnavailable =
+      sendRes?.error?.includes("502") ||
+      sendRes?.error?.includes("Bad Gateway") ||
+      sendRes?.error?.includes("503") ||
+      sendRes?.error?.includes("504");
+
+    if (isServiceUnavailable) {
+      const failedMsg = await prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          unipileMessageId: `failed_${Date.now()}`,
+          senderType: "USER",
+          text: text.trim(),
+          sentAt: new Date(),
+        },
+      });
+
+      await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: {
+          lastMessageText: text.trim(),
+          lastMessageAt: new Date(),
+        },
+      });
+
+      res.status(502).json({
+        success: false,
+        error: "Le service de messagerie LinkedIn est temporairement indisponible. Votre message a été conservé en attente de reconnexion.",
+        message: {
+          id: failedMsg.id,
+          conversationId: conversation.id,
+          senderType: "USER",
+          text: failedMsg.text,
+          sentAt: failedMsg.sentAt.toISOString(),
+          status: "error",
+        },
+      });
+      return;
+    }
+
+    if (!targetChatId || !sendRes?.success) {
+      console.log(`[Inbox] Chat ID '${targetChatId}' inopérant (${sendRes?.error || "aucun chat ID"}). Tentative d'auto-résolution sur le compte actif ${accountId}...`);
 
       const attendeeId = conversation.prospect.providerProfileId || conversation.prospect.linkedinUrl;
 
@@ -716,6 +758,11 @@ export async function sendMessage(req: AuthenticatedRequest, res: Response) {
 
         if (startRes.success && startRes.chatId) {
           foundChatId = startRes.chatId;
+          // startChat transmet déjà le texte du message à la création du chat
+          sendRes = {
+            success: true,
+            messageId: (startRes as any).messageId || (startRes as any).id || "init_chat_msg",
+          };
         } else {
           res.status(500).json({
             success: false,
@@ -723,28 +770,56 @@ export async function sendMessage(req: AuthenticatedRequest, res: Response) {
           });
           return;
         }
+      } else {
+        targetChatId = foundChatId;
+
+        // Envoyer le message sur le chat ID résolu
+        sendRes = await UnipileService.sendChatMessage({
+          chatId: targetChatId,
+          text: text.trim(),
+          attachments,
+        });
       }
 
-      targetChatId = foundChatId;
-
-      // Mettre à jour le chat ID valide en BDD
-      await prisma.conversation.update({
-        where: { id: conversation.id },
-        data: { unipileChatId: targetChatId },
-      });
-
-      // Envoyer le message sur le nouveau chat ID
-      sendRes = await UnipileService.sendChatMessage({
-        chatId: targetChatId,
-        text: text.trim(),
-        attachments,
-      });
+      // Mettre à jour le chat ID valide en base locale
+      if (foundChatId && foundChatId !== conversation.unipileChatId) {
+        await prisma.conversation.update({
+          where: { id: conversation.id },
+          data: { unipileChatId: foundChatId },
+        });
+      }
     }
 
     if (!sendRes || !sendRes.success) {
+      const failedMsg = await prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          unipileMessageId: `failed_${Date.now()}`,
+          senderType: "USER",
+          text: text.trim(),
+          sentAt: new Date(),
+        },
+      });
+
+      await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: {
+          lastMessageText: text.trim(),
+          lastMessageAt: new Date(),
+        },
+      });
+
       res.status(500).json({
         success: false,
         error: sendRes?.error || "Erreur lors de l'envoi du message sur LinkedIn.",
+        message: {
+          id: failedMsg.id,
+          conversationId: conversation.id,
+          senderType: "USER",
+          text: failedMsg.text,
+          sentAt: failedMsg.sentAt.toISOString(),
+          status: "error",
+        },
       });
       return;
     }

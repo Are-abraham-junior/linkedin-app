@@ -28,6 +28,7 @@ import {
   Layers,
   PieChart as PieIcon,
   SlidersHorizontal,
+  RotateCw,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -120,29 +121,70 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({ onStartCampaign })
     replies: true,
   });
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const loadStats = async (isBackground = false) => {
+    if (!isBackground) {
+      setLoading(true);
+    } else {
+      setIsRefreshing(true);
+    }
+    try {
+      const query = selectedMemberId && selectedMemberId !== "ALL" ? `?memberId=${selectedMemberId}` : "";
+      const [resPersonal, resTeam] = await Promise.all([
+        apiRequest<{ success: boolean; stats: DashboardStats }>(`/user/dashboard-stats${query}`),
+        apiRequest<{ success: boolean; metrics: TeamMetrics }>("/team/metrics").catch(() => null),
+      ]);
+
+      if (resPersonal.success && resPersonal.stats) {
+        setStats(resPersonal.stats);
+      }
+      if (resTeam && resTeam.success && resTeam.metrics) {
+        setTeamMetrics(resTeam.metrics);
+      }
+    } catch (e) {
+      console.error("Erreur chargement dashboard stats:", e);
+    } finally {
+      if (!isBackground) {
+        setLoading(false);
+      } else {
+        setIsRefreshing(false);
+      }
+    }
+  };
 
   useEffect(() => {
-    const loadStats = async () => {
-      setLoading(true);
-      try {
-        const [resPersonal, resTeam] = await Promise.all([
-          apiRequest<{ success: boolean; stats: DashboardStats }>("/user/dashboard-stats"),
-          apiRequest<{ success: boolean; metrics: TeamMetrics }>("/team/metrics").catch(() => null),
-        ]);
+    // Chargement initial
+    loadStats(false);
 
-        if (resPersonal.success && resPersonal.stats) {
-          setStats(resPersonal.stats);
-        }
-        if (resTeam && resTeam.success && resTeam.metrics) {
-          setTeamMetrics(resTeam.metrics);
-        }
-      } catch (e) {
-        console.error("Erreur chargement dashboard stats:", e);
-      } finally {
-        setLoading(false);
+    // Intervalle d'actualisation automatique toutes les 25 secondes (uniquement si l'onglet est visible)
+    const intervalId = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        loadStats(true);
+      }
+    }, 25000);
+
+    // Écoute de l'événement de reprise de focus et visibilité de l'onglet du navigateur
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === "visible") {
+        loadStats(true);
       }
     };
-    loadStats();
+    window.addEventListener("focus", handleVisibilityOrFocus);
+    document.addEventListener("visibilitychange", handleVisibilityOrFocus);
+
+    // Écoute des événements de mise à jour déclenchés par d'autres composants
+    const handleCustomRefresh = () => {
+      loadStats(true);
+    };
+    window.addEventListener("bime:refresh-dashboard", handleCustomRefresh);
+
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener("focus", handleVisibilityOrFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
+      window.removeEventListener("bime:refresh-dashboard", handleCustomRefresh);
+    };
   }, [selectedMemberId, impersonatedOrg?.id]);
 
   // Données pour le graphique Recharts
@@ -236,6 +278,16 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({ onStartCampaign })
           )}
 
           <button
+            type="button"
+            onClick={() => loadStats(true)}
+            disabled={loading || isRefreshing}
+            className="p-2.5 rounded-xl bg-white hover:bg-[#f5f5f7] border border-[#e0e0db] text-[#5f5f69] hover:text-[#21164c] transition-all cursor-pointer shadow-xs disabled:opacity-50"
+            title="Actualiser les données"
+          >
+            <RotateCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin text-[#592eff]" : ""}`} />
+          </button>
+
+          <button
             onClick={onStartCampaign || (() => navigate("/campaigns"))}
             className="py-2.5 px-5 rounded-xl bg-[#592eff] hover:bg-[#4d25e0] text-white text-xs font-bold shadow-md shadow-[#592eff]/25 flex items-center gap-2 transition-all transform active:scale-95 cursor-pointer"
           >
@@ -270,7 +322,7 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({ onStartCampaign })
                 {teamMetrics.totalProspects}
               </div>
               <p className="text-[11px] text-[#5f5f69] mt-1">
-                Zéro doublon grâce à l'anti-collision
+                Prospects gérés par l'équipe
               </p>
             </div>
 
@@ -279,11 +331,20 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({ onStartCampaign })
                 <span className="text-xs font-bold text-[#5f5f69] uppercase">Campagnes Actives</span>
                 <Send className="w-4 h-4 text-[#a2ea13]" />
               </div>
-              <div className="text-2xl font-extrabold text-[#21164c]">
-                {teamMetrics.activeCampaigns} / {teamMetrics.totalCampaigns}
+              <div className="flex items-center gap-2">
+                <span className="text-2xl font-extrabold text-[#21164c]">
+                  {teamMetrics.activeCampaigns}
+                </span>
+                <span className="text-xs font-semibold text-[#5f5f69]">
+                  active{teamMetrics.activeCampaigns > 1 ? "s" : ""}
+                </span>
+                <span className="ml-1 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#592eff]/10 text-[#592eff] border border-[#592eff]/20">
+                  <Sparkles className="w-2.5 h-2.5" />
+                  Illimité
+                </span>
               </div>
               <p className="text-[11px] text-[#592eff] font-semibold mt-1">
-                Séquences en cours de diffusion
+                {teamMetrics.totalCampaigns} campagne{teamMetrics.totalCampaigns > 1 ? "s" : ""} créée{teamMetrics.totalCampaigns > 1 ? "s" : ""} au total
               </p>
             </div>
 
@@ -365,7 +426,7 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({ onStartCampaign })
                         {m.dailyMsgSent} / {m.maxDailyMsg}
                       </td>
                       <td className="py-3 text-[#353241]">
-                        <span className="font-bold text-[#592eff]">{m.activeCampaigns}</span> / {m.totalCampaigns}
+                        <span className="font-bold text-[#592eff]">{m.activeCampaigns}</span> active{m.activeCampaigns > 1 ? "s" : ""} <span className="text-[10px] text-[#7c7c88]">({m.totalCampaigns} tot.)</span>
                       </td>
                       <td className="py-3 font-semibold text-[#21164c]">
                         {m.totalProspects}
@@ -1001,11 +1062,20 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({ onStartCampaign })
             <div className="adora-card p-6 flex items-center justify-between">
               <div>
                 <span className="text-xs font-bold text-[#5f5f69] uppercase">Campagnes Actives</span>
-                <div className="text-2xl font-extrabold text-[#21164c] mt-1">
-                  {stats?.activeCampaignsCount || 0} / {stats?.totalCampaignsCount || 0}
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-2xl font-extrabold text-[#21164c]">
+                    {stats?.activeCampaignsCount || 0}
+                  </span>
+                  <span className="text-xs font-semibold text-[#5f5f69]">
+                    active{(stats?.activeCampaignsCount || 0) > 1 ? "s" : ""}
+                  </span>
+                  <span className="ml-1 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#592eff]/10 text-[#592eff] border border-[#592eff]/20">
+                    <Sparkles className="w-2.5 h-2.5" />
+                    Illimité
+                  </span>
                 </div>
                 <p className="text-[11px] text-[#592eff] font-semibold mt-2">
-                  {stats?.queuedActionsCount || 0} actions planifiées dans la file
+                  {stats?.queuedActionsCount || 0} action{(stats?.queuedActionsCount || 0) > 1 ? "s" : ""} planifiée{(stats?.queuedActionsCount || 0) > 1 ? "s" : ""} dans la file
                 </p>
               </div>
               <div className="w-12 h-12 rounded-2xl bg-[#592eff]/10 text-[#592eff] flex items-center justify-center">

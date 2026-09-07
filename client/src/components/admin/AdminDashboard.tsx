@@ -99,7 +99,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateToUser
               <ShieldCheck className="w-3.5 h-3.5" /> Centre de Contrôle SaaS
             </span>
             <span className="badge-tag bg-[#a2ea13]/20 text-[#3c6b00] border border-[#a2ea13]/30">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#528f03] animate-pulse"></span> Unipile API Active
+              <span className="w-1.5 h-1.5 rounded-full bg-[#528f03] animate-pulse"></span> Passerelle LinkedIn Active
             </span>
           </div>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-[#21164c] tracking-tight">
@@ -184,7 +184,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateToUser
         {/* LinkedIn Synchronized Accounts */}
         <div className="adora-card p-6 relative overflow-hidden">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-[#5f5f69]">Comptes Unipile</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-[#5f5f69]">Comptes LinkedIn</span>
             <div className="w-10 h-10 rounded-2xl bg-[#0a66c2]/10 text-[#0a66c2] flex items-center justify-center">
               <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
                 <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.2a1.64 1.64 0 1 0 0 3.28 1.64 1.64 0 0 0 0-3.28z" />
@@ -378,8 +378,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateToUser
 
               <div className="p-3 rounded-2xl bg-[#f8f9fc] border border-[#e0e0db] flex items-center justify-between">
                 <div>
-                  <p className="font-bold text-[#21164c]">Passerelle API Unipile</p>
-                  <p className="text-[11px] text-[#5f5f69]">Connecteurs LinkedIn & Webhooks</p>
+                  <p className="font-bold text-[#21164c]">Passerelle API LinkedIn</p>
+                  <p className="text-[11px] text-[#5f5f69]">Connecteurs LinkedIn & Synchronisation</p>
                 </div>
                 <span className="badge-tag bg-emerald-50 text-emerald-600 border border-emerald-200">
                   Opérationnel

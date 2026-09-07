@@ -268,7 +268,7 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
         setError(res.error || "Erreur lors de la recherche LinkedIn.");
       }
     } catch (err: any) {
-      setError(err.message || "Erreur réseau avec l'API Unipile.");
+      setError(err.message || "Erreur de connexion au service de recherche LinkedIn.");
     } finally {
       setSearching(false);
     }

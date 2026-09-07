@@ -325,9 +325,10 @@ export async function createCampaign(req, res) {
         if (body.listIds && body.listIds.length > 0) {
             const step1 = campaign.steps[0];
             const firstActionType = step1?.actionType || "INVITATION";
-            // Récupérer les IDs de prospects déjà engagés dans une campagne active ou en attente
+            // Récupérer les IDs de prospects déjà engagés dans une campagne active ou en attente POUR CET UTILISATEUR
             const activeStates = await prisma.prospectCampaignState.findMany({
                 where: {
+                    campaign: { userId },
                     status: { in: ["PENDING", "IN_PROGRESS", "WAITING_DELAY", "WAITING_CONDITION"] },
                 },
                 select: { prospectId: true },

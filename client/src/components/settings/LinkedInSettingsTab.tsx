@@ -70,6 +70,20 @@ export const LinkedInSettingsTab: React.FC = () => {
     fetchLinkedInStatus();
   }, []);
 
+function formatCleanError(err?: string): string {
+  if (!err) return "Identifiants LinkedIn incorrects ou session expirée.";
+  if (err.includes("502") || err.includes("Bad Gateway") || err.includes("Unexpected token '<'") || err.includes("<html")) {
+    return "Le serveur de synchronisation LinkedIn est temporairement en cours d'initialisation ou indisponible (Code 502). Veuillez patienter quelques instants puis réessayer.";
+  }
+  if (err.includes("503") || err.includes("Service Unavailable")) {
+    return "Le service LinkedIn est momentanément indisponible (503). Veuillez réessayer dans quelques instants.";
+  }
+  if (err.includes("504") || err.includes("Gateway Timeout")) {
+    return "Le délai d'attente de la passerelle LinkedIn a expiré (504). Veuillez réessayer.";
+  }
+  return err;
+}
+
   const handleReconnect = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage(null);
@@ -114,10 +128,10 @@ export const LinkedInSettingsTab: React.FC = () => {
         await fetchLinkedInStatus();
         await refreshUser();
       } else {
-        setMessage({ type: "error", text: res.error || "Identifiants LinkedIn incorrects." });
+        setMessage({ type: "error", text: formatCleanError(res.error) });
       }
     } catch (err: any) {
-      setMessage({ type: "error", text: err.message || "Erreur de connexion à LinkedIn." });
+      setMessage({ type: "error", text: formatCleanError(err.message) });
     } finally {
       setSubmitting(false);
     }
@@ -153,37 +167,41 @@ export const LinkedInSettingsTab: React.FC = () => {
         await fetchLinkedInStatus();
         await refreshUser();
       } else {
-        setMessage({ type: "error", text: res.error || "Code invalide. Vérifiez et réessayez." });
+        setMessage({ type: "error", text: formatCleanError(res.error) });
       }
     } catch (err: any) {
-      setMessage({ type: "error", text: err.message || "Erreur lors de la validation du code." });
+      setMessage({ type: "error", text: formatCleanError(err.message) });
     } finally {
       setVerifyingCode(false);
     }
   };
 
   const handleDisconnect = async () => {
-    if (!window.confirm("Êtes-vous sûr de vouloir déconnecter ce compte LinkedIn ? Vos campagnes actives seront mises en pause.")) {
+    if (!window.confirm("Êtes-vous sûr de vouloir déconnecter ce compte LinkedIn ? Vos campagnes seront mises en pause.")) {
       return;
     }
 
     try {
-      const res = await apiRequest<{ success: boolean; message?: string }>("/linkedin/disconnect", {
-        method: "POST",
-      });
+      const res = await apiRequest<{ success: boolean; message?: string; error?: string }>(
+        "/settings/linkedin/disconnect",
+        { method: "POST" }
+      );
 
       if (res.success) {
         setMessage({ type: "success", text: "Compte LinkedIn déconnecté." });
         await fetchLinkedInStatus();
         await refreshUser();
+      } else {
+        setMessage({ type: "error", text: formatCleanError(res.error) });
       }
     } catch (err: any) {
-      setMessage({ type: "error", text: err.message || "Échec de la déconnexion." });
+      setMessage({ type: "error", text: formatCleanError(err.message) });
     }
   };
 
   const isConnected = status === "CONNECTED";
   const isCheckpoint = status === "CHECKPOINT";
+  const isGatewayUnavailable = status === "GATEWAY_UNAVAILABLE";
 
   return (
     <div className="space-y-8 max-w-4xl">
@@ -237,6 +255,11 @@ export const LinkedInSettingsTab: React.FC = () => {
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold">
                 <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
                 Vérification 2FA Requise
+              </span>
+            ) : isGatewayUnavailable ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold">
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                Passerelle en synchronisation (502)
               </span>
             ) : (
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 border border-red-200 text-red-700 text-xs font-bold">

@@ -190,22 +190,34 @@ export async function getLinkedInSettings(req, res) {
         if (account.unipileAccountId) {
             try {
                 details = await UnipileService.getAccountStatus(account.unipileAccountId);
-                const sourceStatus = details?.sources?.[0]?.status;
-                if (sourceStatus === "OK" || details?.name) {
-                    liveStatus = "CONNECTED";
+                if (details?.errorStatus === 502 || details?.errorStatus === 503 || details?.errorStatus === 504) {
+                    liveStatus = "GATEWAY_UNAVAILABLE";
                 }
-                else if (sourceStatus === "CHECKPOINT" || details?.status === "CHECKPOINT") {
-                    liveStatus = "CHECKPOINT";
-                }
-                else if (sourceStatus === "CREDENTIALS" || sourceStatus === "DISCONNECTED") {
+                else if (details?.errorStatus === 401 || details?.errorStatus === 404) {
                     liveStatus = "DISCONNECTED";
+                }
+                else {
+                    const sourceStatus = details?.sources?.[0]?.status;
+                    if (sourceStatus === "OK" || details?.name) {
+                        liveStatus = "CONNECTED";
+                    }
+                    else if (sourceStatus === "CHECKPOINT" || details?.status === "CHECKPOINT") {
+                        liveStatus = "CHECKPOINT";
+                    }
+                    else if (sourceStatus === "CREDENTIALS" || sourceStatus === "DISCONNECTED") {
+                        liveStatus = "DISCONNECTED";
+                    }
                 }
             }
             catch (checkErr) {
-                const msg = String(checkErr?.message || "");
-                if (msg.includes("404") || msg.includes("401") || msg.includes("not found")) {
-                    liveStatus = "DISCONNECTED";
-                }
+                liveStatus = "DISCONNECTED";
+            }
+            // Synchroniser le statut en base si déconnecté ou checkpoint
+            if ((liveStatus === "DISCONNECTED" || liveStatus === "CHECKPOINT") && account.status !== liveStatus) {
+                await prisma.linkedInAccount.update({
+                    where: { id: account.id },
+                    data: { status: liveStatus },
+                }).catch(() => { });
             }
         }
         res.json({
@@ -238,7 +250,7 @@ export async function reconnectLinkedInDirect(req, res) {
         const userId = req.user.id;
         const body = ReconnectSchema.parse(req.body);
         console.log(`[reconnectLinkedInDirect] Tentative reconnexion directe pour l'utilisateur ${userId}...`);
-        // 1. Authentification Unipile directe
+        // 1. Authentification LinkedIn directe
         const connectResult = await UnipileService.connectLinkedInAccount(body.linkedinEmail.trim(), body.linkedinPassword);
         if (!connectResult.success) {
             if (connectResult.status === "CHECKPOINT") {
@@ -250,7 +262,8 @@ export async function reconnectLinkedInDirect(req, res) {
                 });
                 return;
             }
-            res.status(401).json({
+            const httpStatus = connectResult.statusCode === 502 || connectResult.statusCode === 503 ? 503 : 400;
+            res.status(httpStatus).json({
                 success: false,
                 error: connectResult.error || "Identifiants LinkedIn invalides. Veuillez vérifier votre mot de passe.",
             });
@@ -260,13 +273,13 @@ export async function reconnectLinkedInDirect(req, res) {
         // 2. Profil connecté
         const profileResult = await UnipileService.getConnectedAccountProfile(newAccountId);
         const profile = profileResult.profile;
-        // 3. Nettoyer les anciennes sessions Unipile de l'utilisateur
+        // 3. Nettoyer les anciennes sessions de l'utilisateur
         const existingAccounts = await prisma.linkedInAccount.findMany({
             where: { userId },
         });
         for (const oldAcc of existingAccounts) {
             if (oldAcc.unipileAccountId && oldAcc.unipileAccountId !== newAccountId) {
-                console.log(`[reconnectLinkedInDirect] Suppression ancien compte Unipile ${oldAcc.unipileAccountId}...`);
+                console.log(`[reconnectLinkedInDirect] Suppression ancien compte ${oldAcc.unipileAccountId}...`);
                 UnipileService.deleteAccount(oldAcc.unipileAccountId).catch(() => { });
             }
         }
@@ -303,9 +316,19 @@ export async function reconnectLinkedInDirect(req, res) {
                 avatarUrl: profile?.avatarUrl || undefined,
             },
         });
+        // 5. Reprendre automatiquement les campagnes actives qui étaient en pause
+        await prisma.campaign.updateMany({
+            where: {
+                userId,
+                status: "PAUSED",
+            },
+            data: {
+                status: "ACTIVE",
+            },
+        }).catch(() => { });
         res.json({
             success: true,
-            message: "Compte LinkedIn reconnecté avec succès !",
+            message: "Compte LinkedIn reconnecté avec succès ! Vos campagnes ont été réactivées.",
             account: updatedAccount,
         });
     }
@@ -324,13 +347,12 @@ export async function resolveLinkedInCheckpoint(req, res) {
             res.status(400).json({ success: false, error: "Identifiant de session et code de vérification requis." });
             return;
         }
-        const UNIPILE_DSN = process.env.UNIPILE_DSN || "https://api43.unipile.com:17317";
-        const UNIPILE_API_KEY = process.env.UNIPILE_API_KEY || "YSlLiQEj.nWSRIuxNb2mkDrVAzWcyNXP38jcr4+tFt9OpgGykHI8=";
-        const BASE_URL = UNIPILE_DSN.replace(/\/$/, "");
-        const response = await fetch(`${BASE_URL}/api/v1/accounts/checkpoint`, {
+        const baseUrl = UnipileService.getBaseUrl();
+        const apiKey = process.env.UNIPILE_API_KEY || "";
+        const response = await fetch(`${baseUrl}/api/v1/accounts/checkpoint`, {
             method: "POST",
             headers: {
-                "X-API-KEY": UNIPILE_API_KEY,
+                "X-API-KEY": apiKey,
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
@@ -338,11 +360,12 @@ export async function resolveLinkedInCheckpoint(req, res) {
                 code: code.trim(),
             }),
         });
-        const data = await response.json();
-        if (!response.ok) {
+        const { ok, status, data, rawText } = await UnipileService.safeJsonParse(response);
+        if (!ok) {
+            const errorMsg = UnipileService.parseErrorResponse(status, rawText);
             res.status(400).json({
                 success: false,
-                error: data?.message || "Code de vérification invalide ou expiré.",
+                error: data?.message || errorMsg || "Code de vérification invalide ou expiré.",
             });
             return;
         }
@@ -351,9 +374,19 @@ export async function resolveLinkedInCheckpoint(req, res) {
             where: { unipileAccountId: accountId },
             data: { status: "CONNECTED" },
         });
+        // Reprendre les campagnes en pause pour l'utilisateur concerné
+        const acc = await prisma.linkedInAccount.findFirst({
+            where: { unipileAccountId: accountId },
+        });
+        if (acc?.userId) {
+            await prisma.campaign.updateMany({
+                where: { userId: acc.userId, status: "PAUSED" },
+                data: { status: "ACTIVE" },
+            }).catch(() => { });
+        }
         res.json({
             success: true,
-            message: "Vérification validée ! Votre compte LinkedIn est maintenant actif.",
+            message: "Vérification validée ! Votre compte LinkedIn est maintenant actif et vos campagnes ont repris.",
         });
     }
     catch (err) {
@@ -772,7 +805,7 @@ export async function getBillingInfo(req, res) {
                 },
                 limits: {
                     maxProspects: plan === "ENTERPRISE" ? 50000 : plan === "PRO" ? 15000 : 3000,
-                    maxCampaigns: plan === "ENTERPRISE" ? 50 : plan === "PRO" ? 15 : 3,
+                    maxCampaigns: -1, // Campagnes illimitées
                     maxTeamSeats: plan === "ENTERPRISE" ? 20 : plan === "PRO" ? 5 : 1,
                 },
                 usage: {

@@ -39,7 +39,7 @@ interface BillingData {
   };
   limits: {
     maxProspects: number;
-    maxCampaigns: number;
+    maxCampaigns: number | string;
     maxTeamSeats: number;
   };
   usage: {
@@ -110,10 +110,16 @@ export const BillingSettingsTab: React.FC = () => {
     Math.round((billing.usage.prospectsCount / billing.limits.maxProspects) * 100),
     100
   );
-  const campaignsPercent = Math.min(
-    Math.round((billing.usage.campaignsCount / billing.limits.maxCampaigns) * 100),
-    100
-  );
+  const isCampaignsUnlimited =
+    billing.limits.maxCampaigns === -1 ||
+    billing.limits.maxCampaigns === "Illimité" ||
+    typeof billing.limits.maxCampaigns === "string";
+  const campaignsPercent = isCampaignsUnlimited
+    ? 100
+    : Math.min(
+        Math.round((billing.usage.campaignsCount / Number(billing.limits.maxCampaigns || 1)) * 100),
+        100
+      );
   const teamPercent = Math.min(
     Math.round((billing.usage.teamCount / billing.limits.maxTeamSeats) * 100),
     100
@@ -172,9 +178,14 @@ export const BillingSettingsTab: React.FC = () => {
           <div className="p-4 rounded-2xl bg-[#f8f9fc] border border-[#e0e0db]/60 space-y-2">
             <div className="flex justify-between text-xs">
               <span className="font-semibold text-[#5f5f69]">Campagnes actives</span>
-              <span className="font-bold text-[#21164c]">
-                {billing.usage.campaignsCount} / {billing.limits.maxCampaigns}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-[#21164c]">
+                  {billing.usage.campaignsCount} active{billing.usage.campaignsCount > 1 ? "s" : ""}
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#592eff]/10 text-[#592eff] border border-[#592eff]/20">
+                  Illimité
+                </span>
+              </div>
             </div>
             <div className="w-full h-2 rounded-full bg-[#e0e0db]/60 overflow-hidden">
               <div
@@ -182,7 +193,7 @@ export const BillingSettingsTab: React.FC = () => {
                 style={{ width: `${campaignsPercent}%` }}
               ></div>
             </div>
-            <p className="text-[10px] text-[#7c7c88] text-right font-medium">{campaignsPercent}% utilisé</p>
+            <p className="text-[10px] text-emerald-600 text-right font-semibold">Campagnes illimitées</p>
           </div>
 
           {/* Équipe */}
@@ -246,7 +257,7 @@ export const BillingSettingsTab: React.FC = () => {
             </div>
             <ul className="space-y-2 text-xs text-[#5f5f69]">
               <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600" /> Jusqu'à 3 000 leads</li>
-              <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600" /> 3 campagnes simultanées</li>
+              <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600" /> Campagnes illimitées</li>
               <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600" /> 1 compte LinkedIn</li>
             </ul>
             <button
@@ -270,7 +281,7 @@ export const BillingSettingsTab: React.FC = () => {
             </div>
             <ul className="space-y-2 text-xs text-[#5f5f69]">
               <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600" /> Jusqu'à 15 000 leads</li>
-              <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600" /> 15 campagnes séquentielles</li>
+              <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600" /> Campagnes illimitées</li>
               <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600" /> 5 sièges d'équipe</li>
             </ul>
             <button
@@ -297,8 +308,8 @@ export const BillingSettingsTab: React.FC = () => {
             </div>
             <ul className="space-y-2 text-xs text-[#5f5f69]">
               <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600" /> 50 000 prospects qualifiés</li>
-              <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600" /> 50 campagnes illimitées</li>
-              <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600" /> 20 collaborateurs & Anti-collision</li>
+              <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600" /> Campagnes illimitées</li>
+              <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600" /> 20 collaborateurs & Campagnes partagées</li>
             </ul>
             <button
               disabled={billing.plan === "ENTERPRISE"}

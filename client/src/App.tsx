@@ -24,6 +24,8 @@ import { InboxView } from "./components/inbox/InboxView";
 import { ProfileModal } from "./components/profile/ProfileModal";
 import { LinkedInOnboardingWall } from "./components/auth/LinkedInOnboardingWall";
 import { SettingsView } from "./components/settings/SettingsView";
+import { LinkedInSessionExpiredBanner } from "./components/common/LinkedInSessionExpiredBanner";
+import { LinkedInReconnectModal } from "./components/modals/LinkedInReconnectModal";
 import { Sparkles, ArrowRight } from "lucide-react";
 
 /**
@@ -50,6 +52,11 @@ const AppLayout: React.FC = () => {
     impersonatedOrg,
     showLinkedInModal,
     setShowLinkedInModal,
+    showReconnectModal,
+    setShowReconnectModal,
+    openReconnectModal,
+    isLinkedInDisconnected,
+    linkedInStatus,
   } = useAuth();
   const location = useLocation();
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -65,6 +72,15 @@ const AppLayout: React.FC = () => {
     location.pathname.startsWith("/prospects") ||
     location.pathname.startsWith("/campaigns") ||
     location.pathname.startsWith("/inbox");
+
+  // Déterminer si le compte a une session expirée ou checkpoint (y compris pour Super Admin)
+  const hasExpiredSession = Boolean(
+    user.linkedInAccount &&
+    (linkedInStatus === "DISCONNECTED" ||
+      linkedInStatus === "CREDENTIALS" ||
+      linkedInStatus === "CHECKPOINT" ||
+      linkedInStatus === "GATEWAY_UNAVAILABLE")
+  );
 
   return (
     <div className="text-[#353241] flex h-screen overflow-hidden bg-[#f8f9fc]">
@@ -85,30 +101,38 @@ const AppLayout: React.FC = () => {
           onOpenProfile={() => setIsProfileModalOpen(true)}
         />
 
-        {/* LinkedIn Connect Reminder Banner pour les membres non connectés */}
-        {!user.hasLinkedInAccount && !isSuperAdmin && (
-          <div className="bg-gradient-to-r from-[#592eff]/15 via-[#7c3aed]/10 to-[#0a66c2]/15 border-b border-[#592eff]/25 px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs z-20 shrink-0 shadow-xs">
-            <div className="flex items-center gap-2.5 text-[#21164c] flex-1 min-w-0">
-              <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#592eff] text-white font-extrabold text-[10px] uppercase tracking-wider shadow-xs shrink-0">
-                <Sparkles className="w-3 h-3 animate-pulse" />
-                Action Requise
-              </span>
-              <p className="text-xs text-[#21164c] truncate">
-                <strong className="font-extrabold">Activez votre prospection :</strong>{" "}
-                <span className="text-[#3b2b73] font-medium">
-                  Connectez votre compte LinkedIn pour lancer vos campagnes et générer des leads qualifiés en continu.
+        {/* 1. Alerte prioritaire : Session LinkedIn expirée ou requérant vérification */}
+        {hasExpiredSession ? (
+          <LinkedInSessionExpiredBanner
+            onReconnectClick={openReconnectModal}
+            status={linkedInStatus}
+          />
+        ) : (
+          /* 2. Invitation initiale pour les collaborateurs sans compte LinkedIn lié */
+          !user.hasLinkedInAccount && !isSuperAdmin && (
+            <div className="bg-gradient-to-r from-[#592eff]/15 via-[#7c3aed]/10 to-[#0a66c2]/15 border-b border-[#592eff]/25 px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs z-20 shrink-0 shadow-xs">
+              <div className="flex items-center gap-2.5 text-[#21164c] flex-1 min-w-0">
+                <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#592eff] text-white font-extrabold text-[10px] uppercase tracking-wider shadow-xs shrink-0">
+                  <Sparkles className="w-3 h-3 animate-pulse" />
+                  Action Requise
                 </span>
-              </p>
+                <p className="text-xs text-[#21164c] truncate">
+                  <strong className="font-extrabold">Activez votre prospection :</strong>{" "}
+                  <span className="text-[#3b2b73] font-medium">
+                    Connectez votre compte LinkedIn pour lancer vos campagnes et générer des leads qualifiés en continu.
+                  </span>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowLinkedInModal(true)}
+                className="px-3.5 py-1.5 bg-[#592eff] hover:bg-[#4a22e0] text-white font-bold text-xs rounded-xl shadow-md shadow-[#592eff]/25 hover:shadow-[#592eff]/40 active:scale-[0.98] transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+              >
+                <span>Connecter LinkedIn</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowLinkedInModal(true)}
-              className="px-3.5 py-1.5 bg-[#592eff] hover:bg-[#4a22e0] text-white font-bold text-xs rounded-xl shadow-md shadow-[#592eff]/25 hover:shadow-[#592eff]/40 active:scale-[0.98] transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
-            >
-              <span>Connecter LinkedIn</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
+          )
         )}
 
         {/* Zone de contenu principale */}
@@ -135,6 +159,14 @@ const AppLayout: React.FC = () => {
           <LinkedInOnboardingWall onDismiss={() => setShowLinkedInModal(false)} />
         </div>
       )}
+
+      {/* LinkedIn Direct Reconnect Modal */}
+      <LinkedInReconnectModal
+        isOpen={showReconnectModal}
+        onClose={() => setShowReconnectModal(false)}
+        initialCheckpoint={linkedInStatus === "CHECKPOINT"}
+        checkpointAccountId={(user as any)?.linkedInAccount?.unipileAccountId || ""}
+      />
     </div>
   );
 };
