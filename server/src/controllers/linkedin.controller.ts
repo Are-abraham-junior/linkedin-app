@@ -72,7 +72,7 @@ export async function searchProfiles(req: AuthenticatedRequest, res: Response) {
 
       res.status(400).json({
         success: false,
-        error: "Votre session LinkedIn a expiré ou n'est plus active sur Unipile. Veuillez reconnecter votre compte LinkedIn.",
+        error: "Votre session LinkedIn a expiré ou n'est plus active. Veuillez reconnecter votre compte LinkedIn.",
         needsReconnect: true,
       });
       return;

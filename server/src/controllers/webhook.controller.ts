@@ -16,6 +16,46 @@ export async function handleUnipileWebhook(req: Request, res: Response) {
     const eventType = event?.event || event?.type;
     const data = event?.data || event;
 
+    // Gestion des événements de déconnexion ou changement d'état du compte LinkedIn
+    if (
+      eventType === "account_disconnected" ||
+      eventType === "account.status.disconnected" ||
+      eventType === "account_status" ||
+      eventType === "account.status"
+    ) {
+      const accountId = data.account_id || data.accountId || data.id;
+      const rawStatus = String(data.status || data.source_status || "DISCONNECTED").toUpperCase();
+      console.warn(`[Webhook] Statut de compte modifié pour accountId=${accountId} -> ${rawStatus}`);
+
+      if (accountId) {
+        const isDisconnected = rawStatus.includes("DISCONNECT") || rawStatus.includes("CREDENTIAL") || rawStatus.includes("EXPIRE");
+        const isCheckpoint = rawStatus.includes("CHECKPOINT");
+        const updatedStatus = isCheckpoint ? "CHECKPOINT" : (isDisconnected ? "DISCONNECTED" : "CONNECTED");
+
+        const acc = await prisma.linkedInAccount.findUnique({
+          where: { unipileAccountId: accountId },
+        });
+
+        if (acc) {
+          await prisma.linkedInAccount.update({
+            where: { id: acc.id },
+            data: { status: updatedStatus },
+          });
+
+          if (isDisconnected || isCheckpoint) {
+            await prisma.campaign.updateMany({
+              where: { userId: acc.userId, status: "ACTIVE" },
+              data: { status: "PAUSED" },
+            });
+            console.warn(`[Webhook] Campagnes de l'utilisateur ${acc.userId} mises en pause suite à l'expiration/déconnexion de la session LinkedIn.`);
+          }
+        }
+      }
+
+      res.status(200).json({ success: true, handled: "account_status" });
+      return;
+    }
+
     if (
       eventType === "message_received" ||
       eventType === "chat_message_received" ||
@@ -114,7 +154,7 @@ export async function handleUnipileWebhook(req: Request, res: Response) {
 
           // Arrêter la séquence de campagne pour ce prospect si c'est un message reçu
           if (!data.is_sender) {
-            await handleProspectReply(conv.prospectId, text);
+            await handleProspectReply(conv.prospectId, text, conv.userId || undefined);
           }
         }
       }

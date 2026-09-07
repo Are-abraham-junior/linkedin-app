@@ -183,61 +183,18 @@ export async function bulkImportProspects(req, res) {
             select: { linkedinUrl: true },
         });
         const existingUrls = new Set(existingProspects.map((p) => p.linkedinUrl.toLowerCase().trim()));
-        // Moteur Anti-Collision d'Équipe : Récupérer les prospects de toute l'organisation
-        const teamCollisions = [];
-        const orgUrlsMap = new Map();
-        if (currentUser?.organizationId) {
-            const allOrgProspects = await prisma.prospect.findMany({
-                where: {
-                    list: {
-                        user: {
-                            organizationId: currentUser.organizationId,
-                        },
-                    },
-                },
-                select: {
-                    linkedinUrl: true,
-                    firstName: true,
-                    lastName: true,
-                    list: {
-                        select: {
-                            userId: true,
-                            user: { select: { name: true, email: true } },
-                        },
-                    },
-                },
-            });
-            for (const op of allOrgProspects) {
-                if (op.list) {
-                    orgUrlsMap.set(op.linkedinUrl.toLowerCase().trim(), {
-                        ownerId: op.list.userId,
-                        ownerName: op.list.user.name || op.list.user.email,
-                    });
-                }
-            }
-        }
         let createdCount = 0;
         let duplicateCount = 0;
         const toInsert = [];
+        const teamCollisions = [];
         for (const p of body.prospects) {
             const cleanUrl = p.linkedinUrl.toLowerCase().trim();
-            // Règle d'or : Ne contactez jamais la même personne qu'un autre membre de l'équipe
-            const teamOwner = orgUrlsMap.get(cleanUrl);
-            if (teamOwner && teamOwner.ownerId !== userId) {
-                teamCollisions.push({
-                    name: `${p.firstName} ${p.lastName}`.trim(),
-                    url: cleanUrl,
-                    ownerName: teamOwner.ownerName,
-                });
-                duplicateCount++;
-                continue;
-            }
+            // Seuls les doublons au sein de la même liste sont filtrés
             if (existingUrls.has(cleanUrl)) {
                 duplicateCount++;
                 continue;
             }
             existingUrls.add(cleanUrl);
-            orgUrlsMap.set(cleanUrl, { ownerId: userId, ownerName: "Moi" });
             toInsert.push({
                 listId: body.listId,
                 firstName: p.firstName.trim(),
@@ -493,69 +450,14 @@ const CollisionCheckSchema = z.object({
 });
 export async function checkProspectCollision(req, res) {
     try {
-        const userId = req.user.id;
-        const body = CollisionCheckSchema.parse(req.body);
-        const currentUser = await prisma.user.findUnique({
-            where: { id: userId },
-            select: { organizationId: true },
-        });
-        if (!currentUser?.organizationId) {
-            res.json({ success: true, collisionsCount: 0, collisions: [] });
-            return;
-        }
-        const cleanUrls = body.urls.map((u) => u.toLowerCase().trim());
-        // Chercher tous les prospects avec ces URLs dans la même organisation
-        const existing = await prisma.prospect.findMany({
-            where: {
-                list: {
-                    user: {
-                        organizationId: currentUser.organizationId,
-                    },
-                },
-                linkedinUrl: { in: cleanUrls },
-            },
-            include: {
-                list: {
-                    include: {
-                        user: {
-                            select: { id: true, name: true, email: true, avatarUrl: true },
-                        },
-                    },
-                },
-            },
-        });
-        const collisions = existing.map((p) => ({
-            prospectId: p.id,
-            linkedinUrl: p.linkedinUrl,
-            name: `${p.firstName} ${p.lastName}`.trim(),
-            company: p.company,
-            ownedByMe: p.list?.userId === userId || p.userId === userId,
-            owner: p.list
-                ? {
-                    id: p.list.user.id,
-                    name: p.list.user.name,
-                    email: p.list.user.email,
-                    avatarUrl: p.list.user.avatarUrl,
-                }
-                : {
-                    id: p.userId || "",
-                    name: "Messagerie",
-                    email: "",
-                    avatarUrl: null,
-                },
-            listName: p.list?.name || "Messagerie",
-        }));
+        // La restriction anti-collision d'équipe est levée : autoriser l'importation libre
         res.json({
             success: true,
-            collisionsCount: collisions.length,
-            collisions,
+            collisionsCount: 0,
+            collisions: [],
         });
     }
     catch (err) {
-        if (err instanceof z.ZodError) {
-            res.status(400).json({ success: false, error: err.issues?.[0]?.message || err.message });
-            return;
-        }
         res.status(500).json({ success: false, error: err.message });
     }
 }

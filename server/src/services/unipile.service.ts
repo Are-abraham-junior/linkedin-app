@@ -2,10 +2,10 @@ import "dotenv/config";
 
 import { extractCompanyFromHeadline } from "../utils/companyExtractor.js";
 
-const UNIPILE_DSN = process.env.UNIPILE_DSN || "https://api43.unipile.com:17317";
-const UNIPILE_API_KEY = process.env.UNIPILE_API_KEY || "YSlLiQEj.nWSRIuxNb2mkDrVAzWcyNXP38jcr4+tFt9OpgGykHI8=";
+const UNIPILE_DSN = process.env.UNIPILE_DSN || "https://api64.unipile.com:19478";
+const UNIPILE_API_KEY = process.env.UNIPILE_API_KEY || "Xn10pe1e.5rETphPfo4LGT/oDPPFuLFaN4OCrAdMvzDP4RbxF1yA=";
 
-const BASE_URL = UNIPILE_DSN.replace(/\/$/, "");
+const BASE_URL = (process.env.UNIPILE_DSN || UNIPILE_DSN).replace(/\/$/, "");
 
 export interface LinkedInProfileResult {
   providerProfileId: string;
@@ -23,9 +23,52 @@ export interface LinkedInProfileResult {
 }
 
 export class UnipileService {
+  public static getBaseUrl(): string {
+    return (process.env.UNIPILE_DSN || BASE_URL).replace(/\/$/, "");
+  }
+
+  public static parseErrorResponse(status: number, errText: string): string {
+    if (status === 502) {
+      return "Le service de messagerie LinkedIn est temporairement indisponible (502 Bad Gateway). Le serveur est en cours de synchronisation, veuillez réessayer dans un instant.";
+    }
+    if (status === 503) {
+      return "Le service de messagerie LinkedIn est temporairement indisponible (503 Service Unavailable). Veuillez réessayer dans quelques instants.";
+    }
+    if (status === 504) {
+      return "Délai d'attente dépassé avec le service LinkedIn (504 Gateway Timeout). Veuillez réessayer.";
+    }
+    if (errText.trim().startsWith("<") || errText.toLowerCase().includes("<html")) {
+      return `Le service de synchronisation LinkedIn rencontre une perturbation temporaire (HTTP ${status}).`;
+    }
+    try {
+      const parsed = JSON.parse(errText);
+      return parsed.message || parsed.error || parsed.detail || errText;
+    } catch {
+      return errText;
+    }
+  }
+
+  public static async safeJsonParse(res: Response): Promise<{ ok: boolean; status: number; data: any; rawText: string }> {
+    const rawText = await res.text();
+    let data: any = null;
+    const contentType = res.headers.get("content-type") || "";
+    if (
+      contentType.includes("application/json") ||
+      (rawText.trim().startsWith("{") && rawText.trim().endsWith("}")) ||
+      (rawText.trim().startsWith("[") && rawText.trim().endsWith("]"))
+    ) {
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        data = null;
+      }
+    }
+    return { ok: res.ok, status: res.status, data, rawText };
+  }
+
   private static getHeaders() {
     return {
-      "X-API-KEY": UNIPILE_API_KEY,
+      "X-API-KEY": process.env.UNIPILE_API_KEY || UNIPILE_API_KEY,
       "Content-Type": "application/json",
       "Accept": "application/json",
     };
@@ -46,16 +89,17 @@ export class UnipileService {
     error?: string;
   }> {
     try {
-      const res = await fetch(`${BASE_URL}/api/v1/accounts`, {
+      const baseUrl = this.getBaseUrl();
+      const res = await fetch(`${baseUrl}/api/v1/accounts`, {
         headers: this.getHeaders(),
       });
-      if (!res.ok) {
-        return { success: false, error: `Status ${res.status}` };
+      const { ok, status, data, rawText } = await this.safeJsonParse(res);
+      if (!ok) {
+        return { success: false, error: this.parseErrorResponse(status, rawText) };
       }
-      const data: any = await res.json();
-      return { success: true, items: data.items || [] };
+      return { success: true, items: data?.items || [] };
     } catch (err: any) {
-      return { success: false, error: err.message };
+      return { success: false, error: this.parseErrorResponse(500, err.message) };
     }
   }
 
@@ -68,26 +112,28 @@ export class UnipileService {
       return { success: false, error: "accountId manquant" };
     }
     try {
-      console.log(`[Unipile] Suppression/Déconnexion du compte ${accountId}...`);
-      const res = await fetch(`${BASE_URL}/api/v1/accounts/${accountId}`, {
+      console.log(`[LinkedIn Gateway] Suppression/Déconnexion du compte ${accountId}...`);
+      const baseUrl = this.getBaseUrl();
+      const res = await fetch(`${baseUrl}/api/v1/accounts/${accountId}`, {
         method: "DELETE",
         headers: this.getHeaders(),
       });
-      if (!res.ok) {
-        const errorText = await res.text();
-        console.warn(`[Unipile] Échec suppression compte ${accountId} (${res.status}):`, errorText);
+      const { ok, status, rawText } = await this.safeJsonParse(res);
+      if (!ok) {
+        const errorText = this.parseErrorResponse(status, rawText);
+        console.warn(`[LinkedIn Gateway] Échec suppression compte ${accountId} (${status}):`, errorText);
         return { success: false, error: errorText };
       }
-      console.log(`[Unipile] ✅ Compte ${accountId} supprimé avec succès.`);
+      console.log(`[LinkedIn Gateway] ✅ Compte ${accountId} supprimé avec succès.`);
       return { success: true };
     } catch (err: any) {
-      console.error(`[Unipile] Erreur suppression compte ${accountId}:`, err.message);
-      return { success: false, error: err.message };
+      console.error(`[LinkedIn Gateway] Erreur suppression compte ${accountId}:`, err.message);
+      return { success: false, error: this.parseErrorResponse(500, err.message) };
     }
   }
 
   /**
-   * Connecte un compte LinkedIn via Unipile Custom Auth.
+   * Connecte un compte LinkedIn via Custom Auth.
    * Retourne { account_id, status } ou { status: "CHECKPOINT", checkpoint: {...} }
    */
   static async connectLinkedInAccount(linkedinEmail: string, linkedinPassword: string): Promise<{
@@ -96,9 +142,11 @@ export class UnipileService {
     status?: string;
     checkpoint?: any;
     error?: string;
+    statusCode?: number;
   }> {
     try {
-      const res = await fetch(`${BASE_URL}/api/v1/accounts`, {
+      const baseUrl = this.getBaseUrl();
+      const res = await fetch(`${baseUrl}/api/v1/accounts`, {
         method: "POST",
         headers: this.getHeaders(),
         body: JSON.stringify({
@@ -108,11 +156,16 @@ export class UnipileService {
         }),
       });
 
-      const data: any = await res.json();
+      const { ok, status, data, rawText } = await this.safeJsonParse(res);
 
-      if (!res.ok) {
-        console.error("[Unipile] connectLinkedInAccount error:", res.status, data);
-        return { success: false, error: data?.message || "Identifiants LinkedIn incorrects." };
+      if (!ok) {
+        const parsedMsg = this.parseErrorResponse(status, rawText);
+        console.error("[LinkedIn Gateway] connectLinkedInAccount error:", status, parsedMsg);
+        return {
+          success: false,
+          statusCode: status,
+          error: data?.message || data?.error || parsedMsg,
+        };
       }
 
       // Checkpoint = LinkedIn demande une vérification supplémentaire (2FA, etc.)
@@ -122,13 +175,56 @@ export class UnipileService {
 
       const accountId = data?.account_id || data?.id;
       if (!accountId) {
-        return { success: false, error: "Impossible de récupérer l'identifiant du compte." };
+        return { success: false, error: "Impossible de récupérer l'identifiant du compte LinkedIn." };
       }
 
       return { success: true, accountId, status: data?.status || "CONNECTED" };
     } catch (err: any) {
-      console.error("[Unipile] connectLinkedInAccount exception:", err.message);
-      return { success: false, error: err.message };
+      console.error("[LinkedIn Gateway] connectLinkedInAccount exception:", err.message);
+      return { success: false, statusCode: 500, error: this.parseErrorResponse(500, err.message) };
+    }
+  }
+
+  /**
+   * Génère un lien de reconnexion sécurisé (Hosted Auth) en cas de besoin de reconnexion guidée
+   */
+  static async createHostedReconnectLink(params: {
+    accountId?: string;
+    redirectUrl?: string;
+    userId?: string;
+  }): Promise<{ success: boolean; url?: string; error?: string }> {
+    try {
+      const baseUrl = this.getBaseUrl();
+      const expiresOn = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+      const body: any = {
+        type: params.accountId ? "reconnect" : "create",
+        providers: ["LINKEDIN"],
+        api_url: baseUrl,
+        expiresOn,
+      };
+      if (params.accountId) {
+        body.reconnect_account = params.accountId;
+      }
+      if (params.redirectUrl) {
+        body.success_redirect_url = params.redirectUrl;
+      }
+      if (params.userId) {
+        body.name = params.userId;
+      }
+
+      const res = await fetch(`${baseUrl}/api/v1/hosted/accounts/link`, {
+        method: "POST",
+        headers: this.getHeaders(),
+        body: JSON.stringify(body),
+      });
+
+      const { ok, status, data, rawText } = await this.safeJsonParse(res);
+      if (!ok) {
+        return { success: false, error: this.parseErrorResponse(status, rawText) };
+      }
+      return { success: true, url: data?.url };
+    } catch (err: any) {
+      return { success: false, error: this.parseErrorResponse(500, err.message) };
     }
   }
 
@@ -149,41 +245,44 @@ export class UnipileService {
     error?: string;
   }> {
     try {
+      const baseUrl = this.getBaseUrl();
       // 1. Tenter l'endpoint /api/v1/users/me pour obtenir la photo haute résolution et l'occupation
-      const meRes = await fetch(`${BASE_URL}/api/v1/users/me?account_id=${accountId}`, {
+      const meRes = await fetch(`${baseUrl}/api/v1/users/me?account_id=${accountId}`, {
         headers: this.getHeaders(),
       });
 
       if (meRes.ok) {
-        const meData: any = await meRes.json();
-        const firstName = meData?.first_name || "";
-        const lastName = meData?.last_name || "";
-        const name = `${firstName} ${lastName}`.trim() || meData?.public_identifier || meData?.email || "";
+        const { data: meData } = await this.safeJsonParse(meRes);
+        if (meData) {
+          const firstName = meData?.first_name || "";
+          const lastName = meData?.last_name || "";
+          const name = `${firstName} ${lastName}`.trim() || meData?.public_identifier || meData?.email || "";
 
-        return {
-          success: true,
-          profile: {
-            accountId,
-            name,
-            firstName,
-            lastName,
-            avatarUrl: meData?.profile_picture_url || meData?.profile_picture || undefined,
-            headline: meData?.occupation || meData?.headline || undefined,
-            linkedinProfileId: meData?.provider_id || meData?.entity_urn || undefined,
-          },
-        };
+          return {
+            success: true,
+            profile: {
+              accountId,
+              name,
+              firstName,
+              lastName,
+              avatarUrl: meData?.profile_picture_url || meData?.profile_picture || undefined,
+              headline: meData?.occupation || meData?.headline || undefined,
+              linkedinProfileId: meData?.provider_id || meData?.entity_urn || undefined,
+            },
+          };
+        }
       }
 
       // 2. Fallback sur /api/v1/accounts/:id si /users/me échoue
-      const res = await fetch(`${BASE_URL}/api/v1/accounts/${accountId}`, {
+      const res = await fetch(`${baseUrl}/api/v1/accounts/${accountId}`, {
         headers: this.getHeaders(),
       });
 
-      if (!res.ok) {
-        return { success: false, error: `Impossible de récupérer le profil (${res.status})` };
+      const { ok, status, data, rawText } = await this.safeJsonParse(res);
+      if (!ok || !data) {
+        return { success: false, error: this.parseErrorResponse(status, rawText) };
       }
 
-      const data: any = await res.json();
       const name = data?.name || data?.username || "";
       const parts = name.split(" ");
       const firstName = parts[0] || "";
@@ -202,26 +301,30 @@ export class UnipileService {
         },
       };
     } catch (err: any) {
-      console.error("[Unipile] getConnectedAccountProfile exception:", err.message);
-      return { success: false, error: err.message };
+      console.error("[LinkedIn Gateway] getConnectedAccountProfile exception:", err.message);
+      return { success: false, error: this.parseErrorResponse(500, err.message) };
     }
   }
 
   /**
-   * Vérifie le statut du compte LinkedIn Unipile
+   * Vérifie le statut du compte LinkedIn
    */
-  static async getAccountStatus(accountId: string) {
+  static async getAccountStatus(accountId: string): Promise<any> {
     if (!accountId) return null;
     try {
-      const res = await fetch(`${BASE_URL}/api/v1/accounts/${accountId}`, {
+      const baseUrl = this.getBaseUrl();
+      const res = await fetch(`${baseUrl}/api/v1/accounts/${accountId}`, {
         headers: this.getHeaders(),
       });
-      if (!res.ok) {
-        throw new Error(`Unipile account error: ${res.statusText}`);
+      const { ok, status, data, rawText } = await this.safeJsonParse(res);
+      if (!ok) {
+        const errorMsg = this.parseErrorResponse(status, rawText);
+        console.warn(`[LinkedIn Gateway] getAccountStatus non-ok (${status}):`, errorMsg);
+        return { errorStatus: status, error: errorMsg };
       }
-      return await res.json();
+      return data;
     } catch (err: any) {
-      console.error("Unipile getAccountStatus error:", err.message);
+      console.error("[LinkedIn Gateway] getAccountStatus error:", err.message);
       return null;
     }
   }
@@ -559,7 +662,7 @@ export class UnipileService {
         identifier = identifier.split("linkedin.com/in/")[1].split("/")[0].split("?")[0];
       }
 
-      const url = `${BASE_URL}/api/v1/users/${encodeURIComponent(identifier)}?account_id=${accountId}&linkedin_sections=contact_info`;
+      const url = `${this.getBaseUrl()}/api/v1/users/${encodeURIComponent(identifier)}?account_id=${accountId}&linkedin_sections=*`;
       const res = await fetch(url, {
         method: "GET",
         headers: this.getHeaders(),
@@ -690,7 +793,7 @@ export class UnipileService {
 
       if (!res.ok) {
         const errText = await res.text();
-        return { success: false, items: [], error: errText || res.statusText };
+        return { success: false, items: [], error: this.parseErrorResponse(res.status, errText) };
       }
 
       const data: any = await res.json();
@@ -791,7 +894,7 @@ export class UnipileService {
 
       if (!res.ok) {
         const errText = await res.text();
-        return { success: false, error: errText || res.statusText };
+        return { success: false, error: this.parseErrorResponse(res.status, errText) };
       }
 
       const data: any = await res.json();
@@ -857,7 +960,7 @@ export class UnipileService {
 
       if (!res.ok) {
         const errText = await res.text();
-        return { success: false, error: errText || res.statusText };
+        return { success: false, error: this.parseErrorResponse(res.status, errText) };
       }
 
       const data: any = await res.json();
@@ -934,7 +1037,7 @@ export class UnipileService {
         identifier = identifier.split("linkedin.com/in/")[1].split("/")[0].split("?")[0];
       }
 
-      const res = await fetch(`${BASE_URL}/api/v1/users/${encodeURIComponent(identifier)}?account_id=${accountId}&linkedin_sections=contact_info`, {
+      const res = await fetch(`${BASE_URL}/api/v1/users/${encodeURIComponent(identifier)}?account_id=${accountId}&linkedin_sections=*`, {
         headers: this.getHeaders(),
       });
 

@@ -767,7 +767,7 @@ export const UserManagement: React.FC = () => {
               </div>
 
               <div className="p-3.5 rounded-2xl bg-[#f8f9fc] border border-[#e0e0db] flex justify-between">
-                <span className="text-[#5f5f69]">Compte LinkedIn Unipile :</span>
+                <span className="text-[#5f5f69]">Compte LinkedIn Associé :</span>
                 <span className="font-bold text-[#21164c]">
                   {selectedUser.linkedInAccount ? (
                     <span className="text-emerald-600 font-bold">

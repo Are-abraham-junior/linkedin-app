@@ -132,7 +132,7 @@ export interface ChatMessage {
   senderType: "USER" | "PROSPECT";
   text: string;
   sentAt: string;
-  status?: "sending" | "sent" | "delivered" | "read";
+  status?: "sending" | "sent" | "delivered" | "read" | "error";
   attachments?: Array<{
     id?: string;
     file_name?: string;

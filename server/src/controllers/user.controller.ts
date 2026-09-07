@@ -119,7 +119,26 @@ export async function getUserDashboardStats(req: AuthenticatedRequest, res: Resp
       return;
     }
 
-    const userId = req.user.id;
+    let userId = req.user.id;
+    const requestedMemberId = (req.query.memberId || req.query.userId) as string;
+    if (requestedMemberId && requestedMemberId !== userId && requestedMemberId !== "ALL") {
+      if (req.user.role === "SUPER_ADMIN") {
+        userId = requestedMemberId;
+      } else if (req.user.organizationId) {
+        const caller = await prisma.user.findUnique({
+          where: { id: req.user.id },
+          select: { orgRole: true, organizationId: true },
+        });
+        if (caller?.orgRole === "OWNER") {
+          const member = await prisma.user.findFirst({
+            where: { id: requestedMemberId, organizationId: caller.organizationId },
+          });
+          if (member) {
+            userId = requestedMemberId;
+          }
+        }
+      }
+    }
 
     // 1. Métriques globales réelles
     const [
@@ -151,7 +170,7 @@ export async function getUserDashboardStats(req: AuthenticatedRequest, res: Resp
       prisma.prospect.count({ where: { list: { userId }, doNotContact: true } }),
       prisma.prospectCampaignState.count({ where: { campaign: { userId }, status: "REPLIED" } }),
       prisma.campaign.count({ where: { userId, status: "ACTIVE" } }),
-      prisma.campaign.count({ where: { userId } }),
+      prisma.campaign.count({ where: { userId, status: { not: "ARCHIVED" } } }),
       prisma.actionQueue.count({ where: { campaign: { userId }, status: "QUEUED" } }),
       prisma.actionQueue.count({ where: { campaign: { userId }, status: { in: ["EXECUTED", "SUCCESS"] } } }),
       prisma.prospect.count({ where: { list: { userId }, email: { not: null } } }),

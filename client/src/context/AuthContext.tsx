@@ -14,6 +14,11 @@ interface AuthContextType {
   showLinkedInModal: boolean;
   setShowLinkedInModal: (show: boolean) => void;
   openLinkedInModal: () => void;
+  showReconnectModal: boolean;
+  setShowReconnectModal: (show: boolean) => void;
+  openReconnectModal: () => void;
+  isLinkedInDisconnected: boolean;
+  linkedInStatus: string;
   login: (token: string, user: User) => void;
   logout: () => void;
   updateUser: (updatedUser: Partial<User>) => void;
@@ -48,8 +53,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     refreshUser();
   };
   const [showLinkedInModal, setShowLinkedInModal] = useState<boolean>(false);
+  const [showReconnectModal, setShowReconnectModal] = useState<boolean>(false);
 
   const openLinkedInModal = () => setShowLinkedInModal(true);
+  const openReconnectModal = () => setShowReconnectModal(true);
+
+  // Calcul réactif de l'état de la session LinkedIn
+  const linkedInStatus = user?.linkedInAccount?.status || (user?.hasLinkedInAccount ? "CONNECTED" : "DISCONNECTED");
+  const isLinkedInDisconnected = Boolean(
+    user && (
+      user.linkedInAccount?.status === "DISCONNECTED" ||
+      user.linkedInAccount?.status === "CREDENTIALS" ||
+      user.linkedInAccount?.status === "CHECKPOINT" ||
+      user.linkedInAccount?.status === "GATEWAY_UNAVAILABLE" ||
+      (!user.hasLinkedInAccount && user.role !== "SUPER_ADMIN")
+    )
+  );
 
   const checkSetupStatus = async (): Promise<boolean> => {
     try {
@@ -94,6 +113,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     };
     initAuth();
+
+    // Surveillance périodique discrète (toutes les 2.5 minutes) pour vérifier la validité de la session
+    const interval = setInterval(() => {
+      const savedToken = localStorage.getItem("bime_token");
+      if (savedToken) {
+        refreshUser();
+      }
+    }, 150000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const login = (newToken: string, newUser: User) => {
@@ -133,6 +162,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         showLinkedInModal,
         setShowLinkedInModal,
         openLinkedInModal,
+        showReconnectModal,
+        setShowReconnectModal,
+        openReconnectModal,
+        isLinkedInDisconnected,
+        linkedInStatus,
         login,
         logout,
         updateUser,

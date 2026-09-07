@@ -112,6 +112,7 @@ export const CampaignsView: React.FC = () => {
         setCampaigns((prev) =>
           prev.map((c) => (c.id === campaign.id ? { ...c, status: newStatus } : c))
         );
+        window.dispatchEvent(new CustomEvent("bime:refresh-dashboard"));
       }
     } catch (err) {
       console.error("Erreur toggle status:", err);
@@ -147,6 +148,7 @@ export const CampaignsView: React.FC = () => {
           setCampaigns((prev) => prev.filter((c) => c.id !== campaignToDelete.id));
         }
         setCampaignToDelete(null);
+        window.dispatchEvent(new CustomEvent("bime:refresh-dashboard"));
       } else {
         setDeleteCampaignError(res.error || "Impossible d'archiver ou supprimer cette campagne.");
       }
@@ -169,6 +171,7 @@ export const CampaignsView: React.FC = () => {
         setCampaigns((prev) =>
           prev.map((c) => (c.id === campaign.id ? { ...c, status: "PAUSED" } : c))
         );
+        window.dispatchEvent(new CustomEvent("bime:refresh-dashboard"));
       }
     } catch (err) {
       console.error("Erreur restauration campagne:", err);
@@ -577,7 +580,10 @@ export const CampaignsView: React.FC = () => {
       <CampaignWizardModal
         isOpen={isWizardOpen}
         onClose={() => setIsWizardOpen(false)}
-        onCampaignCreated={fetchCampaigns}
+        onCampaignCreated={() => {
+          fetchCampaigns();
+          window.dispatchEvent(new CustomEvent("bime:refresh-dashboard"));
+        }}
       />
 
       {/* Modale de Détail (Funnel & Prospects) */}
@@ -588,7 +594,10 @@ export const CampaignsView: React.FC = () => {
           setIsDetailOpen(false);
           setSelectedCampaignId(null);
         }}
-        onStatusToggled={fetchCampaigns}
+        onStatusToggled={() => {
+          fetchCampaigns();
+          window.dispatchEvent(new CustomEvent("bime:refresh-dashboard"));
+        }}
       />
 
       {/* Modale d'avertissement LinkedIn requis */}

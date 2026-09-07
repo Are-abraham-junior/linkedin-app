@@ -50,6 +50,7 @@ export const InboxView: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [inputMessage, setInputMessage] = useState<string>("");
   const [sending, setSending] = useState<boolean>(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [totalUnread, setTotalUnread] = useState<number>(0);
   const [showRightDrawer, setShowRightDrawer] = useState<boolean>(true);
   const [crmTab, setCrmTab] = useState<"INFOS" | "NOTES">("INFOS");
@@ -252,27 +253,36 @@ export const InboxView: React.FC = () => {
     return () => clearInterval(interval);
   }, [selectedConvId]);
 
-  // Envoi d'un message avec mise à jour optimiste
-  const handleSendMessage = async (e?: React.FormEvent) => {
+  // Envoi d'un message avec mise à jour optimiste et tolérance aux pannes
+  const handleSendMessage = async (e?: React.FormEvent, overrideText?: string, failedTempId?: string) => {
     if (e) e.preventDefault();
-    if (!inputMessage.trim() || !selectedConvId || sending) return;
+    const textToSend = (overrideText || inputMessage).trim();
+    if (!textToSend || !selectedConvId || sending) return;
 
-    const textToSend = inputMessage.trim();
-    setInputMessage("");
+    if (!overrideText) {
+      setInputMessage("");
+    }
     setSending(true);
+    setSendError(null);
 
-    // Message optimiste dans l'UI
-    const tempMessage: ChatMessage = {
-      id: `temp_${Date.now()}`,
-      senderType: "USER",
-      text: textToSend,
-      sentAt: new Date().toISOString(),
-      status: "sending",
-    };
-    setMessages((prev) => [...prev, tempMessage]);
+    const tempId = failedTempId || `temp_${Date.now()}`;
+    if (!failedTempId) {
+      const tempMessage: ChatMessage = {
+        id: tempId,
+        senderType: "USER",
+        text: textToSend,
+        sentAt: new Date().toISOString(),
+        status: "sending",
+      };
+      setMessages((prev) => [...prev, tempMessage]);
+    } else {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === tempId ? { ...m, status: "sending" } : m))
+      );
+    }
 
     try {
-      const res = await apiRequest<{ success: boolean; message: ChatMessage }>(
+      const res = await apiRequest<{ success: boolean; message?: ChatMessage; error?: string }>(
         "/inbox/messages/send",
         {
           method: "POST",
@@ -285,7 +295,7 @@ export const InboxView: React.FC = () => {
 
       if (res.success && res.message) {
         setMessages((prev) =>
-          prev.map((m) => (m.id === tempMessage.id ? { ...res.message, status: "sent" } : m))
+          prev.map((m) => (m.id === tempId ? { ...res.message!, status: "sent" } : m))
         );
         // Mettre à jour le dernier message dans la liste de gauche
         setConversations((prev) =>
@@ -299,13 +309,31 @@ export const InboxView: React.FC = () => {
               : c
           )
         );
+      } else {
+        const errMsg = res.error || "Le service de messagerie LinkedIn est momentanément indisponible.";
+        setSendError(errMsg);
+        setMessages((prev) =>
+          prev.map((m) => (m.id === tempId ? { ...m, status: "error" } : m))
+        );
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("[InboxView] Erreur envoi message:", err);
+      const errMsg =
+        err?.message ||
+        "Échec d'envoi : la passerelle LinkedIn est temporairement inaccessible. Votre message a été conservé.";
+      setSendError(errMsg);
+      setMessages((prev) =>
+        prev.map((m) => (m.id === tempId ? { ...m, status: "error" } : m))
+      );
     } finally {
       setSending(false);
       setTimeout(() => messageInputRef.current?.focus(), 50);
     }
+  };
+
+  // Réessayer un message en échec
+  const handleRetryMessage = (msg: ChatMessage) => {
+    handleSendMessage(undefined, msg.text, msg.id);
   };
 
   // Gestion des Tags CRM
@@ -736,6 +764,16 @@ export const InboxView: React.FC = () => {
                           <span>
                             {m.status === "sending" ? (
                               <Clock className="w-3 h-3 text-slate-400 animate-pulse" />
+                            ) : m.status === "error" ? (
+                              <button
+                                type="button"
+                                onClick={() => handleRetryMessage(m)}
+                                className="inline-flex items-center gap-1 text-[10px] text-rose-500 hover:text-rose-600 dark:text-rose-400 font-semibold cursor-pointer transition-colors"
+                                title="Échec de transmission LinkedIn — Cliquer pour réessayer"
+                              >
+                                <AlertCircle className="w-3 h-3 text-rose-500" />
+                                <span>Échec • Réessayer</span>
+                              </button>
                             ) : (
                               <CheckCheck className="w-3.5 h-3.5 text-[#592eff]" />
                             )}
@@ -751,7 +789,23 @@ export const InboxView: React.FC = () => {
           </div>
 
           {/* Chat Input Footer */}
-          <div className="p-3 bg-white dark:bg-slate-900 border-t border-slate-200/80 dark:border-slate-800/80">
+          <div className="p-3 bg-white dark:bg-slate-900 border-t border-slate-200/80 dark:border-slate-800/80 space-y-2">
+            {sendError && (
+              <div className="p-2.5 px-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 flex items-center justify-between text-xs text-rose-700 dark:text-rose-300 animate-in fade-in">
+                <div className="flex items-center gap-2 min-w-0">
+                  <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                  <span className="truncate">{sendError}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSendError(null)}
+                  className="text-rose-400 hover:text-rose-600 dark:hover:text-rose-200 font-bold ml-2 text-xs shrink-0 cursor-pointer"
+                  title="Fermer"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
             <form onSubmit={handleSendMessage} className="space-y-2">
               <div className="relative border border-slate-200 dark:border-slate-700/80 rounded-2xl bg-slate-50/70 dark:bg-slate-800/60 focus-within:ring-2 focus-within:ring-[#592eff] focus-within:border-transparent transition-all overflow-hidden">
                 <textarea

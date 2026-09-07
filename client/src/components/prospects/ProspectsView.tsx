@@ -1009,7 +1009,7 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                           Recherche LinkedIn
                         </p>
                         <p className="text-[10px] text-[#5f5f69]">
-                          Extraction via Unipile par poste, ville ou entreprise
+                          Extraction directe par poste, ville ou entreprise
                         </p>
                       </div>
                     </button>
@@ -1155,7 +1155,7 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                 onClick={handleSyncStatus}
                 disabled={isSyncingStatus || loading}
                 className="p-1.5 rounded-xl border border-[#e0e0db] bg-white hover:bg-[#f5f5f7] text-[#5f5f69] shrink-0 transition-colors disabled:opacity-50"
-                title="Synchroniser le statut de connexion LinkedIn réel depuis Unipile"
+                title="Synchroniser le statut de connexion LinkedIn réel"
               >
                 <RefreshCw className={`w-3 h-3 ${isSyncingStatus || loading ? "animate-spin text-[#592eff]" : ""}`} />
               </button>
@@ -1753,10 +1753,10 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
               <div className="p-3 rounded-xl bg-[#f8f9fc] border border-[#e0e0db] text-xs text-[#5f5f69] space-y-1">
                 <p className="font-semibold text-[#21164c] flex items-center gap-1">
                   <ShieldCheck className="w-3.5 h-3.5 text-[#592eff]" />
-                  Anti-collision conservé
+                  Transfert sécurisé
                 </p>
                 <p className="text-[11px]">
-                  Les prospects seront transférés dans une liste du collaborateur sans rupture d'historique ni risque de doublon.
+                  Les prospects seront transférés dans une liste du collaborateur avec conservation de l'historique.
                 </p>
               </div>
 

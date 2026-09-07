@@ -102,12 +102,12 @@ export const ImportsHistoryTab: React.FC = () => {
 
   return (
     <div className="space-y-8 max-w-5xl">
-      {/* KPIs en en-tête */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      {/* Cartes Métriques Globales */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
         <div className="p-4 bg-white rounded-2xl border border-[#e0e0db]/80 shadow-xs">
           <div className="flex items-center justify-between text-[#5f5f69] text-xs font-semibold mb-1">
-            <span>Lots importés</span>
-            <History className="w-4 h-4 text-[#592eff]" />
+            <span>Lots traités</span>
+            <FileSpreadsheet className="w-4 h-4 text-[#592eff]" />
           </div>
           <p className="text-xl font-extrabold text-[#21164c]">{stats.totalImports}</p>
         </div>
@@ -126,14 +126,6 @@ export const ImportsHistoryTab: React.FC = () => {
             <ShieldCheck className="w-4 h-4 text-[#592eff]" />
           </div>
           <p className="text-xl font-extrabold text-[#21164c]">{stats.totalDuplicatesFiltered}</p>
-        </div>
-
-        <div className="p-4 bg-white rounded-2xl border border-[#e0e0db]/80 shadow-xs">
-          <div className="flex items-center justify-between text-[#5f5f69] text-xs font-semibold mb-1">
-            <span>Collisions évitées</span>
-            <AlertTriangle className="w-4 h-4 text-amber-500" />
-          </div>
-          <p className="text-xl font-extrabold text-amber-600">{stats.totalCollisionsBlocked}</p>
         </div>
       </div>
 
@@ -225,9 +217,9 @@ export const ImportsHistoryTab: React.FC = () => {
                       +{item.importedCount}
                     </td>
                     <td className="py-3.5 px-4 text-center text-[#7c7c88]">
-                      {item.duplicateCount + item.collisionCount > 0 ? (
+                      {item.duplicateCount > 0 ? (
                         <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 font-semibold text-[11px]">
-                          {item.duplicateCount + item.collisionCount} ignoré(s)
+                          {item.duplicateCount} doublon(s)
                         </span>
                       ) : (
                         "—"
@@ -302,13 +294,9 @@ export const ImportsHistoryTab: React.FC = () => {
                 <span className="text-[#7c7c88]">Prospects ajoutés avec succès :</span>
                 <span className="font-bold text-emerald-600">+{selectedImport.importedCount}</span>
               </div>
-              <div className="flex justify-between py-1 border-b border-[#e0e0db]/40">
+              <div className="flex justify-between py-1">
                 <span className="text-[#7c7c88]">Doublons filtrés :</span>
                 <span className="font-bold text-[#21164c]">{selectedImport.duplicateCount}</span>
-              </div>
-              <div className="flex justify-between py-1">
-                <span className="text-[#7c7c88]">Collisions d'équipe protégées :</span>
-                <span className="font-bold text-amber-600">{selectedImport.collisionCount}</span>
               </div>
             </div>
 

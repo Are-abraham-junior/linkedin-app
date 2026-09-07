@@ -540,18 +540,6 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
               )}
             </p>
 
-            {Boolean(importResult.teamCollisionsCount && importResult.teamCollisionsCount > 0) && (
-              <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs text-left space-y-1 max-w-md mx-auto">
-                <p className="font-bold flex items-center gap-1.5 text-amber-950">
-                  <ShieldCheck className="w-4 h-4 text-amber-700 shrink-0" />
-                  Anti-collision d'équipe ({importResult.teamCollisionsCount} lead(s) protégés)
-                </p>
-                <p className="text-[11px] text-amber-800">
-                  Ces profils sont déjà suivis par un collègue dans votre espace. Aucun doublon n'a été créé afin d'éviter tout double démarchage.
-                </p>
-              </div>
-            )}
-
             <button
               onClick={onClose}
               className="mt-4 px-6 py-2.5 rounded-xl bg-[#592eff] text-white text-xs font-bold shadow-md hover:bg-[#4d25e0]"

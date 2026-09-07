@@ -161,11 +161,16 @@ function categorizeUnipileError(errorMsg) {
 async function handleActionResultFailure(action, prospect, account, errorMessage, defaultMessage = "Erreur exécution action") {
     const errInfo = categorizeUnipileError(errorMessage);
     if (errInfo.action === "DISCONNECT_ACCOUNT") {
-        console.error(`[CampaignWorker] Compte ${account.id} déconnecté ou checkpoint requis. Mise en pause du compte.`);
+        console.error(`[CampaignWorker] Compte ${account.id} déconnecté ou checkpoint requis. Mise en pause du compte et des campagnes.`);
         await prisma.linkedInAccount.update({
             where: { id: account.id },
             data: { status: "DISCONNECTED" },
         });
+        // Mettre également en pause les campagnes actives de l'utilisateur pour éviter les échecs répétitifs
+        await prisma.campaign.updateMany({
+            where: { userId: account.userId, status: "ACTIVE" },
+            data: { status: "PAUSED" },
+        }).catch(() => { });
         // Reprogrammer l'action pour dans 2h (en attente de reconnexion de session)
         await prisma.actionQueue.update({
             where: { id: action.id },
