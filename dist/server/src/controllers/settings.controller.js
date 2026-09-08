@@ -232,6 +232,9 @@ export async function getLinkedInSettings(req, res) {
                 profilePicture: account.profilePicture,
                 dailyInvitesSent: account.dailyInvitesSent,
                 dailyMsgSent: account.dailyMsgSent,
+                isPremium: account.isPremium,
+                hasSalesNavigator: account.hasSalesNavigator,
+                accountType: account.accountType,
                 updatedAt: account.updatedAt,
             },
             liveDetails: details,
@@ -299,6 +302,9 @@ export async function reconnectLinkedInDirect(req, res) {
                 profilePicture: profile?.avatarUrl,
                 headline: profile?.headline,
                 status: "CONNECTED",
+                isPremium: profile?.isPremium ?? false,
+                hasSalesNavigator: profile?.hasSalesNavigator ?? false,
+                accountType: profile?.accountType ?? "STANDARD",
             },
             update: {
                 userId,
@@ -306,6 +312,9 @@ export async function reconnectLinkedInDirect(req, res) {
                 profilePicture: profile?.avatarUrl,
                 headline: profile?.headline,
                 status: "CONNECTED",
+                isPremium: profile?.isPremium ?? false,
+                hasSalesNavigator: profile?.hasSalesNavigator ?? false,
+                accountType: profile?.accountType ?? "STANDARD",
             },
         });
         // Mettre à jour l'utilisateur si besoin
@@ -369,10 +378,22 @@ export async function resolveLinkedInCheckpoint(req, res) {
             });
             return;
         }
-        // Mise à jour du statut en base
+        // Mise à jour du profil, abonnement et statut en base
+        const profileResult = await UnipileService.getConnectedAccountProfile(accountId).catch(() => null);
+        const profile = profileResult?.profile;
         await prisma.linkedInAccount.updateMany({
             where: { unipileAccountId: accountId },
-            data: { status: "CONNECTED" },
+            data: {
+                status: "CONNECTED",
+                ...(profile ? {
+                    accountName: profile.name,
+                    profilePicture: profile.avatarUrl,
+                    headline: profile.headline,
+                    isPremium: profile.isPremium ?? false,
+                    hasSalesNavigator: profile.hasSalesNavigator ?? false,
+                    accountType: profile.accountType ?? "STANDARD",
+                } : {}),
+            },
         });
         // Reprendre les campagnes en pause pour l'utilisateur concerné
         const acc = await prisma.linkedInAccount.findFirst({

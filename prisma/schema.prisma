@@ -134,6 +134,9 @@ model LinkedInAccount {
   status           String            @default("CONNECTED")
   dailyInvitesSent Int               @default(0)
   dailyMsgSent     Int               @default(0)
+  isPremium        Boolean           @default(false)
+  hasSalesNavigator Boolean          @default(false)
+  accountType      String            @default("STANDARD") // STANDARD | PREMIUM | SALES_NAVIGATOR | RECRUITER
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 

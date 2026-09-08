@@ -16,6 +16,9 @@ export interface LinkedInAccount {
   status: string;
   dailyInvitesSent: number;
   dailyMsgSent: number;
+  isPremium?: boolean;
+  hasSalesNavigator?: boolean;
+  accountType?: "STANDARD" | "PREMIUM" | "SALES_NAVIGATOR" | "RECRUITER" | string;
 }
 
 export interface User {
