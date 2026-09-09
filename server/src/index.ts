@@ -34,7 +34,7 @@ app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 
 // Health check
 app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString(), service: "Bime Link API" });
+  res.json({ status: "ok", timestamp: new Date().toISOString(), service: "Bleadin API" });
 });
 
 // API Routes
@@ -73,7 +73,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Bime Link API Server running on port ${PORT}`);
+  console.log(`🚀 Bleadin API Server running on port ${PORT}`);
   // Initialiser le planificateur de tâches de campagne
   startCampaignScheduler();
 

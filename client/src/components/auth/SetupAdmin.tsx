@@ -24,7 +24,7 @@ export const SetupAdmin: React.FC = () => {
           name,
           email,
           password,
-          organizationName: organizationName || "Bime Link Technologies",
+          organizationName: organizationName || "Bleadin Technologies",
         }),
       });
 
@@ -49,7 +49,7 @@ export const SetupAdmin: React.FC = () => {
             <ShieldCheck className="w-8 h-8" />
           </div>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-[#21164c] tracking-tight">
-            Bienvenue sur Bime Link
+            Bienvenue sur Bleadin
           </h1>
           <p className="text-[#5f5f69] text-sm sm:text-base mt-2 max-w-md mx-auto">
             Initialisation de la plateforme. Configurez le compte <span className="font-bold text-[#592eff]">Super Administrateur</span> principal.
@@ -95,7 +95,7 @@ export const SetupAdmin: React.FC = () => {
                 <Building2 className="w-5 h-5 text-[#5f5f69] absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="Bime Link HQ (Optionnel)"
+                  placeholder="Bleadin HQ (Optionnel)"
                   value={organizationName}
                   onChange={(e) => setOrganizationName(e.target.value)}
                   className="w-full pl-11 pr-4 py-3 rounded-xl border border-[#e0e0db] bg-white text-sm text-[#353241] placeholder:text-[#5f5f69]/60 focus:outline-none focus:border-[#592eff] transition-colors"
@@ -112,7 +112,7 @@ export const SetupAdmin: React.FC = () => {
                 <input
                   type="email"
                   required
-                  placeholder="admin@bimelink.io"
+                  placeholder="admin@bleadin.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full pl-11 pr-4 py-3 rounded-xl border border-[#e0e0db] bg-white text-sm text-[#353241] placeholder:text-[#5f5f69]/60 focus:outline-none focus:border-[#592eff] transition-colors"

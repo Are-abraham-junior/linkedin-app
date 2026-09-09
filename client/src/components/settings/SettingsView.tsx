@@ -59,7 +59,7 @@ export const SettingsView: React.FC = () => {
             Configuration & Paramètres
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-[#21164c] tracking-tight">
-            Paramètres Bime Link
+            Paramètres Bleadin
           </h1>
           <p className="text-[#5f5f69] text-xs sm:text-sm mt-1">
             Gérez votre profil, votre connexion LinkedIn, l'historique d'importation, vos intégrations et votre facturation.

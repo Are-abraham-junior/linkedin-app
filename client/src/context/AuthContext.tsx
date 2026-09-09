@@ -28,24 +28,30 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Helper pour la migration transparente du stockage local
+const getStoredItem = (key: string, legacyKey: string): string | null => {
+  return localStorage.getItem(key) || localStorage.getItem(legacyKey);
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem("bime_user");
+    const saved = getStoredItem("bleadin_user", "bime_user");
     return saved ? JSON.parse(saved) : null;
   });
-  const [token, setToken] = useState<string | null>(localStorage.getItem("bime_token"));
+  const [token, setToken] = useState<string | null>(() => getStoredItem("bleadin_token", "bime_token"));
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [setupNeeded, setSetupNeeded] = useState<boolean>(false);
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [impersonatedOrg, setImpersonatedOrgState] = useState<{ id: string; name: string; slug: string } | null>(() => {
-    const saved = localStorage.getItem("bime_impersonated_org");
+    const saved = getStoredItem("bleadin_impersonated_org", "bime_impersonated_org");
     return saved ? JSON.parse(saved) : null;
   });
 
   const setImpersonatedOrg = (org: { id: string; name: string; slug: string } | null) => {
     if (org) {
-      localStorage.setItem("bime_impersonated_org", JSON.stringify(org));
+      localStorage.setItem("bleadin_impersonated_org", JSON.stringify(org));
     } else {
+      localStorage.removeItem("bleadin_impersonated_org");
       localStorage.removeItem("bime_impersonated_org");
     }
     setImpersonatedOrgState(org);
@@ -86,7 +92,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const refreshUser = async () => {
-    const savedToken = localStorage.getItem("bime_token");
+    const savedToken = getStoredItem("bleadin_token", "bime_token");
     if (!savedToken) {
       setUser(null);
       return;
@@ -96,7 +102,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const res = await apiRequest<{ user: User }>("/auth/me");
       if (res.success && res.user) {
         setUser(res.user);
-        localStorage.setItem("bime_user", JSON.stringify(res.user));
+        localStorage.setItem("bleadin_user", JSON.stringify(res.user));
       } else {
         logout();
       }
@@ -107,7 +113,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const initAuth = async () => {
-      const savedToken = localStorage.getItem("bime_token");
+      const savedToken = getStoredItem("bleadin_token", "bime_token");
       if (savedToken) {
         await refreshUser();
       }
@@ -116,7 +122,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Surveillance périodique discrète (toutes les 2.5 minutes) pour vérifier la validité de la session
     const interval = setInterval(() => {
-      const savedToken = localStorage.getItem("bime_token");
+      const savedToken = getStoredItem("bleadin_token", "bime_token");
       if (savedToken) {
         refreshUser();
       }
@@ -126,16 +132,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = (newToken: string, newUser: User) => {
-    localStorage.setItem("bime_token", newToken);
-    localStorage.setItem("bime_user", JSON.stringify(newUser));
+    localStorage.setItem("bleadin_token", newToken);
+    localStorage.setItem("bleadin_user", JSON.stringify(newUser));
     setToken(newToken);
     setUser(newUser);
     setSetupNeeded(false);
   };
 
   const logout = () => {
+    localStorage.removeItem("bleadin_token");
+    localStorage.removeItem("bleadin_user");
+    localStorage.removeItem("bleadin_impersonated_org");
     localStorage.removeItem("bime_token");
     localStorage.removeItem("bime_user");
+    localStorage.removeItem("bime_impersonated_org");
     setToken(null);
     setUser(null);
   };
@@ -144,7 +154,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (user) {
       const updated = { ...user, ...updatedFields };
       setUser(updated);
-      localStorage.setItem("bime_user", JSON.stringify(updated));
+      localStorage.setItem("bleadin_user", JSON.stringify(updated));
     }
   };
 

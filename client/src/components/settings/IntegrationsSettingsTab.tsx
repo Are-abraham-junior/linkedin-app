@@ -58,7 +58,7 @@ const INTEGRATION_APPS: IntegrationApp[] = [
     name: "Connecteur IA (MCP)",
     provider: "MCP",
     description:
-      "Importez des prospects et ajoutez-les à des campagnes avec Claude, ChatGPT et d'autres modèles IA via le connecteur MCP Bime Link",
+      "Importez des prospects et ajoutez-les à des campagnes avec Claude, ChatGPT et d'autres modèles IA via le connecteur MCP Bleadin",
     badge: "Nouveau",
     isMcp: true,
   },
@@ -150,7 +150,7 @@ export const IntegrationsSettingsTab: React.FC = () => {
         apiKey: ApiKeyRecord;
       }>("/settings/api-keys", {
         method: "POST",
-        body: { name: `Clé API Bime Link - ${new Date().toLocaleDateString("fr-FR")}` },
+        body: { name: `Clé API Bleadin - ${new Date().toLocaleDateString("fr-FR")}` },
       });
 
       if (res.success && res.secretKey) {
@@ -375,7 +375,7 @@ export const IntegrationsSettingsTab: React.FC = () => {
   return (
     <div className="space-y-10 max-w-5xl">
       {/* ========================================== */}
-      {/* 1. CLÉS D'API BIME LINK                    */}
+      {/* 1. CLÉS D'API BLEADIN                      */}
       {/* ========================================== */}
       <div className="adora-card p-6 sm:p-7 bg-white rounded-3xl border border-[#e0e0db]/80 shadow-xs space-y-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-[#f0f0f4] pb-5">
@@ -384,7 +384,7 @@ export const IntegrationsSettingsTab: React.FC = () => {
               <KeyRound className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-[#21164c]">Clé API Bime Link</h3>
+              <h3 className="text-base font-bold text-[#21164c]">Clé API Bleadin</h3>
               <p className="text-xs text-[#5f5f69]">Connectez vos flux Make, Zapier, n8n ou requêtes personnalisées</p>
             </div>
           </div>
@@ -405,7 +405,7 @@ export const IntegrationsSettingsTab: React.FC = () => {
           <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-xs space-y-3 animate-in fade-in">
             <div className="flex items-center gap-2 font-bold text-amber-900">
               <Sparkles className="w-4 h-4 text-amber-600" />
-              <span>Votre nouvelle clé secrète Bime Link a été générée</span>
+              <span>Votre nouvelle clé secrète Bleadin a été générée</span>
             </div>
             <p className="text-amber-800">
               Copiez cette clé immédiatement. Par mesure de sécurité, elle ne vous sera plus jamais montrée en clair :
@@ -471,10 +471,10 @@ export const IntegrationsSettingsTab: React.FC = () => {
         <div className="p-4 rounded-2xl bg-[#21164c] text-white text-xs font-mono space-y-2 overflow-x-auto">
           <div className="flex items-center gap-2 text-[#a594fd] text-[11px] font-sans font-bold">
             <Code className="w-3.5 h-3.5" />
-            <span>Exemple d'utilisation de l'API Bime Link (cURL)</span>
+            <span>Exemple d'utilisation de l'API Bleadin (cURL)</span>
           </div>
           <pre className="text-[11px] leading-relaxed text-gray-200">
-{`curl -X GET "https://bimelink.croixance.net/api/prospects" \\
+{`curl -X GET "https://api.bleadin.com/api/prospects" \\
   -H "Authorization: Bearer bl_live_votre_cle_secrete" \\
   -H "Content-Type: application/json"`}
           </pre>
@@ -744,7 +744,7 @@ export const IntegrationsSettingsTab: React.FC = () => {
               </div>
               <div>
                 <h3 className="text-base font-extrabold text-[#21164c]">Connecteur IA MCP (Model Context Protocol)</h3>
-                <p className="text-xs text-[#5f5f69]">Contrôlez Bime Link depuis Claude Desktop, ChatGPT ou Cursor</p>
+                <p className="text-xs text-[#5f5f69]">Contrôlez Bleadin depuis Claude Desktop, ChatGPT ou Cursor</p>
               </div>
             </div>
 
@@ -761,8 +761,8 @@ export const IntegrationsSettingsTab: React.FC = () => {
                     const jsonConfig = JSON.stringify(
                       {
                         mcpServers: {
-                          "bime-link": {
-                            url: "https://bimelink.croixance.net/api/mcp",
+                          "bleadin": {
+                            url: "https://api.bleadin.com/api/mcp",
                             headers: {
                               Authorization: "Bearer bl_live_VOTRE_CLE_API_ICI",
                             },
@@ -786,8 +786,8 @@ export const IntegrationsSettingsTab: React.FC = () => {
               <div className="p-4 rounded-2xl bg-[#21164c] text-gray-200 font-mono text-xs overflow-x-auto">
                 <pre>{`{
   "mcpServers": {
-    "bime-link": {
-      "url": "https://bimelink.croixance.net/api/mcp",
+    "bleadin": {
+      "url": "https://api.bleadin.com/api/mcp",
       "headers": {
         "Authorization": "Bearer bl_live_VOTRE_CLE_API_ICI"
       }
@@ -800,9 +800,9 @@ export const IntegrationsSettingsTab: React.FC = () => {
             <div className="p-3.5 rounded-2xl bg-[#f8f9fc] border border-[#e0e0db] text-xs text-[#5f5f69] space-y-1">
               <p className="font-bold text-[#21164c]">Étapes de mise en place :</p>
               <ol className="list-decimal pl-4 space-y-1 text-[11px]">
-                <li>Générez une clé API Bime Link dans la section ci-dessus.</li>
+                <li>Générez une clé API Bleadin dans la section ci-dessus.</li>
                 <li>Collez la clé dans le fichier de configuration de Claude Desktop (`claude_desktop_config.json`).</li>
-                <li>Redémarrez Claude Desktop : vos outils Bime Link (import leads, listes, campagnes) seront prêts à l'emploi.</li>
+                <li>Redémarrez Claude Desktop : vos outils Bleadin (import leads, listes, campagnes) seront prêts à l'emploi.</li>
               </ol>
             </div>
 

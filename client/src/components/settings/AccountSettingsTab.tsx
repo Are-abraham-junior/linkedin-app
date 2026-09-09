@@ -272,7 +272,7 @@ export const AccountSettingsTab: React.FC = () => {
           </div>
           <div>
             <h3 className="text-base font-bold text-[#21164c]">Sécurité & Authentification</h3>
-            <p className="text-xs text-[#5f5f69]">Mettez à jour votre mot de passe d'accès à Bime Link</p>
+            <p className="text-xs text-[#5f5f69]">Mettez à jour votre mot de passe d'accès à Bleadin</p>
           </div>
         </div>
 

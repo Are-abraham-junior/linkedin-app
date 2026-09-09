@@ -229,7 +229,121 @@ export class UnipileService {
   }
 
   /**
-   * Récupère le profil du compte LinkedIn connecté (nom, photo, headline, provider_id)
+   * Détecte le type d'abonnement LinkedIn via Unipile :
+   * - Vérifie is_premium sur le profil (/api/v1/users/me)
+   * - Vérifie les produits activés sur le compte (/api/v1/accounts/:id)
+   * - Vérifie la présence éventuelle d'un contrat Sales Navigator ou Recruiter (/api/v1/linkedin/contracts)
+   */
+  static async detectLinkedInSubscription(accountId: string): Promise<{
+    isPremium: boolean;
+    hasSalesNavigator: boolean;
+    accountType: "STANDARD" | "PREMIUM" | "SALES_NAVIGATOR" | "RECRUITER";
+  }> {
+    let isPremium = false;
+    let hasSalesNavigator = false;
+    let hasRecruiter = false;
+
+    try {
+      const baseUrl = this.getBaseUrl();
+      const headers = this.getHeaders();
+
+      // 1. Profil utilisateur (/api/v1/users/me)
+      try {
+        const meRes = await fetch(`${baseUrl}/api/v1/users/me?account_id=${accountId}`, { headers });
+        if (meRes.ok) {
+          const { data: meData } = await this.safeJsonParse(meRes);
+          if (meData) {
+            isPremium = Boolean(
+              meData?.is_premium ??
+              meData?.specifics?.is_premium ??
+              meData?.is_open_profile ??
+              meData?.specifics?.is_open_profile
+            );
+          }
+        }
+      } catch (err: any) {
+        console.warn("[detectLinkedInSubscription] Error checking /users/me:", err.message);
+      }
+
+      // 2. Objet compte (/api/v1/accounts/:id)
+      try {
+        const accRes = await fetch(`${baseUrl}/api/v1/accounts/${accountId}`, { headers });
+        if (accRes.ok) {
+          const { data: accData } = await this.safeJsonParse(accRes);
+          const productsStatus = accData?.metadata?.products_connection_status || {};
+          const productsList = Array.isArray(accData?.products) ? accData.products : [];
+
+          if (
+            productsStatus.sales_navigator === "running" ||
+            productsList.includes("sales_navigator")
+          ) {
+            hasSalesNavigator = true;
+          }
+
+          if (
+            productsStatus.recruiter === "running" ||
+            productsList.includes("recruiter")
+          ) {
+            hasRecruiter = true;
+          }
+        }
+      } catch (err: any) {
+        console.warn("[detectLinkedInSubscription] Error checking /accounts/:id:", err.message);
+      }
+
+      // 3. Si Sales Navigator n'est pas encore confirmé, sonder les contrats (/api/v1/linkedin/contracts)
+      if (!hasSalesNavigator && !hasRecruiter) {
+        try {
+          const contractsRes = await fetch(`${baseUrl}/api/v1/linkedin/contracts?account_id=${accountId}`, { headers });
+          if (contractsRes.ok) {
+            const { data: contractsData } = await this.safeJsonParse(contractsRes);
+            const contracts = contractsData?.contracts || (Array.isArray(contractsData) ? contractsData : []);
+            for (const contract of contracts) {
+              const product = String(contract?.product || "").toLowerCase();
+              if (product.includes("sales_navigator")) {
+                hasSalesNavigator = true;
+              }
+              if (product.includes("recruiter")) {
+                hasRecruiter = true;
+              }
+            }
+          }
+        } catch (err: any) {
+          // Normal si le compte n'a pas de contrats
+        }
+      }
+
+      // Si Sales Navigator ou Recruiter est actif, le compte est forcément considéré comme Premium
+      if (hasSalesNavigator || hasRecruiter) {
+        isPremium = true;
+      }
+
+      let accountType: "STANDARD" | "PREMIUM" | "SALES_NAVIGATOR" | "RECRUITER" = "STANDARD";
+      if (hasSalesNavigator) {
+        accountType = "SALES_NAVIGATOR";
+      } else if (hasRecruiter) {
+        accountType = "RECRUITER";
+      } else if (isPremium) {
+        accountType = "PREMIUM";
+      }
+
+      return {
+        isPremium,
+        hasSalesNavigator,
+        accountType,
+      };
+    } catch (err: any) {
+      console.error("[detectLinkedInSubscription] Exception:", err.message);
+      return {
+        isPremium: false,
+        hasSalesNavigator: false,
+        accountType: "STANDARD",
+      };
+    }
+  }
+
+  /**
+   * Récupère le profil du compte LinkedIn connecté (nom, photo, headline, provider_id, abonnement)
    */
   static async getConnectedAccountProfile(accountId: string): Promise<{
     success: boolean;
@@ -241,11 +355,16 @@ export class UnipileService {
       avatarUrl?: string;
       headline?: string;
       linkedinProfileId?: string;
+      isPremium?: boolean;
+      hasSalesNavigator?: boolean;
+      accountType?: "STANDARD" | "PREMIUM" | "SALES_NAVIGATOR" | "RECRUITER";
     };
     error?: string;
   }> {
     try {
       const baseUrl = this.getBaseUrl();
+      const sub = await this.detectLinkedInSubscription(accountId);
+
       // 1. Tenter l'endpoint /api/v1/users/me pour obtenir la photo haute résolution et l'occupation
       const meRes = await fetch(`${baseUrl}/api/v1/users/me?account_id=${accountId}`, {
         headers: this.getHeaders(),
@@ -268,6 +387,9 @@ export class UnipileService {
               avatarUrl: meData?.profile_picture_url || meData?.profile_picture || undefined,
               headline: meData?.occupation || meData?.headline || undefined,
               linkedinProfileId: meData?.provider_id || meData?.entity_urn || undefined,
+              isPremium: sub.isPremium,
+              hasSalesNavigator: sub.hasSalesNavigator,
+              accountType: sub.accountType,
             },
           };
         }
@@ -298,6 +420,9 @@ export class UnipileService {
           avatarUrl: data?.profile_picture_url || data?.profile_picture || data?.avatar_url || undefined,
           headline: data?.headline || data?.occupation || undefined,
           linkedinProfileId: data?.provider_id || data?.identifier || undefined,
+          isPremium: sub.isPremium,
+          hasSalesNavigator: sub.hasSalesNavigator,
+          accountType: sub.accountType,
         },
       };
     } catch (err: any) {

@@ -8,8 +8,8 @@ export async function apiRequest<T = any>(
   endpoint: string,
   options: ApiOptions = {}
 ): Promise<{ success: boolean; data?: T; error?: string; [key: string]: any }> {
-  const token = localStorage.getItem("bime_token");
-  const savedOrg = localStorage.getItem("bime_impersonated_org");
+  const token = localStorage.getItem("bleadin_token") || localStorage.getItem("bime_token");
+  const savedOrg = localStorage.getItem("bleadin_impersonated_org") || localStorage.getItem("bime_impersonated_org");
 
   const headers: HeadersInit = {
     ...(options.headers || {}),

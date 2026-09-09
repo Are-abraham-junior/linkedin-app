@@ -112,11 +112,11 @@ export const Login: React.FC = () => {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
                 </div>
-                <span className="text-xl font-bold text-gray-900">Bime Link</span>
+                <span className="text-xl font-extrabold text-gray-900 tracking-wider">BLEADIN</span>
               </div>
 
               <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                Bienvenue sur Bime Link 👋
+                Bienvenue sur Bleadin 👋
               </h1>
               <p className="text-gray-500 text-sm mb-8 leading-relaxed">
                 Automatisez votre prospection LinkedIn et atteignez jusqu'à 800 prospects qualifiés par mois.
@@ -176,7 +176,7 @@ export const Login: React.FC = () => {
                   </svg>
                 </div>
                 <h2 className="text-xl font-bold text-gray-900">Se connecter</h2>
-                <p className="text-gray-500 text-xs mt-1">Accédez à votre espace Bime Link</p>
+                <p className="text-gray-500 text-xs mt-1">Accédez à votre espace Bleadin</p>
               </div>
 
               {error && (

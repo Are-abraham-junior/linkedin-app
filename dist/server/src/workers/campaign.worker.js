@@ -812,7 +812,7 @@ export async function checkAcceptedInvitations() {
  * Démarre le planificateur de tâches de campagne
  */
 export function startCampaignScheduler() {
-    console.log("⚡ [CampaignWorker] Initialisation du planificateur de campagnes Bime Link...");
+    console.log("⚡ [CampaignWorker] Initialisation du planificateur de campagnes Bleadin...");
     // Exécution de la file d'attente chaque minute
     setInterval(() => {
         processActionQueue().catch((err) => console.error("[CampaignWorker] Interval error:", err));

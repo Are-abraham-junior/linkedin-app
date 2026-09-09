@@ -22,6 +22,18 @@ export async function searchProfiles(req, res) {
             });
             return;
         }
+        // Garde-fou de sécurité : le mode Sales Navigator et les filtres de taille d'entreprise sont réservés aux comptes Sales Navigator
+        const wantsSalesNav = api === "sales_navigator" || (Array.isArray(companyHeadcount) && companyHeadcount.length > 0);
+        const hasSalesNav = Boolean(linkedAcc.hasSalesNavigator || linkedAcc.accountType === "SALES_NAVIGATOR");
+        if (wantsSalesNav && !hasSalesNav) {
+            res.status(403).json({
+                success: false,
+                error: "Le mode Sales Navigator et le filtre par taille d'entreprise nécessitent un compte LinkedIn Sales Navigator. Votre compte est actuellement en mode Standard.",
+                requiresSalesNavigator: true,
+                accountType: linkedAcc.accountType || "STANDARD",
+            });
+            return;
+        }
         const safeLimit = Math.min(Math.max(parseInt(limit) || 25, 1), 100);
         const result = await UnipileService.searchProfiles({
             accountId: linkedAcc.unipileAccountId,

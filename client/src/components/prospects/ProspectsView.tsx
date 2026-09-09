@@ -77,7 +77,7 @@ const DEFAULT_COLUMNS: ColumnDef[] = [
   { key: "importedAt", label: "Date d'importation" },
 ];
 
-const STORAGE_KEY = "bime_prospects_columns_order_v1";
+const STORAGE_KEY = "bleadin_prospects_columns_order_v1";
 
 interface ProspectsViewProps {
   onStartCampaign?: () => void;
@@ -594,7 +594,7 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
     const encodedUri = encodeURI(csvContent);
     const a = document.createElement("a");
     a.href = encodedUri;
-    a.download = `bime-link-prospects-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `bleadin-prospects-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
   };
 
@@ -940,7 +940,7 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
 
                 <p className="text-[11px] text-[#5f5f69] mt-0.5">
                   {selectedListId === "ALL"
-                    ? "Tous les prospects importés dans votre compte Bime Link."
+                    ? "Tous les prospects importés dans votre compte Bleadin."
                     : selectedListId === "DO_NOT_CONTACT"
                     ? "Contacts exclus de vos automatisations et envois de messages."
                     : `Liste dédiée • ${total} prospect(s) qualifié(s).`}

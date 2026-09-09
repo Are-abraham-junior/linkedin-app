@@ -28,7 +28,7 @@ app.use(express.json());
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 // Health check
 app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", timestamp: new Date().toISOString(), service: "Bime Link API" });
+    res.json({ status: "ok", timestamp: new Date().toISOString(), service: "Bleadin API" });
 });
 // API Routes
 app.use("/api/auth", authRoutes);
@@ -63,7 +63,7 @@ app.use((err, req, res, next) => {
     });
 });
 app.listen(PORT, () => {
-    console.log(`🚀 Bime Link API Server running on port ${PORT}`);
+    console.log(`🚀 Bleadin API Server running on port ${PORT}`);
     // Initialiser le planificateur de tâches de campagne
     startCampaignScheduler();
     // Self-ping pour garder le processus actif (Passenger met en veille après inactivité)

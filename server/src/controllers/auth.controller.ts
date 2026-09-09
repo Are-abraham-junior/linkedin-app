@@ -79,8 +79,8 @@ export async function setupSuperAdmin(req: AuthenticatedRequest, res: Response) 
     // Créer l'organisation principale
     const org = await prisma.organization.create({
       data: {
-        name: body.organizationName || "Bime Link Technologies",
-        slug: "bime-link-main",
+        name: body.organizationName || "Bleadin Technologies",
+        slug: "bleadin-main",
         plan: "ENTERPRISE",
       },
     });
@@ -369,6 +369,9 @@ export async function getMe(req: AuthenticatedRequest, res: Response) {
               accountName: p.name || primaryAccount.accountName,
               profilePicture: p.avatarUrl || primaryAccount.profilePicture,
               headline: p.headline || primaryAccount.headline,
+              isPremium: p.isPremium ?? primaryAccount.isPremium,
+              hasSalesNavigator: p.hasSalesNavigator ?? primaryAccount.hasSalesNavigator,
+              accountType: p.accountType ?? primaryAccount.accountType,
             },
           });
         }
@@ -598,6 +601,9 @@ export async function linkedinAuth(req: AuthenticatedRequest, res: Response) {
           profilePicture: profile?.avatarUrl,
           headline: profile?.headline,
           status: "CONNECTED",
+          isPremium: profile?.isPremium ?? false,
+          hasSalesNavigator: profile?.hasSalesNavigator ?? false,
+          accountType: profile?.accountType ?? "STANDARD",
         },
         update: {
           userId: user.id,
@@ -605,6 +611,9 @@ export async function linkedinAuth(req: AuthenticatedRequest, res: Response) {
           profilePicture: profile?.avatarUrl,
           headline: profile?.headline,
           status: "CONNECTED",
+          isPremium: profile?.isPremium ?? false,
+          hasSalesNavigator: profile?.hasSalesNavigator ?? false,
+          accountType: profile?.accountType ?? "STANDARD",
         },
       });
 
@@ -647,6 +656,9 @@ export async function linkedinAuth(req: AuthenticatedRequest, res: Response) {
           profilePicture: profile?.avatarUrl,
           headline: profile?.headline,
           status: "CONNECTED",
+          isPremium: profile?.isPremium ?? false,
+          hasSalesNavigator: profile?.hasSalesNavigator ?? false,
+          accountType: profile?.accountType ?? "STANDARD",
         },
       });
     }
@@ -824,6 +836,9 @@ export async function acceptInvitation(req: AuthenticatedRequest, res: Response)
         profilePicture: profile?.avatarUrl,
         headline: profile?.headline,
         status: "CONNECTED",
+        isPremium: profile?.isPremium ?? false,
+        hasSalesNavigator: profile?.hasSalesNavigator ?? false,
+        accountType: profile?.accountType ?? "STANDARD",
       },
       update: {
         userId: user.id,
@@ -831,6 +846,9 @@ export async function acceptInvitation(req: AuthenticatedRequest, res: Response)
         profilePicture: profile?.avatarUrl,
         headline: profile?.headline,
         status: "CONNECTED",
+        isPremium: profile?.isPremium ?? false,
+        hasSalesNavigator: profile?.hasSalesNavigator ?? false,
+        accountType: profile?.accountType ?? "STANDARD",
       },
     });
 

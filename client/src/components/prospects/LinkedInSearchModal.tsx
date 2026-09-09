@@ -22,6 +22,7 @@ import {
   ChevronDown,
   Info,
   Check,
+  Lock,
 } from "lucide-react";
 
 interface LinkedInSearchModalProps {
@@ -89,8 +90,23 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
     return "";
   };
 
-  const { openLinkedInModal } = useAuth();
+  const { user, openLinkedInModal, openReconnectModal } = useAuth();
+  const linkedInAccount = user?.linkedInAccount;
+  const hasSalesNavigator = Boolean(
+    linkedInAccount?.hasSalesNavigator ||
+    linkedInAccount?.accountType === "SALES_NAVIGATOR"
+  );
+  const isPremium = Boolean(
+    linkedInAccount?.isPremium ||
+    linkedInAccount?.accountType === "PREMIUM" ||
+    hasSalesNavigator
+  );
+  const accountType =
+    linkedInAccount?.accountType ||
+    (hasSalesNavigator ? "SALES_NAVIGATOR" : isPremium ? "PREMIUM" : "STANDARD");
+
   const [selectedListId, setSelectedListId] = useState<string>(getInitialListId());
+  const [showSalesNavLockedModal, setShowSalesNavLockedModal] = useState<boolean>(false);
 
   useEffect(() => {
     if (!selectedListId || selectedListId === "ALL") {
@@ -102,7 +118,7 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
   // Mode principal : CRITERIA vs URL
   const [searchMode, setSearchMode] = useState<"CRITERIA" | "URL">("CRITERIA");
 
-  // Mode d'API LinkedIn : Classic vs Sales Navigator
+  // Mode d'API LinkedIn : Classic vs Sales Navigator (verrouillé si pas Sales Nav)
   const [apiMode, setApiMode] = useState<"classic" | "sales_navigator">("classic");
 
   // Critères standards
@@ -174,6 +190,11 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
   if (!isOpen) return null;
 
   const toggleHeadcount = (tierId: string) => {
+    if (!hasSalesNavigator) {
+      setShowSalesNavLockedModal(true);
+      return;
+    }
+
     // Si on est en Classic et qu'on clique sur une tranche, on bascule automatiquement vers Sales Navigator
     if (apiMode === "classic") {
       setApiMode("sales_navigator");
@@ -197,7 +218,7 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
       !company.trim() &&
       !location.trim() &&
       !selectedSector &&
-      selectedHeadcounts.length === 0
+      (hasSalesNavigator ? selectedHeadcounts.length === 0 : true)
     ) {
       setError("Veuillez saisir au moins un critère de recherche (poste, lieu, entreprise ou secteur).");
       return;
@@ -214,9 +235,10 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
     setSelectedProfileIds(new Set<string>());
 
     try {
+      const effectiveApiMode = hasSalesNavigator ? apiMode : "classic";
       const payload: any = {
         limit: importLimit,
-        api: apiMode,
+        api: effectiveApiMode,
       };
 
       if (searchMode === "URL") {
@@ -230,7 +252,7 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
           payload.industry = [selectedSector.id];
         }
 
-        if (apiMode === "sales_navigator" && selectedHeadcounts.length > 0) {
+        if (effectiveApiMode === "sales_navigator" && selectedHeadcounts.length > 0) {
           payload.companyHeadcount = selectedHeadcounts
             .map((id) => {
               const tier = HEADCOUNT_TIERS.find((t) => t.id === id);
@@ -424,9 +446,7 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-lg sm:text-xl font-bold text-[#21164c]">Recherche de Profils LinkedIn</h2>
-                <span className="hidden sm:inline-block text-[10px] px-2 py-0.5 rounded-full bg-[#592eff]/10 text-[#592eff] font-bold">
-                  Split-View
-                </span>
+               
               </div>
               <p className="text-xs text-[#5f5f69]">
                 Ciblez des décideurs par critères métier, secteur d'activité et taille d'entreprise
@@ -471,11 +491,32 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
             {/* Header du volet filtres */}
             <div className="px-3.5 py-2.5 bg-white border-b border-[#e0e0db] flex items-center justify-between shrink-0">
               <span className="text-xs font-bold text-[#21164c] flex items-center gap-1.5 uppercase tracking-wider">
-                <Sliders className="w-3.5 h-3.5 text-[#592eff]" /> Paramètres de recherche
+                <Sliders className="w-3.5 h-3.5 text-[#592eff]" /> Paramètres
               </span>
-              <span className="text-[10px] text-[#5f5f69] font-medium">
-                {searchMode === "CRITERIA" ? (apiMode === "sales_navigator" ? "Sales Nav" : "Standard") : "URL"}
-              </span>
+              <div className="flex items-center gap-1.5">
+                {hasSalesNavigator ? (
+                  <span
+                    className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200"
+                    title="Compte LinkedIn Sales Navigator actif"
+                  >
+                    <Sparkles className="w-2.5 h-2.5 text-emerald-600" /> Sales Nav
+                  </span>
+                ) : isPremium ? (
+                  <span
+                    className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200"
+                    title="Compte LinkedIn Premium"
+                  >
+                    <ShieldCheck className="w-2.5 h-2.5 text-blue-600" /> Premium
+                  </span>
+                ) : (
+                  <span
+                    className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200"
+                    title="Compte LinkedIn Standard"
+                  >
+                    <Users className="w-2.5 h-2.5 text-slate-500" /> Standard
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Formulaire défilant indépendamment */}
@@ -489,7 +530,11 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                         Moteur :
                       </span>
                       <span className="text-[10px] text-[#5f5f69]">
-                        {apiMode === "sales_navigator" ? "Ciblage avancé" : "Gratuit"}
+                        {apiMode === "sales_navigator"
+                          ? "Ciblage avancé"
+                          : !hasSalesNavigator
+                          ? "Recherche Standard"
+                          : "Gratuit"}
                       </span>
                     </div>
                     <div className="grid grid-cols-2 gap-1 p-0.5 bg-[#f5f5f7] rounded-lg">
@@ -506,14 +551,37 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                       </button>
                       <button
                         type="button"
-                        onClick={() => setApiMode("sales_navigator")}
+                        onClick={() => {
+                          if (!hasSalesNavigator) {
+                            setShowSalesNavLockedModal(true);
+                            return;
+                          }
+                          setApiMode("sales_navigator");
+                        }}
                         className={`py-1 rounded-md text-[11px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
                           apiMode === "sales_navigator"
                             ? "bg-[#592eff] text-white shadow-xs"
-                            : "text-[#5f5f69] hover:text-[#592eff]"
+                            : hasSalesNavigator
+                            ? "text-[#5f5f69] hover:text-[#592eff]"
+                            : "text-[#8e8e93] hover:text-amber-700 hover:bg-amber-50"
                         }`}
+                        title={
+                          !hasSalesNavigator
+                            ? "Nécessite un abonnement LinkedIn Sales Navigator (Cliquez pour en savoir plus)"
+                            : "Activer les filtres Sales Navigator"
+                        }
                       >
-                        <Sparkles className="w-3 h-3" /> Sales Nav
+                        {!hasSalesNavigator ? (
+                          <Lock className="w-3 h-3 text-amber-500 shrink-0" />
+                        ) : (
+                          <Sparkles className="w-3 h-3 shrink-0" />
+                        )}
+                        <span>Sales Nav</span>
+                        {!hasSalesNavigator && (
+                          <span className="text-[8px] bg-amber-100 text-amber-700 px-1 py-0.2 rounded font-bold">
+                            🔒
+                          </span>
+                        )}
                       </button>
                     </div>
                   </div>
@@ -660,10 +728,23 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                   {/* Taille de l'entreprise (Headcount) */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <label className="block text-[10px] font-bold text-[#21164c] uppercase flex items-center gap-1">
+                      <label className="block text-[10px] font-bold text-[#21164c] uppercase flex items-center gap-1.5">
                         <Building className="w-3 h-3 text-[#592eff]" /> Taille d'entreprise
+                        {!hasSalesNavigator && (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 text-[9px] font-semibold border border-amber-200">
+                            <Lock className="w-2.5 h-2.5" /> Requis Sales Nav
+                          </span>
+                        )}
                       </label>
-                      {apiMode === "classic" ? (
+                      {!hasSalesNavigator ? (
+                        <button
+                          type="button"
+                          onClick={() => setShowSalesNavLockedModal(true)}
+                          className="text-[10px] text-amber-600 hover:text-amber-700 font-semibold flex items-center gap-1 cursor-pointer"
+                        >
+                          <Info className="w-3 h-3" /> Pourquoi ?
+                        </button>
+                      ) : apiMode === "classic" ? (
                         <button
                           type="button"
                           onClick={() => setApiMode("sales_navigator")}
@@ -689,6 +770,7 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                       {HEADCOUNT_TIERS.map((tier) => {
                         const isSelected = selectedHeadcounts.includes(tier.id);
                         const isClassic = apiMode === "classic";
+                        const isLocked = !hasSalesNavigator;
 
                         return (
                           <button
@@ -696,28 +778,47 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                             type="button"
                             onClick={() => toggleHeadcount(tier.id)}
                             className={`px-1.5 py-1.5 rounded-lg border text-center transition-all flex flex-col justify-center cursor-pointer ${
-                              isClassic
+                              isLocked
+                                ? "bg-[#f5f5f7]/60 border-[#e0e0db] text-[#8e8e93] hover:border-amber-400 hover:bg-amber-50/40"
+                                : isClassic
                                 ? "bg-[#f5f5f7] border-[#e0e0db] text-[#5f5f69] hover:border-[#592eff]/50 hover:bg-[#592eff]/5 opacity-80"
                                 : isSelected
                                 ? "bg-[#592eff] border-[#592eff] text-white shadow-xs"
                                 : "bg-white border-[#e0e0db] text-[#21164c] hover:border-[#592eff]/40 hover:bg-[#f8f9fc]"
                             }`}
                             title={
-                              isClassic
+                              isLocked
+                                ? "Ce filtre requiert un abonnement LinkedIn Sales Navigator (Cliquez pour plus d'infos)"
+                                : isClassic
                                 ? "Cliquez pour activer Sales Navigator et filtrer par effectif"
                                 : `${tier.label} salariés (${tier.sub})`
                             }
                           >
-                            <span className={`text-[11px] font-bold leading-tight ${isSelected && !isClassic ? "text-white" : ""}`}>
+                            <span
+                              className={`text-[11px] font-bold leading-tight ${
+                                isSelected && !isClassic && !isLocked ? "text-white" : ""
+                              }`}
+                            >
                               {tier.label}
                             </span>
-                            <span className={`text-[8px] leading-tight truncate ${isSelected && !isClassic ? "text-white/80" : "text-[#5f5f69]"}`}>
+                            <span
+                              className={`text-[8px] leading-tight truncate ${
+                                isSelected && !isClassic && !isLocked ? "text-white/80" : "text-[#5f5f69]"
+                              }`}
+                            >
                               {tier.sub}
                             </span>
                           </button>
                         );
                       })}
                     </div>
+
+                    {!hasSalesNavigator && (
+                      <p className="text-[10px] text-amber-800 flex items-center gap-1 mt-1.5 bg-amber-50/90 border border-amber-200/70 rounded-lg px-2 py-1">
+                        <Lock className="w-3 h-3 text-amber-600 shrink-0" />
+                        <span>Filtre effectif réservé aux comptes Sales Navigator.</span>
+                      </p>
+                    )}
                   </div>
                 </>
               ) : (
@@ -1043,6 +1144,84 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
             </div>
           </div>
         </div>
+
+        {/* ========================================================================= */}
+        {/* MODALE D'EXPLICATION : FONCTIONNALITÉ SALES NAVIGATOR REQUISE              */}
+        {/* ========================================================================= */}
+        {showSalesNavLockedModal && (
+          <div className="fixed inset-0 bg-[#21164c]/60 backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-in fade-in">
+            <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-[#e0e0db] space-y-4 relative animate-in zoom-in-95">
+              <button
+                type="button"
+                onClick={() => setShowSalesNavLockedModal(false)}
+                className="absolute right-4 top-4 p-2 rounded-full hover:bg-[#f5f5f7] text-[#5f5f69] transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0">
+                  <Lock className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-[#21164c]">
+                    Sales Navigator requis
+                  </h3>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-xs text-[#5f5f69]">Compte connecté :</span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-[#21164c] border border-slate-200">
+                      {accountType === "PREMIUM" ? "LinkedIn Premium" : "LinkedIn Standard"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="text-xs text-[#5f5f69] space-y-2 leading-relaxed bg-[#f8f9fc] p-3.5 rounded-2xl border border-[#e0e0db]">
+                <p>
+                  Le ciblage <strong>Sales Navigator</strong> et le filtre par <strong>taille d'entreprise (effectif)</strong> s'appuient sur l'API Sales Navigator de LinkedIn.
+                </p>
+                <p>
+                  LinkedIn réserve ces critères avancés aux profils disposant d'un abonnement <strong>Sales Navigator</strong> actif.
+                </p>
+              </div>
+
+              <div className="p-3 bg-emerald-50/80 border border-emerald-200/60 rounded-2xl text-xs text-emerald-800 flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Votre recherche reste active :</strong> Vous pouvez continuer à cibler des profils par <strong>intitulé de poste</strong>, <strong>localisation</strong>, <strong>entreprise</strong>, <strong>secteur d'activité</strong> et <strong>mots-clés</strong> en mode Standard.
+                </span>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSalesNavLockedModal(false);
+                    setApiMode("classic");
+                  }}
+                  className="px-4 py-2 rounded-xl border border-[#e0e0db] text-xs font-bold text-[#21164c] hover:bg-[#f5f5f7] cursor-pointer"
+                >
+                  Continuer en Standard
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSalesNavLockedModal(false);
+                    if (openReconnectModal) {
+                      openReconnectModal();
+                    } else if (openLinkedInModal) {
+                      openLinkedInModal();
+                    }
+                  }}
+                  className="px-4 py-2 rounded-xl bg-[#592eff] hover:bg-[#4d25e0] text-white text-xs font-bold shadow-md shadow-[#592eff]/25 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Reconnecter un compte
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

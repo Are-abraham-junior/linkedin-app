@@ -82,7 +82,7 @@ export const FloatingNavPill: React.FC<FloatingNavPillProps> = ({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-bold text-lg text-[#21164c] tracking-tight">Bime Link</span>
+              <span className="font-extrabold text-lg text-[#21164c] tracking-wider">BLEADIN</span>
               {isSuperAdmin && (
                 <span className="bg-[#592eff]/10 text-[#592eff] border border-[#592eff]/20 text-[11px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
                   Super Admin

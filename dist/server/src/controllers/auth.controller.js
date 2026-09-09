@@ -66,8 +66,8 @@ export async function setupSuperAdmin(req, res) {
         // Créer l'organisation principale
         const org = await prisma.organization.create({
             data: {
-                name: body.organizationName || "Bime Link Technologies",
-                slug: "bime-link-main",
+                name: body.organizationName || "Bleadin Technologies",
+                slug: "bleadin-main",
                 plan: "ENTERPRISE",
             },
         });
@@ -335,6 +335,9 @@ export async function getMe(req, res) {
                             accountName: p.name || primaryAccount.accountName,
                             profilePicture: p.avatarUrl || primaryAccount.profilePicture,
                             headline: p.headline || primaryAccount.headline,
+                            isPremium: p.isPremium ?? primaryAccount.isPremium,
+                            hasSalesNavigator: p.hasSalesNavigator ?? primaryAccount.hasSalesNavigator,
+                            accountType: p.accountType ?? primaryAccount.accountType,
                         },
                     });
                 }
@@ -545,6 +548,9 @@ export async function linkedinAuth(req, res) {
                     profilePicture: profile?.avatarUrl,
                     headline: profile?.headline,
                     status: "CONNECTED",
+                    isPremium: profile?.isPremium ?? false,
+                    hasSalesNavigator: profile?.hasSalesNavigator ?? false,
+                    accountType: profile?.accountType ?? "STANDARD",
                 },
                 update: {
                     userId: user.id,
@@ -552,6 +558,9 @@ export async function linkedinAuth(req, res) {
                     profilePicture: profile?.avatarUrl,
                     headline: profile?.headline,
                     status: "CONNECTED",
+                    isPremium: profile?.isPremium ?? false,
+                    hasSalesNavigator: profile?.hasSalesNavigator ?? false,
+                    accountType: profile?.accountType ?? "STANDARD",
                 },
             });
         }
@@ -592,6 +601,9 @@ export async function linkedinAuth(req, res) {
                     profilePicture: profile?.avatarUrl,
                     headline: profile?.headline,
                     status: "CONNECTED",
+                    isPremium: profile?.isPremium ?? false,
+                    hasSalesNavigator: profile?.hasSalesNavigator ?? false,
+                    accountType: profile?.accountType ?? "STANDARD",
                 },
             });
         }
@@ -751,6 +763,9 @@ export async function acceptInvitation(req, res) {
                 profilePicture: profile?.avatarUrl,
                 headline: profile?.headline,
                 status: "CONNECTED",
+                isPremium: profile?.isPremium ?? false,
+                hasSalesNavigator: profile?.hasSalesNavigator ?? false,
+                accountType: profile?.accountType ?? "STANDARD",
             },
             update: {
                 userId: user.id,
@@ -758,6 +773,9 @@ export async function acceptInvitation(req, res) {
                 profilePicture: profile?.avatarUrl,
                 headline: profile?.headline,
                 status: "CONNECTED",
+                isPremium: profile?.isPremium ?? false,
+                hasSalesNavigator: profile?.hasSalesNavigator ?? false,
+                accountType: profile?.accountType ?? "STANDARD",
             },
         });
         // 5. Marquer l'invitation comme acceptée
