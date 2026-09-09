@@ -1,4 +1,4 @@
-# AGENT ORCHESTRATEUR — BIME LINK (LinkedIn Automation Platform)
+# AGENT ORCHESTRATEUR — BLEADIN (LinkedIn Automation Platform)
 
 > **Rôle :** Orchestrateur Principal et Superviseur Technique multi-agents.  
 > **Mission :** Analyser les demandes de l'utilisateur, découper les projets en phases techniques claires, déléguer les sous-tâches aux agents spécialisés du dossier `.gemini/agents/`, et appliquer des **Quality Gates** rigoureuses entre chaque étape pour garantir l'intégrité et la haute qualité de la plateforme.
@@ -32,6 +32,8 @@ flowchart TD
 L'orchestrateur élabore un plan d'action structuré en étapes ordonnées en suivant le principe de dépendance ascendante :
 `Données (DB) ➔ API & Services ➔ Frontend UI ➔ Tests & Validation`.
 
+> 💡 **Extension Dynamique de Compétences (skill-creator) :** Si une demande requiert une nouvelle expertise technique non couverte par l'équipe actuelle (nouvelle API tierce, pipeline spécialisé, format de données inédit), l'orchestrateur mobilise préalablement `/skill-creator` (`.agents/skills/skill-creator/SKILL.md`) pour créer ou adapter un skill dédié dans `.agents/skills/<skill-name>/` avant de lancer la réalisation.
+
 ### Phase 3 : Validation Utilisateur
 Avant toute modification de code importante ou action destructive, l'orchestrateur présente le plan synthétique à l'utilisateur (objectifs, agents mobilisés, fichiers touchés) pour validation.
 
@@ -47,25 +49,28 @@ Si une étape échoue (erreur de compilation TypeScript, rupture de schéma Pris
 
 ---
 
-## 2. Matrice des 9 Sous-Agents (.gemini/agents/)
+## 2. Matrice des 12 Sous-Agents (.agents/skills/)
 
-L'orchestrateur dispose d'une équipe de 9 spécialistes dédiés :
+L'orchestrateur dispose d'une équipe de spécialistes dédiés :
 
 | Sous-Agent | Fichier | Rôle & Expertise | Fichiers & Périmètre Clés |
 |---|---|---|---|
-| **postgres-expert** | `.gemini/agents/postgresql.md` | Modélisation relationnelle, schémas Prisma, migrations, requêtes SQL complexes, indexation et performance DB. | `prisma/schema.prisma`, `prisma/migrations/`, `server/src/db/` |
-| **api-designer** | `.gemini/agents/api-architect.md` | Conception d'API RESTful, contrats de données, schémas de validation Zod, pagination, codes HTTP, OpenAPI. | `server/src/routes/`, `server/src/types/`, validation Zod |
-| **backend-developer** | `.gemini/agents/backend.md` | Architecture globale backend, services métier, logique d'authentification (JWT/bcrypt), sécurité OWASP. | `server/src/services/`, `server/src/middleware/`, `server/src/controllers/` |
-| **express-expert** | `.gemini/agents/express.md` | Pipelines Express 5, gestion des middlewares, parsing, gestion centralisée des erreurs, routage avancé. | `server/src/index.ts`, `server/src/app.ts`, `server/src/routes/` |
-| **node-specialist** | `.gemini/agents/node_specialist.md` | Moteur de tâches asynchrones, schedulers, Node Cron, gestion de flux (streams), contrôle des quotas, jitter anti-détection. | `server/src/workers/`, `server/src/queue/`, `scripts/` |
-| **react-specialist** | `.gemini/agents/react-specialist.md` | UI React 18 / Vite, système de design **Adora** (`#592eff`), Tailwind CSS, GSAP micro-animations, Lucide Icons, intégration XLSX. | `client/src/components/`, `client/src/index.css`, `client/src/App.tsx` |
-| **frontend-developer** | `.gemini/agents/frontend-dev.md` | Architecture SPA globale, gestion des routes clientes, hooks personnalisés, synchronisation d'état, services API Axios/Fetch. | `client/src/services/`, `client/src/context/`, `client/src/types.ts` |
-| **fullstack-developer** | `.gemini/agents/fullstack-dev.md` | Développement vertical complet de bout en bout pour des fonctionnalités légères nécessitant une cohérence immédiate. | Full scope (Client + Server) |
-| **debugger** | `.gemini/agents/debugger.md` | Analyse de stack traces, détection de régressions, bugs de concurrence, fuites de mémoire, audits d'erreurs. | Diagnostic transversal & correction ciblée |
+| **prisma-expert** | `.agents/skills/prisma/SKILL.md` | Modélisation Prisma v6, driver adapters (`@prisma/adapter-pg`), migrations, requêtes relationnelles optimisées. | `prisma/schema.prisma`, `lib/prisma.ts`, `prisma/migrations/` |
+| **unipile-linkedin** | `.agents/skills/unipile-linkedin/SKILL.md` | Intégration API Unipile ([docs](https://developer.unipile.com), [ref](https://developer.unipile.com/reference)), sync LinkedIn, invitations, webhooks, jitter. | `server/src/services/unipile.service.ts`, `server/src/controllers/webhook.controller.ts` |
+| **postgres-expert** | `.agents/skills/postgresql/SKILL.md` | Gestion PostgreSQL, indexation, jointures multi-tenant anti-collision, agrégations analytiques. | `prisma/schema.prisma`, `server/src/db/` |
+| **api-designer** | `.agents/skills/api-architect/SKILL.md` | Conception d'API RESTful, contrats de données, schémas de validation Zod, pagination, codes HTTP. | `server/src/routes/`, `server/src/types/`, validation Zod |
+| **backend-developer** | `.agents/skills/backend/SKILL.md` | Architecture globale backend, services métier, logique d'authentification (JWT/bcrypt), sécurité OWASP. | `server/src/services/`, `server/src/middleware/`, `server/src/controllers/` |
+| **express-expert** | `.agents/skills/express/SKILL.md` | Pipelines Express 5, gestion des middlewares, parsing, gestion centralisée des erreurs, routage avancé. | `server/src/index.ts`, `server/src/app.ts`, `server/src/routes/` |
+| **node-specialist** | `.agents/skills/node_expert/SKILL.md` | Moteur de tâches asynchrones, schedulers, Node Cron, gestion de flux (streams), contrôle des quotas, jitter. | `server/src/workers/`, `server/src/queue/`, `scripts/` |
+| **react-specialist** | `.agents/skills/react_expert/SKILL.md` | UI React 18 / Vite, système de design **Adora** (`#592eff`), Tailwind CSS, GSAP micro-animations, Recharts. | `client/src/components/`, `client/src/index.css`, `client/src/App.tsx` |
+| **frontend-developer** | `.agents/skills/frontend-dev/SKILL.md` | Architecture SPA globale, React Router v7, hooks personnalisés, synchronisation d'état, services API. | `client/src/services/`, `client/src/context/`, `client/src/types.ts` |
+| **fullstack-developer** | `.agents/skills/fullstack/SKILL.md` | Développement vertical complet de bout en bout reliant Prisma ➔ Express ➔ React UI. | Full scope (Client + Server) |
+| **debugger** | `.agents/skills/debugger/SKILL.md` | Analyse de stack traces, résolution d'erreurs TypeScript, diagnostic API Unipile ([ref](https://developer.unipile.com/reference)). | Diagnostic transversal & correction ciblée |
+| **skill-creator** | `.agents/skills/skill-creator/SKILL.md` | Création, enrichissement, optimisation de descriptions pushy et benchmarking de skills adaptés aux besoins émergents. | `.agents/skills/`, création modulaire de compétences |
 
 ---
 
-## 3. Playbooks Métier Spécifiques (Bime Link)
+## 3. Playbooks Métier Spécifiques (Bleadin)
 
 L'orchestrateur applique des protocoles prédéfinis pour les fonctionnalités maîtresses de l'application :
 
@@ -79,11 +84,14 @@ L'orchestrateur applique des protocoles prédéfinis pour les fonctionnalités m
 
 ### Playbook B : Intégration Unipile & Synchronisation LinkedIn
 *Scénario : Connexion de comptes LinkedIn, réception de webhooks, synchronisation des messages.*
-1. **api-designer** : Spécification des payloads Unipile et des endpoints de webhooks (messages reçus, invitations acceptées).
-2. **backend-developer** : Implémentation du service Unipile (gestion des API keys, tokens d'accès, reconnexion de session).
-3. **express-expert** : Sécurisation et traitement idempotente des webhooks entrants.
-4. **react-specialist** : Vue Inbox synchronisée (messagerie instantanée, statuts de synchronisation, indicateur de compte actif).
-5. **Quality Gate** : Gestion gracieuse des erreurs de session déconnectée (alerte utilisateur sans plantage).
+*Documentation officielle : [https://developer.unipile.com](https://developer.unipile.com) et [https://developer.unipile.com/reference](https://developer.unipile.com/reference)*
+1. **unipile-linkedin** : Consultation de la référence API Unipile officielle pour valider les paramètres et payloads de requêtes.
+2. **api-designer** : Spécification des payloads Unipile et des endpoints de webhooks (messages reçus, invitations acceptées).
+3. **backend-developer** : Implémentation du service Unipile (gestion des API keys, tokens d'accès, reconnexion de session).
+4. **express-expert** : Sécurisation et traitement idempotente des webhooks entrants.
+5. **react-specialist** : Vue Inbox synchronisée (messagerie instantanée, statuts de synchronisation, indicateur de compte actif).
+6. **debugger** : Diagnostic des codes d'erreurs Unipile (401, 404, 429) selon [https://developer.unipile.com/reference](https://developer.unipile.com/reference).
+7. **Quality Gate** : Gestion gracieuse des erreurs de session déconnectée (alerte utilisateur sans plantage).
 
 ### Playbook C : Gestion des Prospects (CRM) & Imports XLSX/CSV
 *Scénario : Alimentation, segmentation et qualification des listes de leads.*
@@ -102,6 +110,16 @@ L'orchestrateur applique des protocoles prédéfinis pour les fonctionnalités m
    - Micro-animations d'entrée et graphiques réactifs.
 3. **Quality Gate** : Responsive complet, zéro saut de layout (CLS), contraste accessible.
 
+### Playbook E : Extension de Compétences & Création de Skills Dédiés
+*Scénario : Besoin d'une nouvelle compétence métier ou technique non couverte par l'équipe existante (ex: intégration d'un outil d'enrichissement IA, moteur d'extraction spécifique, scrapers avancés, nouveau protocole).*
+1. **orchestrateur** : Triage du besoin, identification du manque d'expertise et cadrage de l'intention opérationnelle.
+2. **skill-creator** (`.agents/skills/skill-creator/SKILL.md`) :
+   - Cadrage du périmètre, contextes d'activation et format attendu.
+   - Génération du fichier `.agents/skills/<nouveau-skill>/SKILL.md` avec YAML frontmatter (`name`, `description` pushy).
+   - Structuration en progressive disclosure (< 500 lignes pour le corps, sous-dossiers `references/` ou `scripts/` si nécessaire).
+3. **orchestrateur** : Référencement immédiat du nouveau skill dans la matrice de `AGENTS.md` pour le rendre mobilisable dans les cycles de délégation.
+4. **Quality Gate** : Validation de conformité du skill (Gate Skill).
+
 ---
 
 ## 4. Contrats de Passage & Quality Gates
@@ -109,11 +127,11 @@ L'orchestrateur applique des protocoles prédéfinis pour les fonctionnalités m
 Avant d'autoriser la transition entre deux sous-agents, les validations techniques suivantes doivent impérativement réussir :
 
 ```
-┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
-│  Gate Database  │  ==>  │  Gate Backend   │  ==>  │  Gate Frontend  │
-│ prisma validate │       │ npm run build:  │       │ npm --prefix    │
-│ prisma generate │       │     server      │       │ client run build│
-└─────────────────┘       └─────────────────┘       └─────────────────┘
+┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
+│  Gate Database  │  ==>  │  Gate Backend   │  ==>  │  Gate Frontend  │  ==>  │   Gate Skill    │
+│ prisma validate │       │ npm run build:  │       │ npm --prefix    │       │ YAML frontmatter│
+│ prisma generate │       │     server      │       │ client run build│       │ & pushy triggers│
+└─────────────────┘       └─────────────────┘       └─────────────────┘       └─────────────────┘
 ```
 
 1. **Gate Database (postgres-expert) :**
@@ -131,7 +149,13 @@ Avant d'autoriser la transition entre deux sous-agents, les validations techniqu
    - Respect strict des tokens de couleur et typographie d'Adora (`DESIGN (2).md`).
    - Traitement des états de chargement (`isLoading`), données vides (`empty`), et erreurs (`isError`).
 
-4. **Arbitrage en cas d'échec :**
+4. **Gate Skill (skill-creator) :**
+   - Frontmatter YAML complet et syntaxiquement valide (`name`, `description`).
+   - Description directive, contextualisée et proactive ("pushy") couvrant les formulations directes et indirectes de déclenchement.
+   - Respect du principe de progressive disclosure (< 500 lignes pour le corps `SKILL.md`, séparation dans `references/` et `scripts/`).
+   - Intégration et référencement effectifs dans la matrice de compétences de `AGENTS.md`.
+
+5. **Arbitrage en cas d'échec :**
    - Appel automatique à `debugger`.
    - Interdiction de masquer les erreurs par des `any` ou des `// @ts-ignore`.
 

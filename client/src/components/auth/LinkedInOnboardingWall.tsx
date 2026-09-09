@@ -76,7 +76,7 @@ export const LinkedInOnboardingWall: React.FC<LinkedInOnboardingWallProps> = ({ 
             Connectez votre compte LinkedIn
           </h1>
           <p className="text-[#5f5f69] text-xs sm:text-sm mt-1">
-            Espace actif : <span className="font-bold text-[#21164c]">{user?.organization?.name || "Bime Link"}</span>
+            Espace actif : <span className="font-bold text-[#21164c]">{user?.organization?.name || "Bleadin"}</span>
           </p>
         </div>
 

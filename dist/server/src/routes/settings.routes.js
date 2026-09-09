@@ -3,7 +3,7 @@ import { requireAuth } from "../middlewares/auth.middleware.js";
 import { getAccountSettings, updateAccountSettings, getLinkedInSettings, reconnectLinkedInDirect, resolveLinkedInCheckpoint, getImportHistory, getImportDetails, getApiKeys, createApiKey, revokeApiKey, getIntegrations, saveIntegration, testIntegrationConnection, getBillingInfo, downloadInvoicePdf, } from "../controllers/settings.controller.js";
 const router = Router();
 router.use(requireAuth);
-// 1. Compte Bime Link
+// 1. Compte Bleadin
 router.get("/account", getAccountSettings);
 router.put("/account", updateAccountSettings);
 // 2. Reconnexion & Santé LinkedIn

@@ -79,8 +79,8 @@ export async function setupSuperAdmin(req: AuthenticatedRequest, res: Response) 
     // Créer l'organisation principale
     const org = await prisma.organization.create({
       data: {
-        name: body.organizationName || "Bime Link Technologies",
-        slug: "bime-link-main",
+        name: body.organizationName || "Bleadin Technologies",
+        slug: "bleadin-main",
         plan: "ENTERPRISE",
       },
     });

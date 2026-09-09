@@ -45,8 +45,6 @@ const TEMPLATES: SequenceTemplate[] = [
   {
     id: "INVITE_AND_3_MESSAGES",
     title: "Invitation + 3 messages",
-    badge: "Haute conversion",
-    badgeColor: "bg-[#592eff]/10 text-[#592eff]",
     image: "/campagnes_images/01_invitation_3_messages.png",
     popularity: "44.4K",
     description: "Séquence de prospection complète avec 1 invitation et 3 relances de valeur. Arrêt automatique garanti dès que le prospect répond.",
@@ -81,8 +79,6 @@ const TEMPLATES: SequenceTemplate[] = [
   {
     id: "VISIT_FOLLOW_INVITE",
     title: "Visite + Follow + Invitation",
-    badge: "Préchauffage max",
-    badgeColor: "bg-amber-500/10 text-amber-700",
     image: "/campagnes_images/02_visite_follow_invitation.png",
     popularity: "28.1K",
     description: "Stratégie multi-touch : consulte le profil le Jour J, s'abonne à ses publications à J+1, puis envoie l'invitation à J+2 avec un taux d'acceptation record.",
@@ -111,8 +107,6 @@ const TEMPLATES: SequenceTemplate[] = [
   {
     id: "VISIT_INVITE_1_MESSAGE",
     title: "Visite + Invitation + 1 message",
-    badge: "Approche naturelle",
-    badgeColor: "bg-emerald-500/10 text-emerald-700",
     image: "/campagnes_images/03_visite_invitation_1_message.png",
     popularity: "118.5K",
     description: "Préchauffez votre prospect par une consultation de son profil, puis envoyez l'invitation et un premier message d'introduction dès acceptation.",
@@ -141,8 +135,6 @@ const TEMPLATES: SequenceTemplate[] = [
   {
     id: "INVITE_AND_FOLLOWUPS",
     title: "Connexion & Double Relance",
-    badge: "Le plus populaire",
-    badgeColor: "bg-blue-500/10 text-blue-700",
     image: "/campagnes_images/06_invitation_2_messages.png",
     popularity: "376.4K",
     description: "Envoie une invitation ciblée, puis 2 messages espacés dès que le contact accepte la relation.",
@@ -171,8 +163,6 @@ const TEMPLATES: SequenceTemplate[] = [
   {
     id: "SOFT_INVITE",
     title: "Invitation Douce sans note",
-    badge: "Taux d'acceptation max",
-    badgeColor: "bg-violet-500/10 text-violet-700",
     image: "/campagnes_images/05_invitation.png",
     popularity: "92.3K",
     description: "Invitation sans message d'accroche (recommandé pour un taux d'acceptation optimal), suivie d'un premier message.",
@@ -195,8 +185,6 @@ const TEMPLATES: SequenceTemplate[] = [
   {
     id: "DIRECT_MESSAGES",
     title: "Message Direct (Contacts 1er degré)",
-    badge: "Relations existantes",
-    badgeColor: "bg-slate-500/10 text-slate-700",
     image: "/campagnes_images/04_message_direct.png",
     popularity: "65.2K",
     description: "Contacte directement les prospects qui font déjà partie de votre réseau LinkedIn avec une relance automatique.",
@@ -747,23 +735,27 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                         {/* Card Content Compact - Titre uniquement */}
                         <div className="p-3.5 flex-1 flex flex-col justify-between space-y-2">
                           <div>
-                            {/* Badges & Popularity */}
-                            <div className="flex items-center justify-between gap-2 mb-1.5">
-                              <span
-                                className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                                  tmpl.badgeColor || "bg-[#592eff]/10 text-[#592eff]"
-                                }`}
-                              >
-                                {tmpl.badge}
-                              </span>
+                            {/* Popularity & Optional Badge */}
+                            {(tmpl.badge || tmpl.popularity) && (
+                              <div className={`flex items-center gap-2 mb-1.5 ${tmpl.badge ? "justify-between" : "justify-end"}`}>
+                                {tmpl.badge && (
+                                  <span
+                                    className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                                      tmpl.badgeColor || "bg-[#592eff]/10 text-[#592eff]"
+                                    }`}
+                                  >
+                                    {tmpl.badge}
+                                  </span>
+                                )}
 
-                              {tmpl.popularity && (
-                                <span className="text-[10px] font-semibold text-[#5f5f69] flex items-center gap-1">
-                                  <Users className="w-3 h-3 text-[#592eff]" />
-                                  <span>{tmpl.popularity}</span>
-                                </span>
-                              )}
-                            </div>
+                                {tmpl.popularity && (
+                                  <span className="text-[10px] font-semibold text-[#5f5f69] flex items-center gap-1">
+                                    <Users className="w-3 h-3 text-[#592eff]" />
+                                    <span>{tmpl.popularity}</span>
+                                  </span>
+                                )}
+                              </div>
+                            )}
 
                             {/* Title - Sans description */}
                             <h3 className="font-extrabold text-[#21164c] text-xs sm:text-sm group-hover:text-[#592eff] transition-colors leading-snug line-clamp-2">
@@ -1333,7 +1325,7 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                             Consultation automatique du profil LinkedIn
                           </h4>
                           <p className="text-xs text-[#5f5f69] leading-relaxed">
-                            Bime Link consultera discrètement le profil LinkedIn du prospect. Celui-ci recevra une notification LinkedIn native : <span className="font-semibold text-[#21164c]">"X a consulté votre profil"</span>. Cela crée de la familiarité avant toute sollicitation directe.
+                            Bleadin consultera discrètement le profil LinkedIn du prospect. Celui-ci recevra une notification LinkedIn native : <span className="font-semibold text-[#21164c]">"X a consulté votre profil"</span>. Cela crée de la familiarité avant toute sollicitation directe.
                           </p>
                         </div>
                       </div>
@@ -1370,7 +1362,7 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                             Abonnement aux publications du prospect (Follow)
                           </h4>
                           <p className="text-xs text-[#5f5f69] leading-relaxed">
-                            Bime Link s'abonne automatiquement aux publications du prospect sur LinkedIn. Cela témoigne d'un intérêt authentique pour son contenu et renforce significativement les chances d'acceptation de votre prochaine invitation.
+                            Bleadin s'abonne automatiquement aux publications du prospect sur LinkedIn. Cela témoigne d'un intérêt authentique pour son contenu et renforce significativement les chances d'acceptation de votre prochaine invitation.
                           </p>
                         </div>
                       </div>
@@ -1577,7 +1569,7 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                       Activer la campagne immédiatement
                     </span>
                     <span className="text-xs text-[#5f5f69] leading-relaxed block">
-                      Le worker Bime Link commencera à exécuter les premières étapes selon vos créneaux et quotas de sécurité.
+                      Le worker Bleadin commencera à exécuter les premières étapes selon vos créneaux et quotas de sécurité.
                     </span>
                   </div>
                 </label>

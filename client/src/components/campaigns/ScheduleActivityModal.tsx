@@ -322,7 +322,7 @@ export const ScheduleActivityModal: React.FC<ScheduleActivityModalProps> = ({
           <div className="p-3.5 bg-[#592eff]/5 rounded-2xl border border-[#592eff]/15 flex items-start gap-2.5 text-xs text-[#21164c]">
             <Info className="w-4 h-4 text-[#592eff] shrink-0 mt-0.5" />
             <p>
-              Bime Link espace automatiquement chaque action de 90 secondes avec un léger délai aléatoire
+              Bleadin espace automatiquement chaque action de 90 secondes avec un léger délai aléatoire
               pour garantir une sécurité maximale à votre compte.
             </p>
           </div>

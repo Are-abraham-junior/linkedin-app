@@ -177,12 +177,14 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({ onStartCampaign })
     const handleCustomRefresh = () => {
       loadStats(true);
     };
+    window.addEventListener("bleadin:refresh-dashboard", handleCustomRefresh);
     window.addEventListener("bime:refresh-dashboard", handleCustomRefresh);
 
     return () => {
       clearInterval(intervalId);
       window.removeEventListener("focus", handleVisibilityOrFocus);
       document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
+      window.removeEventListener("bleadin:refresh-dashboard", handleCustomRefresh);
       window.removeEventListener("bime:refresh-dashboard", handleCustomRefresh);
     };
   }, [selectedMemberId, impersonatedOrg?.id]);

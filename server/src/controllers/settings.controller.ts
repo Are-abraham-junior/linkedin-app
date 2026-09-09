@@ -713,9 +713,9 @@ export async function testIntegrationConnection(req: AuthenticatedRequest, res: 
       }
       try {
         const testPayload = {
-          event: "bime_link_connection_test",
+          event: "bleadin_connection_test",
           timestamp: new Date().toISOString(),
-          message: "Test de connectivité réussi depuis Bime Link.",
+          message: "Test de connectivité réussi depuis Bleadin.",
         };
         const hookRes = await fetch(webhookUrl, {
           method: "POST",
@@ -924,7 +924,7 @@ export async function downloadInvoicePdf(req: AuthenticatedRequest, res: Respons
       ? await prisma.organization.findUnique({ where: { id: invoice.organizationId } })
       : null;
 
-    const orgName = org?.name || "Bime Link Client";
+    const orgName = org?.name || "Bleadin Client";
     const dateFormatted = new Date(invoice.createdAt).toLocaleDateString("fr-FR");
     const periodStartStr = new Date(invoice.periodStart).toLocaleDateString("fr-FR");
     const periodEndStr = new Date(invoice.periodEnd).toLocaleDateString("fr-FR");
@@ -935,7 +935,7 @@ export async function downloadInvoicePdf(req: AuthenticatedRequest, res: Respons
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <title>Facture ${invoice.number} - Bime Link</title>
+  <title>Facture ${invoice.number} - Bleadin</title>
   <style>
     body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #21164c; margin: 40px; background: #fff; }
     .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #592eff; padding-bottom: 20px; }
@@ -959,7 +959,7 @@ export async function downloadInvoicePdf(req: AuthenticatedRequest, res: Respons
 <body>
   <div class="header">
     <div>
-      <div class="logo">⚡ Bime Link</div>
+      <div class="logo">⚡ BLEADIN</div>
       <p style="font-size: 12px; color: #5f5f69; margin-top: 4px;">Plateforme d'Automatisation & Prospection LinkedIn</p>
     </div>
     <div style="text-align: right;">
@@ -972,7 +972,7 @@ export async function downloadInvoicePdf(req: AuthenticatedRequest, res: Respons
   <div class="meta-grid">
     <div class="meta-block">
       <h4>Émetteur</h4>
-      <p><strong>Bime Link Technologies SAS</strong></p>
+      <p><strong>Bleadin Technologies SAS</strong></p>
       <p>42 Avenue de l'Automatisation</p>
       <p>75008 Paris, France</p>
       <p>SIRET : 912 345 678 00019</p>
@@ -1000,7 +1000,7 @@ export async function downloadInvoicePdf(req: AuthenticatedRequest, res: Respons
     <tbody>
       <tr>
         <td>
-          <strong>Abonnement Bime Link - Formule ${invoice.plan}</strong><br>
+          <strong>Abonnement Bleadin - Formule ${invoice.plan}</strong><br>
           <span style="font-size: 11px; color: #666;">Accès illimité aux campagnes séquentielles, Inbox synchronisée et enrichissement automatique.</span>
         </td>
         <td style="text-align: center;">${periodStartStr} - ${periodEndStr}</td>
@@ -1020,7 +1020,7 @@ export async function downloadInvoicePdf(req: AuthenticatedRequest, res: Respons
   </div>
 
   <div class="footer">
-    Bime Link Technologies SAS • RCS Paris • Facture acquittée automatiquement • Pour toute question : billing@bimelink.io
+    Bleadin Technologies SAS • RCS Paris • Facture acquittée automatiquement • Pour toute question : billing@bleadin.com
   </div>
 
   <script>

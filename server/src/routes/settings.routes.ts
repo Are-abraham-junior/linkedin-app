@@ -22,7 +22,7 @@ const router = Router();
 
 router.use(requireAuth);
 
-// 1. Compte Bime Link
+// 1. Compte Bleadin
 router.get("/account", getAccountSettings);
 router.put("/account", updateAccountSettings);
 

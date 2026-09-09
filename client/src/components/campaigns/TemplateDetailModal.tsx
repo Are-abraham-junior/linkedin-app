@@ -26,7 +26,7 @@ export interface SequenceTemplateStep {
 export interface SequenceTemplate {
   id: string;
   title: string;
-  badge: string;
+  badge?: string;
   badgeColor?: string;
   description: string;
   recommendedFor: string;
@@ -169,13 +169,15 @@ export const TemplateDetailModal: React.FC<TemplateDetailModalProps> = ({
             {/* Infos clés & Titre */}
             <div className="flex-1 text-center sm:text-left space-y-2">
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-                <span
-                  className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full ${
-                    template.badgeColor || "bg-[#592eff]/10 text-[#592eff]"
-                  }`}
-                >
-                  {template.badge}
-                </span>
+                {template.badge && (
+                  <span
+                    className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full ${
+                      template.badgeColor || "bg-[#592eff]/10 text-[#592eff]"
+                    }`}
+                  >
+                    {template.badge}
+                  </span>
+                )}
 
                 {template.popularity && (
                   <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#5f5f69] bg-white px-2.5 py-1 rounded-full border border-[#e0e0db]">
@@ -273,7 +275,7 @@ export const TemplateDetailModal: React.FC<TemplateDetailModalProps> = ({
             </div>
           </div>
 
-          {/* Règle de sécurité Bime Link */}
+          {/* Règle de sécurité Bleadin */}
           <div className="p-3.5 rounded-2xl bg-[#f8f9fc] border border-[#e0e0db] text-xs text-[#5f5f69] flex items-center gap-2.5">
             <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
             <span>

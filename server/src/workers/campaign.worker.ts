@@ -902,7 +902,7 @@ export async function checkAcceptedInvitations(): Promise<void> {
  * Démarre le planificateur de tâches de campagne
  */
 export function startCampaignScheduler(): void {
-  console.log("⚡ [CampaignWorker] Initialisation du planificateur de campagnes Bime Link...");
+  console.log("⚡ [CampaignWorker] Initialisation du planificateur de campagnes Bleadin...");
 
   // Exécution de la file d'attente chaque minute
   setInterval(() => {

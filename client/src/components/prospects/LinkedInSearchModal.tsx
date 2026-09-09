@@ -446,9 +446,7 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-lg sm:text-xl font-bold text-[#21164c]">Recherche de Profils LinkedIn</h2>
-                <span className="hidden sm:inline-block text-[10px] px-2 py-0.5 rounded-full bg-[#592eff]/10 text-[#592eff] font-bold">
-                  Split-View
-                </span>
+               
               </div>
               <p className="text-xs text-[#5f5f69]">
                 Ciblez des décideurs par critères métier, secteur d'activité et taille d'entreprise

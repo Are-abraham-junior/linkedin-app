@@ -1,7 +1,7 @@
 {
   "name": "linkedin-app",
   "version": "1.0.0",
-  "description": "Bime Link - LinkedIn Automation Platform",
+  "description": "BLEADIN - LinkedIn Automation Platform",
   "main": "index.js",
   "type": "module",
   "scripts": {

@@ -321,7 +321,7 @@ function formatCleanError(err?: string): string {
         )}
       </div>
 
-      {/* Formulaire de Reconnexion Directe (Intégré dans Bime Link) */}
+      {/* Formulaire de Reconnexion Directe (Intégré dans Bleadin) */}
       <div className="adora-card p-6 sm:p-7 bg-white rounded-3xl border border-[#e0e0db]/80 shadow-xs space-y-6">
         <div className="flex items-center gap-3 border-b border-[#f0f0f4] pb-4">
           <div className="w-9 h-9 rounded-2xl bg-[#592eff]/10 flex items-center justify-center text-[#592eff]">

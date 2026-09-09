@@ -73,7 +73,7 @@ export const BillingSettingsTab: React.FC = () => {
   }, []);
 
   const handleDownloadInvoice = (invoiceId: string) => {
-    const token = localStorage.getItem("bime_token");
+    const token = localStorage.getItem("bleadin_token") || localStorage.getItem("bime_token");
     const url = `/api/settings/billing/invoices/${invoiceId}/pdf`;
 
     // Ouverture directe avec jeton d'authentification

@@ -112,7 +112,7 @@ export const CampaignsView: React.FC = () => {
         setCampaigns((prev) =>
           prev.map((c) => (c.id === campaign.id ? { ...c, status: newStatus } : c))
         );
-        window.dispatchEvent(new CustomEvent("bime:refresh-dashboard"));
+        window.dispatchEvent(new CustomEvent("bleadin:refresh-dashboard"));
       }
     } catch (err) {
       console.error("Erreur toggle status:", err);
@@ -148,7 +148,7 @@ export const CampaignsView: React.FC = () => {
           setCampaigns((prev) => prev.filter((c) => c.id !== campaignToDelete.id));
         }
         setCampaignToDelete(null);
-        window.dispatchEvent(new CustomEvent("bime:refresh-dashboard"));
+        window.dispatchEvent(new CustomEvent("bleadin:refresh-dashboard"));
       } else {
         setDeleteCampaignError(res.error || "Impossible d'archiver ou supprimer cette campagne.");
       }
@@ -171,7 +171,7 @@ export const CampaignsView: React.FC = () => {
         setCampaigns((prev) =>
           prev.map((c) => (c.id === campaign.id ? { ...c, status: "PAUSED" } : c))
         );
-        window.dispatchEvent(new CustomEvent("bime:refresh-dashboard"));
+        window.dispatchEvent(new CustomEvent("bleadin:refresh-dashboard"));
       }
     } catch (err) {
       console.error("Erreur restauration campagne:", err);
@@ -582,7 +582,7 @@ export const CampaignsView: React.FC = () => {
         onClose={() => setIsWizardOpen(false)}
         onCampaignCreated={() => {
           fetchCampaigns();
-          window.dispatchEvent(new CustomEvent("bime:refresh-dashboard"));
+          window.dispatchEvent(new CustomEvent("bleadin:refresh-dashboard"));
         }}
       />
 
@@ -596,7 +596,7 @@ export const CampaignsView: React.FC = () => {
         }}
         onStatusToggled={() => {
           fetchCampaigns();
-          window.dispatchEvent(new CustomEvent("bime:refresh-dashboard"));
+          window.dispatchEvent(new CustomEvent("bleadin:refresh-dashboard"));
         }}
       />
 

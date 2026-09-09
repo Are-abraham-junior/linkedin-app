@@ -2,7 +2,7 @@ import { prisma } from "../lib/prisma.js";
 import bcrypt from "bcryptjs";
 
 async function main() {
-  console.log("🌱 Seeding database for Bime Link with Multi-Tenant structure...");
+  console.log("🌱 Seeding database for Bleadin with Multi-Tenant structure...");
 
   // Clean existing data
   await prisma.message.deleteMany();
@@ -23,8 +23,8 @@ async function main() {
   // 1. Create Default Organizations
   const mainOrg = await prisma.organization.create({
     data: {
-      name: "Bime Link Technologies",
-      slug: "bime-link-hq",
+      name: "Bleadin Technologies",
+      slug: "bleadin-hq",
       plan: "ENTERPRISE",
     },
   });
