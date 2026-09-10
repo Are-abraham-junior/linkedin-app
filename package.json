@@ -18,7 +18,15 @@
     "prisma:seed": "prisma db seed",
     "verify": "tsx scripts/verify-prisma.ts",
     "backfill": "tsx scripts/backfill_companies.js",
-    "deploy": "node scripts/deploy.js",
+    "deploy": "node scripts/cpanel-remote.js deploy-all",
+    "deploy:package": "node scripts/cpanel-remote.js package",
+    "deploy:remote": "node scripts/cpanel-remote.js deploy-all",
+    "remote:restart": "node scripts/cpanel-remote.js restart",
+    "remote:logs": "node scripts/cpanel-remote.js logs",
+    "remote:diag": "node scripts/cpanel-remote.js diag",
+    "remote:chmod": "node scripts/cpanel-remote.js chmod",
+    "remote:health": "node scripts/cpanel-remote.js health",
+    "remote:clean-env": "node scripts/cpanel-remote.js clean-env",
     "build:production": "npx tsc --outDir dist && npx prisma generate"
   },
   "prisma": {

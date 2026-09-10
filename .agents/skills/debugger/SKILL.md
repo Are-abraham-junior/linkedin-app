@@ -57,6 +57,9 @@ Follow this structured 4-step diagnostic method:
 | `Unipile 429 Too Many Requests` | Limite de débit API Unipile / LinkedIn atteinte | Consulter [Unipile Rate Limits](https://developer.unipile.com/reference) : mettre en pause le worker 15 minutes avec jitter anti-détection. |
 | `Session LinkedIn Déconnectée / 401` | Cookie ou token LinkedIn révoqué | Marquer `LinkedInAccount.status = 'DISCONNECTED'` et inviter l'utilisateur à reconnecter son compte via l'UI. |
 | `Empty dashboard / 0 metrics` | User has no prospect lists yet | Render Adora empty state with CTA to import or connect |
+| `ERR_MODULE_NOT_FOUND` ou `Permission denied` sur un dossier dans `dist/` | Perte du bit d'exécution (`+x`) sur les sous-répertoires suite à un dézippage Windows | Exécuter `chmod -R 755 dist` dans le terminal SSH pour autoriser Node.js à traverser les répertoires. |
+| `transaction_read_only = on` ou `no pg_hba.conf entry` sur Postgres hôte | PostgreSQL en lecture seule ou accès restreint par l'hébergeur | Basculer vers Neon.tech (`DATABASE_URL` avec `sslmode=require`) pour conserver la compatibilité des modèles Prisma (`tags String[]`). |
+| Erreur 500 CloudLinux / Passenger sans détails | Passenger masque la stack trace de démarrage | Activer le virtualenv Node (`source ~/nodevenv/.../bin/activate`) et exécuter directement `node app.js` pour lire la stack trace complète. |
 
 ---
 

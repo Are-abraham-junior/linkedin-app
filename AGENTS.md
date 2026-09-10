@@ -49,7 +49,7 @@ Si une étape échoue (erreur de compilation TypeScript, rupture de schéma Pris
 
 ---
 
-## 2. Matrice des 12 Sous-Agents (.agents/skills/)
+## 2. Matrice des 13 Sous-Agents (.agents/skills/)
 
 L'orchestrateur dispose d'une équipe de spécialistes dédiés :
 
@@ -65,6 +65,7 @@ L'orchestrateur dispose d'une équipe de spécialistes dédiés :
 | **react-specialist** | `.agents/skills/react_expert/SKILL.md` | UI React 18 / Vite, système de design **Adora** (`#592eff`), Tailwind CSS, GSAP micro-animations, Recharts. | `client/src/components/`, `client/src/index.css`, `client/src/App.tsx` |
 | **frontend-developer** | `.agents/skills/frontend-dev/SKILL.md` | Architecture SPA globale, React Router v7, hooks personnalisés, synchronisation d'état, services API. | `client/src/services/`, `client/src/context/`, `client/src/types.ts` |
 | **fullstack-developer** | `.agents/skills/fullstack/SKILL.md` | Développement vertical complet de bout en bout reliant Prisma ➔ Express ➔ React UI. | Full scope (Client + Server) |
+| **cpanel-lws-expert** | `.agents/skills/cpanel-lws-expert/SKILL.md` | Expert déploiement cPanel LWS (CloudLinux/Passenger), transferts SSH/SCP, télé-maintenance, permissions Linux et diagnostics production. | `deploy/`, `scripts/cpanel-remote.js`, `.env.deploy` |
 | **debugger** | `.agents/skills/debugger/SKILL.md` | Analyse de stack traces, résolution d'erreurs TypeScript, diagnostic API Unipile ([ref](https://developer.unipile.com/reference)). | Diagnostic transversal & correction ciblée |
 | **skill-creator** | `.agents/skills/skill-creator/SKILL.md` | Création, enrichissement, optimisation de descriptions pushy et benchmarking de skills adaptés aux besoins émergents. | `.agents/skills/`, création modulaire de compétences |
 
@@ -120,6 +121,24 @@ L'orchestrateur applique des protocoles prédéfinis pour les fonctionnalités m
 3. **orchestrateur** : Référencement immédiat du nouveau skill dans la matrice de `AGENTS.md` pour le rendre mobilisable dans les cycles de délégation.
 4. **Quality Gate** : Validation de conformité du skill (Gate Skill).
 
+### Playbook F : Déploiement & Télé-maintenance Serveur de Production (cPanel LWS / CloudLinux / Neon)
+*Scénario : Déploiement automatisé ou manuel sur hébergement cPanel LWS avec Phusion Passenger, gestion des environnements virtuels Node et base de données PostgreSQL managée.*
+1. **cpanel-lws-expert (Build & Packaging) :**
+   - Compilation TypeScript du serveur, génération Prisma et build du client Vite (`npm run build:server && npm run build:client && npx prisma generate`).
+   - Assemblage du dossier `deploy/` et génération des archives ZIP de secours : `node scripts/cpanel-remote.js package`.
+2. **cpanel-lws-expert (Transfert & Déploiement Distant) :**
+   - Transfert automatisé SCP/SSH vers `REMOTE_API_DIR` et `REMOTE_CLIENT_DIR` (`npm run deploy:remote`) ou téléversement manuel via File Manager cPanel (`references/runbooks.md`).
+3. **cpanel-lws-expert & debugger (Permissions Linux post-extraction) :**
+   - Rétablissement impératif des droits d'exécution sur le serveur : `node scripts/cpanel-remote.js chmod` (`chmod -R 755 dist`).
+4. **postgres-expert & cpanel-lws-expert (Validation DB Neon vs Hébergeur) :**
+   - Pousser le schéma Prisma vers PostgreSQL Neon managé (`sslmode=require`) : `node scripts/cpanel-remote.js db-push` (`npx prisma db push`).
+5. **cpanel-lws-expert (Cycle de Rechargement Passenger & Recette) :**
+   - Rechargement à chaud de Phusion Passenger : `node scripts/cpanel-remote.js restart` (`touch tmp/restart.txt`).
+   - Validation de la **Gate Deployment** : `node scripts/cpanel-remote.js health` (`curl -s https://<api-domain>/api/health`).
+6. **debugger & cpanel-lws-expert (Diagnostic Runtime Direct en cas d'erreur 500) :**
+   - Démasquage direct des erreurs masquées par Passenger : `node scripts/cpanel-remote.js diag` (exécution directe `node app.js` dans le `nodevenv`).
+   - Extraction des logs d'erreurs : `node scripts/cpanel-remote.js logs` (`tail -n 80 stderr.log`).
+
 ---
 
 ## 4. Contrats de Passage & Quality Gates
@@ -127,11 +146,11 @@ L'orchestrateur applique des protocoles prédéfinis pour les fonctionnalités m
 Avant d'autoriser la transition entre deux sous-agents, les validations techniques suivantes doivent impérativement réussir :
 
 ```
-┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
-│  Gate Database  │  ==>  │  Gate Backend   │  ==>  │  Gate Frontend  │  ==>  │   Gate Skill    │
-│ prisma validate │       │ npm run build:  │       │ npm --prefix    │       │ YAML frontmatter│
-│ prisma generate │       │     server      │       │ client run build│       │ & pushy triggers│
-└─────────────────┘       └─────────────────┘       └─────────────────┘       └─────────────────┘
+┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
+│  Gate Database  │  ==>  │  Gate Backend   │  ==>  │  Gate Frontend  │  ==>  │   Gate Skill    │  ==>  │ Gate Deployment │
+│ prisma validate │       │ npm run build:  │       │ npm --prefix    │       │ YAML frontmatter│       │ curl /health 200│
+│ prisma generate │       │     server      │       │ client run build│       │ & pushy triggers│       │ + client 200 OK │
+└─────────────────┘       └─────────────────┘       └─────────────────┘       └─────────────────┘       └─────────────────┘
 ```
 
 1. **Gate Database (postgres-expert) :**
@@ -155,7 +174,12 @@ Avant d'autoriser la transition entre deux sous-agents, les validations techniqu
    - Respect du principe de progressive disclosure (< 500 lignes pour le corps `SKILL.md`, séparation dans `references/` et `scripts/`).
    - Intégration et référencement effectifs dans la matrice de compétences de `AGENTS.md`.
 
-5. **Arbitrage en cas d'échec :**
+5. **Gate Deployment (cpanel-lws-expert) :**
+   - Code HTTP 200 sur `GET /api/health` avec charge utile JSON valide.
+   - Code HTTP 200 sur le Frontend (`https://app.bleadin.com`).
+   - Permissions 755 appliquées sur `dist/` sans erreur `EACCES`.
+
+6. **Arbitrage en cas d'échec :**
    - Appel automatique à `debugger`.
    - Interdiction de masquer les erreurs par des `any` ou des `// @ts-ignore`.
 

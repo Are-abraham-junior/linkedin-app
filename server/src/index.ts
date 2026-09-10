@@ -21,7 +21,7 @@ import fs from "fs";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const FRONTEND_URL = process.env.FRONTEND_URL || "https://bimlink.croixance.net";
+const FRONTEND_URL = process.env.FRONTEND_URL || "https://bleadin.com";
 
 app.use(
   cors({
