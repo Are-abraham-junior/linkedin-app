@@ -5,7 +5,48 @@ import { extractCompanyFromHeadline } from "../utils/companyExtractor.js";
 const UNIPILE_DSN = process.env.UNIPILE_DSN || "https://api64.unipile.com:19478";
 const UNIPILE_API_KEY = process.env.UNIPILE_API_KEY || "Xn10pe1e.5rETphPfo4LGT/oDPPFuLFaN4OCrAdMvzDP4RbxF1yA=";
 
-const BASE_URL = (process.env.UNIPILE_DSN || UNIPILE_DSN).replace(/\/$/, "");
+/**
+ * LWS (mutualisé) bloque toute connexion SORTANTE sur un port non-standard : seuls
+ * 80/443 passent (vérifié : 19478, 8443, 993, 587... tous refusés — ECONNREFUSED —
+ * alors que 443 répond en <0.1s). Le DSN Unipile dédié utilise pourtant un port
+ * custom (ex: :19478), ce qui rendait tout appel Unipile impossible depuis le
+ * serveur ("fetch failed" côté client, ECONNREFUSED côté serveur).
+ *
+ * Unipile fournit un contournement officiel : appeler l'hôte SANS le port dans le
+ * DSN (donc port 443 implicite) et passer le port réel en paramètre de requête
+ * `?port=XXXXX` à la place — cf. https://developer.unipile.com/docs/api-usage :
+ * "If custom port are blocked in your environment, you can use port as query
+ * parameter to stay on standard 443".
+ *
+ * Ne jamais revenir à un DSN avec port inline (`https://apiXX.unipile.com:PORT`)
+ * tant que l'app tourne sur cet hébergement LWS mutualisé.
+ */
+function parseUnipileDsn(dsn: string): { hostBaseUrl: string; port: string | null } {
+  try {
+    const u = new URL(dsn);
+    const port = u.port || null;
+    u.port = "";
+    return { hostBaseUrl: u.toString().replace(/\/$/, ""), port };
+  } catch {
+    return { hostBaseUrl: dsn.replace(/\/$/, ""), port: null };
+  }
+}
+
+const BASE_URL = parseUnipileDsn(process.env.UNIPILE_DSN || UNIPILE_DSN).hostBaseUrl;
+
+/**
+ * Ajoute automatiquement `?port=` (ou `&port=` si l'URL a déjà une query string) à
+ * toute requête sortante vers Unipile, puis délègue au `fetch` global. C'est le SEUL
+ * point de sortie réseau de ce service : TOUS les appels ci-dessous utilisent cette
+ * fonction (jamais `fetch` directement) afin que le contournement de port reste
+ * garanti même si un appel utilise `getBaseUrl()` ou `BASE_URL` directement.
+ */
+function unipileFetch(url: string, options?: RequestInit): Promise<Response> {
+  const { port } = parseUnipileDsn(process.env.UNIPILE_DSN || UNIPILE_DSN);
+  if (!port) return fetch(url, options);
+  const sep = url.includes("?") ? "&" : "?";
+  return fetch(`${url}${sep}port=${port}`, options);
+}
 
 export interface LinkedInProfileResult {
   providerProfileId: string;
@@ -24,7 +65,7 @@ export interface LinkedInProfileResult {
 
 export class UnipileService {
   public static getBaseUrl(): string {
-    return (process.env.UNIPILE_DSN || BASE_URL).replace(/\/$/, "");
+    return parseUnipileDsn(process.env.UNIPILE_DSN || BASE_URL).hostBaseUrl;
   }
 
   public static parseErrorResponse(status: number, errText: string): string {
@@ -90,7 +131,7 @@ export class UnipileService {
   }> {
     try {
       const baseUrl = this.getBaseUrl();
-      const res = await fetch(`${baseUrl}/api/v1/accounts`, {
+      const res = await unipileFetch(`${baseUrl}/api/v1/accounts`, {
         headers: this.getHeaders(),
       });
       const { ok, status, data, rawText } = await this.safeJsonParse(res);
@@ -114,7 +155,7 @@ export class UnipileService {
     try {
       console.log(`[LinkedIn Gateway] Suppression/Déconnexion du compte ${accountId}...`);
       const baseUrl = this.getBaseUrl();
-      const res = await fetch(`${baseUrl}/api/v1/accounts/${accountId}`, {
+      const res = await unipileFetch(`${baseUrl}/api/v1/accounts/${accountId}`, {
         method: "DELETE",
         headers: this.getHeaders(),
       });
@@ -146,7 +187,7 @@ export class UnipileService {
   }> {
     try {
       const baseUrl = this.getBaseUrl();
-      const res = await fetch(`${baseUrl}/api/v1/accounts`, {
+      const res = await unipileFetch(`${baseUrl}/api/v1/accounts`, {
         method: "POST",
         headers: this.getHeaders(),
         body: JSON.stringify({
@@ -212,7 +253,7 @@ export class UnipileService {
         body.name = params.userId;
       }
 
-      const res = await fetch(`${baseUrl}/api/v1/hosted/accounts/link`, {
+      const res = await unipileFetch(`${baseUrl}/api/v1/hosted/accounts/link`, {
         method: "POST",
         headers: this.getHeaders(),
         body: JSON.stringify(body),
@@ -249,7 +290,7 @@ export class UnipileService {
 
       // 1. Profil utilisateur (/api/v1/users/me)
       try {
-        const meRes = await fetch(`${baseUrl}/api/v1/users/me?account_id=${accountId}`, { headers });
+        const meRes = await unipileFetch(`${baseUrl}/api/v1/users/me?account_id=${accountId}`, { headers });
         if (meRes.ok) {
           const { data: meData } = await this.safeJsonParse(meRes);
           if (meData) {
@@ -267,7 +308,7 @@ export class UnipileService {
 
       // 2. Objet compte (/api/v1/accounts/:id)
       try {
-        const accRes = await fetch(`${baseUrl}/api/v1/accounts/${accountId}`, { headers });
+        const accRes = await unipileFetch(`${baseUrl}/api/v1/accounts/${accountId}`, { headers });
         if (accRes.ok) {
           const { data: accData } = await this.safeJsonParse(accRes);
           const productsStatus = accData?.metadata?.products_connection_status || {};
@@ -294,7 +335,7 @@ export class UnipileService {
       // 3. Si Sales Navigator n'est pas encore confirmé, sonder les contrats (/api/v1/linkedin/contracts)
       if (!hasSalesNavigator && !hasRecruiter) {
         try {
-          const contractsRes = await fetch(`${baseUrl}/api/v1/linkedin/contracts?account_id=${accountId}`, { headers });
+          const contractsRes = await unipileFetch(`${baseUrl}/api/v1/linkedin/contracts?account_id=${accountId}`, { headers });
           if (contractsRes.ok) {
             const { data: contractsData } = await this.safeJsonParse(contractsRes);
             const contracts = contractsData?.contracts || (Array.isArray(contractsData) ? contractsData : []);
@@ -366,7 +407,7 @@ export class UnipileService {
       const sub = await this.detectLinkedInSubscription(accountId);
 
       // 1. Tenter l'endpoint /api/v1/users/me pour obtenir la photo haute résolution et l'occupation
-      const meRes = await fetch(`${baseUrl}/api/v1/users/me?account_id=${accountId}`, {
+      const meRes = await unipileFetch(`${baseUrl}/api/v1/users/me?account_id=${accountId}`, {
         headers: this.getHeaders(),
       });
 
@@ -396,7 +437,7 @@ export class UnipileService {
       }
 
       // 2. Fallback sur /api/v1/accounts/:id si /users/me échoue
-      const res = await fetch(`${baseUrl}/api/v1/accounts/${accountId}`, {
+      const res = await unipileFetch(`${baseUrl}/api/v1/accounts/${accountId}`, {
         headers: this.getHeaders(),
       });
 
@@ -438,7 +479,7 @@ export class UnipileService {
     if (!accountId) return null;
     try {
       const baseUrl = this.getBaseUrl();
-      const res = await fetch(`${baseUrl}/api/v1/accounts/${accountId}`, {
+      const res = await unipileFetch(`${baseUrl}/api/v1/accounts/${accountId}`, {
         headers: this.getHeaders(),
       });
       const { ok, status, data, rawText } = await this.safeJsonParse(res);
@@ -483,7 +524,7 @@ export class UnipileService {
     }
 
     const endpoint = `${BASE_URL}/api/v1/linkedin/search/parameters?${searchParams.toString()}`;
-    const res = await fetch(endpoint, {
+    const res = await unipileFetch(endpoint, {
       method: "GET",
       headers: this.getHeaders(),
     });
@@ -583,7 +624,7 @@ export class UnipileService {
 
         console.log(`Unipile search iteration ${iterations}:`, JSON.stringify(bodyPayload));
 
-        const res = await fetch(endpoint, {
+        const res = await unipileFetch(endpoint, {
           method: "POST",
           headers: this.getHeaders(),
           body: JSON.stringify(bodyPayload),
@@ -701,7 +742,7 @@ export class UnipileService {
       }
 
       console.log(`[Unipile] Sending invitation to ${params.providerId} with account ${accountId}...`);
-      const res = await fetch(`${BASE_URL}/api/v1/users/invite`, {
+      const res = await unipileFetch(`${BASE_URL}/api/v1/users/invite`, {
         method: "POST",
         headers: this.getHeaders(),
         body: JSON.stringify(body),
@@ -745,7 +786,7 @@ export class UnipileService {
       };
 
       console.log(`[Unipile] Sending message to attendee ${params.attendeeId} with account ${accountId}...`);
-      const res = await fetch(`${BASE_URL}/api/v1/chats`, {
+      const res = await unipileFetch(`${BASE_URL}/api/v1/chats`, {
         method: "POST",
         headers: this.getHeaders(),
         body: JSON.stringify(body),
@@ -788,7 +829,7 @@ export class UnipileService {
       }
 
       const url = `${this.getBaseUrl()}/api/v1/users/${encodeURIComponent(identifier)}?account_id=${accountId}&linkedin_sections=*`;
-      const res = await fetch(url, {
+      const res = await unipileFetch(url, {
         method: "GET",
         headers: this.getHeaders(),
       });
@@ -820,7 +861,7 @@ export class UnipileService {
     try {
       const limit = params.limit || 100;
       const url = `${BASE_URL}/api/v1/users/relations?account_id=${accountId}&limit=${limit}`;
-      const res = await fetch(url, {
+      const res = await unipileFetch(url, {
         method: "GET",
         headers: this.getHeaders(),
       });
@@ -864,7 +905,7 @@ export class UnipileService {
     }
     try {
       const url = `${BASE_URL}/api/v1/linkedin`;
-      const res = await fetch(url, {
+      const res = await unipileFetch(url, {
         method: "POST",
         headers: this.getHeaders(),
         body: JSON.stringify({
@@ -911,7 +952,7 @@ export class UnipileService {
       if (params.before) url += `&before=${encodeURIComponent(params.before)}`;
       if (params.after) url += `&after=${encodeURIComponent(params.after)}`;
 
-      const res = await fetch(url, {
+      const res = await unipileFetch(url, {
         method: "GET",
         headers: this.getHeaders(),
       });
@@ -939,7 +980,7 @@ export class UnipileService {
   static async getChatAttendees(chatId: string): Promise<{ success: boolean; items: any[]; error?: string }> {
     try {
       const url = `${BASE_URL}/api/v1/chats/${chatId}/attendees`;
-      const res = await fetch(url, {
+      const res = await unipileFetch(url, {
         method: "GET",
         headers: this.getHeaders(),
       });
@@ -972,7 +1013,7 @@ export class UnipileService {
       let url = `${BASE_URL}/api/v1/chats/${params.chatId}/messages?limit=${limit}`;
       if (params.cursor) url += `&cursor=${encodeURIComponent(params.cursor)}`;
 
-      const res = await fetch(url, {
+      const res = await unipileFetch(url, {
         method: "GET",
         headers: this.getHeaders(),
       });
@@ -1011,7 +1052,7 @@ export class UnipileService {
         body.attachments = params.attachments;
       }
 
-      const res = await fetch(url, {
+      const res = await unipileFetch(url, {
         method: "POST",
         headers: this.getHeaders(),
         body: JSON.stringify(body),
@@ -1039,7 +1080,7 @@ export class UnipileService {
   static async markChatAsRead(chatId: string): Promise<{ success: boolean; error?: string }> {
     try {
       const url = `${BASE_URL}/api/v1/chats/${chatId}`;
-      const res = await fetch(url, {
+      const res = await unipileFetch(url, {
         method: "PATCH",
         headers: this.getHeaders(),
         body: JSON.stringify({
@@ -1073,7 +1114,7 @@ export class UnipileService {
     }
     try {
       const url = `${BASE_URL}/api/v1/chats`;
-      const res = await fetch(url, {
+      const res = await unipileFetch(url, {
         method: "POST",
         headers: this.getHeaders(),
         body: JSON.stringify({
@@ -1162,7 +1203,7 @@ export class UnipileService {
         identifier = identifier.split("linkedin.com/in/")[1].split("/")[0].split("?")[0];
       }
 
-      const res = await fetch(`${BASE_URL}/api/v1/users/${encodeURIComponent(identifier)}?account_id=${accountId}&linkedin_sections=*`, {
+      const res = await unipileFetch(`${BASE_URL}/api/v1/users/${encodeURIComponent(identifier)}?account_id=${accountId}&linkedin_sections=*`, {
         headers: this.getHeaders(),
       });
 
