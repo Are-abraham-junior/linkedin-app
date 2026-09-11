@@ -83,9 +83,23 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
   defaultListId,
   onSuccess,
 }) => {
-  // Garantir que la liste sélectionnée est un vrai ID de liste et non "ALL"
+  // Garantir que la liste sélectionnée est un ID réellement présent dans `lists`.
+  //
+  // Il ne suffit PAS d'écarter les pseudo-identifiants "ALL" / "DO_NOT_CONTACT" :
+  // `selectedListId` de ProspectsView n'est pas réinitialisé quand le périmètre
+  // change (changement de membre, entrée/sortie du mode supervision), donc
+  // `defaultListId` peut pointer vers une liste d'une AUTRE organisation, absente
+  // de `lists`. Le <select> affiche alors sa première option — la valeur ne
+  // correspondant à aucune option — et l'import partait avec cet identifiant
+  // fantôme, que le serveur rejetait en 404 « Liste cible non trouvée. » alors
+  // que la liste affichée existait bel et bien.
+  //
+  // On vérifie donc l'appartenance à `lists`, comme le fait déjà ExcelImportModal.
+  const isSelectable = (id?: string) =>
+    Boolean(id) && id !== "ALL" && id !== "DO_NOT_CONTACT" && lists.some((l) => l.id === id);
+
   const getInitialListId = () => {
-    if (defaultListId && defaultListId !== "ALL") return defaultListId;
+    if (isSelectable(defaultListId)) return defaultListId as string;
     if (lists && lists.length > 0) return lists[0].id;
     return "";
   };
@@ -108,10 +122,13 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
   const [selectedListId, setSelectedListId] = useState<string>(getInitialListId());
   const [showSalesNavLockedModal, setShowSalesNavLockedModal] = useState<boolean>(false);
 
+  // Re-valider à chaque changement de `lists` : une sélection devenue orpheline
+  // (liste supprimée, ou périmètre d'organisation changé) doit être remplacée,
+  // sinon le <select> affiche une option qui ne correspond pas à son état.
   useEffect(() => {
-    if (!selectedListId || selectedListId === "ALL") {
+    if (!isSelectable(selectedListId)) {
       const valid = getInitialListId();
-      if (valid) setSelectedListId(valid);
+      if (valid !== selectedListId) setSelectedListId(valid);
     }
   }, [defaultListId, lists]);
 
@@ -342,10 +359,13 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
   };
 
   const handleImportSelected = async () => {
-    let targetList = selectedListId;
-    if (!targetList || targetList === "ALL") {
-      targetList = lists.length > 0 ? lists[0].id : "";
-    }
+    // Dernier filet : ne jamais envoyer au serveur un identifiant qui n'est pas
+    // une liste réellement proposée dans le sélecteur (cf. isSelectable).
+    const targetList = isSelectable(selectedListId)
+      ? selectedListId
+      : lists.length > 0
+        ? lists[0].id
+        : "";
 
     if (!targetList) {
       setError("Veuillez d'abord créer une liste de prospects pour y importer ces profils.");

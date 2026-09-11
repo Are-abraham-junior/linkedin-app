@@ -346,14 +346,20 @@ function cmdGuardApiHtaccess(scpOpts) {
 function cmdChmod() {
   log("🔒", "Application des permissions Linux requises sur le serveur distant...");
   // CloudLinux & Passenger exigent le droit d'exécution (+x / 755) sur les répertoires et les fichiers JS compilés
-  const remoteCmd = `chmod -R 755 ${config.remoteApiDir}/dist && chmod 644 ${config.remoteApiDir}/.env 2>/dev/null && chmod -R 755 ${config.remoteClientDir}`;
+  // Guillemets OBLIGATOIRES : runRemoteSsh passe par `shell: true`, donc cmd.exe
+  // parse la commande avant ssh et traite `&&` comme son propre séparateur — la
+  // commande partait tronquée et le `~` arrivait non expansé côté serveur.
+  const remoteCmd = `"chmod -R 755 ${config.remoteApiDir}/dist; chmod 644 ${config.remoteApiDir}/.env 2>/dev/null; chmod -R 755 ${config.remoteClientDir}"`;
   runRemoteSsh(remoteCmd, "Correction des permissions chmod 755");
 }
 
 function cmdRestart() {
   log("🔄", "Redémarrage de l'application Phusion Passenger...");
   // Signal de redémarrage Phusion Passenger standard
-  const remoteCmd = `mkdir -p ${config.remoteApiDir}/tmp && touch ${config.remoteApiDir}/tmp/restart.txt`;
+  // Guillemets obligatoires, même raison que dans cmdChmod : sans eux cmd.exe
+  // coupe la commande sur le `&&` et le redémarrage échouait silencieusement
+  // (« touch: cannot touch '~/public_html/...': No such file or directory »).
+  const remoteCmd = `"mkdir -p ${config.remoteApiDir}/tmp; touch ${config.remoteApiDir}/tmp/restart.txt"`;
   runRemoteSsh(remoteCmd, "Redémarrage Passenger (tmp/restart.txt)");
 }
 

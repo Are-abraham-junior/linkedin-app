@@ -112,7 +112,7 @@ export const Login: React.FC = () => {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
                 </div>
-                <span className="text-xl font-extrabold text-gray-900 tracking-wider">BLEADIN</span>
+                <span className="text-xl font-extrabold text-gray-900 tracking-wider">Bleadin</span>
               </div>
 
               <h1 className="text-2xl font-bold text-gray-900 mb-2">

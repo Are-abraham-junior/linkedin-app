@@ -173,7 +173,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           className={`flex items-center gap-2.5 cursor-pointer group ${
             isCollapsed ? "justify-center" : ""
           }`}
-          title="BLEADIN"
+          title="Bleadin"
         >
           {/* Logo BLEADIN */}
           <div className="w-9 h-9 rounded-2xl bg-[#592eff] flex items-center justify-center text-white shadow-md shadow-[#592eff]/30 group-hover:scale-105 transition-transform shrink-0">
@@ -196,7 +196,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {!isCollapsed && (
             <div className="flex items-center gap-1.5 overflow-hidden">
               <span className="font-extrabold text-base text-[#21164c] tracking-wider truncate">
-                BLEADIN
+                Bleadin
               </span>
               {isSuperAdmin && (
                 <span className="bg-[#592eff]/10 text-[#592eff] border border-[#592eff]/20 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full uppercase tracking-wider">
