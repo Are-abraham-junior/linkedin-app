@@ -1,6 +1,16 @@
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
+
+  # L'API Node vit dans ~/public_html/api-bleadin, SOUS la racine de ce .htaccess.
+  # Apache applique les .htaccess de tous les repertoires parents : sans ces
+  # gardes, le fallback SPA ci-dessous s'applique aussi aux requetes de
+  # api.bleadin.com et reecrit toute URL inexistante (/api/health...) vers un
+  # /index.html absent du docroot de l'API => 500 Internal Server Error.
+  RewriteCond %{HTTP_HOST} ^api\. [NC]
+  RewriteRule ^ - [L]
+  RewriteRule ^api-bleadin(/|$) - [L]
+
   RewriteRule ^index\.html$ - [L]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d

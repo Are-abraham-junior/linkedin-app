@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { apiRequest } from "../../services/api";
 import { User } from "../../types";
@@ -16,11 +17,13 @@ interface LinkedInOnboardingWallProps {
 
 export const LinkedInOnboardingWall: React.FC<LinkedInOnboardingWallProps> = ({ onDismiss }) => {
   const { user, login, logout, refreshUser } = useAuth();
+  const navigate = useNavigate();
   const [linkedinEmail, setLinkedinEmail] = useState("");
   const [linkedinPassword, setLinkedinPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [checkpointMsg, setCheckpointMsg] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
 
   const handleConnect = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,6 +54,14 @@ export const LinkedInOnboardingWall: React.FC<LinkedInOnboardingWallProps> = ({ 
       if (res.success && res.token && res.user) {
         login(res.token, res.user);
         await refreshUser();
+        // Message de félicitations avant de fermer la modale et de rediriger vers le dashboard
+        setSuccess(true);
+        setIsLoading(false);
+        setTimeout(() => {
+          onDismiss?.();
+          navigate("/dashboard");
+        }, 2000);
+        return;
       } else {
         setError((res as any).error || "Identifiants LinkedIn incorrects ou compte introuvable.");
       }
@@ -82,7 +93,7 @@ export const LinkedInOnboardingWall: React.FC<LinkedInOnboardingWallProps> = ({ 
 
         {/* Card Form */}
         <div className="adora-card p-6 sm:p-8 relative overflow-hidden shadow-2xl shadow-[#0077b5]/10 border border-[#e0e0db]/60 bg-white rounded-3xl">
-          {onDismiss && (
+          {onDismiss && !success && (
             <button
               type="button"
               onClick={onDismiss}
@@ -92,6 +103,21 @@ export const LinkedInOnboardingWall: React.FC<LinkedInOnboardingWallProps> = ({ 
               ✕
             </button>
           )}
+
+          {success ? (
+            <div className="py-6 flex flex-col items-center text-center">
+              <div className="w-16 h-16 rounded-full bg-emerald-50 flex items-center justify-center mb-4 animate-pulse">
+                <CheckCircle2 className="w-9 h-9 text-emerald-600" />
+              </div>
+              <h2 className="text-xl font-extrabold text-[#21164c] mb-1.5">
+                Félicitations, votre compte LinkedIn est connecté ! 🎉
+              </h2>
+              <p className="text-[#5f5f69] text-xs sm:text-sm">
+                Redirection vers votre tableau de bord...
+              </p>
+            </div>
+          ) : (
+          <>
           {error && (
             <div className="mb-5 p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold flex items-start gap-2.5">
               <span className="text-sm font-bold">⚠️</span>
@@ -178,6 +204,8 @@ export const LinkedInOnboardingWall: React.FC<LinkedInOnboardingWallProps> = ({ 
               Changer de compte
             </button>
           </div>
+          </>
+          )}
         </div>
       </div>
     </div>

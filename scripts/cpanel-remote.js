@@ -225,7 +225,11 @@ function cmdPackage() {
   if (fs.existsSync(htaccessSrc)) {
     copyFile(htaccessSrc, path.join(DEPLOY_CLIENT, ".htaccess"));
   } else if (!fs.existsSync(path.join(DEPLOY_CLIENT, ".htaccess"))) {
-    const defaultHtaccess = `<IfModule mod_rewrite.c>\n  RewriteEngine On\n  RewriteBase /\n  RewriteRule ^index\\.html$ - [L]\n  RewriteCond %{REQUEST_FILENAME} !-f\n  RewriteCond %{REQUEST_FILENAME} !-d\n  RewriteRule . /index.html [L]\n</IfModule>\n`;
+    // Gardes indispensables : ce .htaccess est posé à la racine de ~/public_html,
+    // donc Apache l'applique AUSSI au sous-répertoire api-bleadin (docroot de
+    // api.bleadin.com). Sans elles, le fallback SPA réécrit toute URL inexistante
+    // vers un /index.html absent du docroot de l'API → chaque route /api/* répond 500.
+    const defaultHtaccess = `<IfModule mod_rewrite.c>\n  RewriteEngine On\n  RewriteBase /\n  RewriteCond %{HTTP_HOST} ^api\\. [NC]\n  RewriteRule ^ - [L]\n  RewriteRule ^api-bleadin(/|$) - [L]\n  RewriteRule ^index\\.html$ - [L]\n  RewriteCond %{REQUEST_FILENAME} !-f\n  RewriteCond %{REQUEST_FILENAME} !-d\n  RewriteRule . /index.html [L]\n</IfModule>\n`;
     fs.writeFileSync(path.join(DEPLOY_CLIENT, ".htaccess"), defaultHtaccess);
   }
 
@@ -284,19 +288,59 @@ function cmdPush() {
 
   // 3. Transfert SCP du Client
   log("📤", `Transfert du Client vers ${config.remoteClientDir}...`);
-  const scpClientCmd = `scp ${scpOpts.join(" ")} "${DEPLOY_CLIENT}"/* ${config.sshUser}@${config.sshHost}:${config.remoteClientDir}/`;
-  try {
-    execSync(scpClientCmd, { stdio: "inherit" });
-  } catch {
-    // Si glob échoue sur Windows scp, transférer les sous-éléments
-    const clientItems = fs.readdirSync(DEPLOY_CLIENT);
-    for (const item of clientItems) {
-      const localItem = path.join(DEPLOY_CLIENT, item);
-      execSync(`scp ${scpOpts.join(" ")} "${localItem}" ${config.sshUser}@${config.sshHost}:${config.remoteClientDir}/`, { stdio: "inherit" });
-    }
+  // On énumère explicitement avec readdirSync AU LIEU d'un glob `*` : le glob
+  // shell ignore les fichiers commençant par un point, donc le .htaccess du
+  // front (qui porte les gardes protégeant le vhost API) n'était jamais poussé.
+  for (const item of fs.readdirSync(DEPLOY_CLIENT)) {
+    const localItem = path.join(DEPLOY_CLIENT, item);
+    execSync(`scp ${scpOpts.join(" ")} "${localItem}" ${config.sshUser}@${config.sshHost}:${config.remoteClientDir}/`, { stdio: "inherit" });
   }
 
+  // 4. Garde .htaccess de l'API (isolation vis-à-vis du fallback SPA parent)
+  cmdGuardApiHtaccess(scpOpts);
+
   log("✅", "Transferts terminés avec succès.");
+}
+
+// Marqueur d'idempotence : présent dans scripts/api-htaccess-guard.conf.
+const API_GUARD_MARKER = "BLEADIN-API-GUARD";
+
+/**
+ * Installe (une seule fois) le bloc de garde dans le .htaccess de l'API.
+ *
+ * Le .htaccess de l'API est géré par CloudLinux (blocs « DO NOT REMOVE » qui
+ * portent la configuration Passenger) : on ne le remplace JAMAIS, on se contente
+ * d'y APPENDRE le bloc de garde s'il n'y est pas déjà. Sans cette garde, l'API
+ * hérite du fallback SPA de ~/public_html/.htaccess et toutes les routes /api/*
+ * répondent 500 (voir l'en-tête de scripts/api-htaccess-guard.conf).
+ */
+function cmdGuardApiHtaccess(scpOpts) {
+  const guardSrc = path.join(ROOT, "scripts", "api-htaccess-guard.conf");
+  if (!fs.existsSync(guardSrc)) {
+    log("⚠️", "scripts/api-htaccess-guard.conf introuvable — garde .htaccess API non appliquée.");
+    return;
+  }
+
+  log("🛡️", "Vérification de la garde .htaccess de l'API...");
+  const opts = scpOpts || (() => {
+    const o = [`-P`, config.sshPort, `-r`];
+    if (config.sshKey) o.push(`-i`, config.sshKey.replace(/^~/, process.env.HOME || process.env.USERPROFILE || ""));
+    return o;
+  })();
+
+  const remoteGuard = `${config.remoteApiDir}/.bleadin-api-guard.conf`;
+  execSync(
+    `scp ${opts.join(" ")} "${guardSrc}" ${config.sshUser}@${config.sshHost}:${remoteGuard}`,
+    { stdio: "inherit" }
+  );
+
+  // Commande volontairement sur UNE seule ligne ET entre guillemets : runRemoteSsh
+  // passe par `shell: true`, donc cmd.exe la parse avant ssh. Sans guillemets il
+  // avale les `;`. On proscrit aussi `$(...)` et `%` (substitution de commande et
+  // expansion de variables cmd.exe) — d'où le nom de sauvegarde fixe.
+  const f = `${config.remoteApiDir}/.htaccess`;
+  const remoteCmd = `"touch ${f}; if grep -q ${API_GUARD_MARKER} ${f}; then echo GUARD_ALREADY_PRESENT; else cp -p ${f} ${f}.bak-before-guard; echo >> ${f}; cat ${remoteGuard} >> ${f}; echo GUARD_ADDED; fi"`;
+  runRemoteSsh(remoteCmd, "Garde .htaccess API (anti-fallback SPA)");
 }
 
 function cmdChmod() {
@@ -372,10 +416,17 @@ async function cmdHealth() {
   log("🩺", "Phase de Vérification : Tests de Santé en Production");
   console.log("=========================================\n");
 
-  log("🔍", `Test de l'API : ${config.apiHealthUrl}`);
+  let ok = true;
+
+  // Cache-buster OBLIGATOIRE : LWS place un edge Varnish devant le site
+  // (en-tetes `Edge-Cache-Engine: varnish` / `Age:`). Sans lui, le health check
+  // peut renvoyer un 200 servi depuis le cache alors que l'application est morte
+  // — c'est precisement ce qui a masque le debut de la panne du 11/09/2026.
+  const healthUrl = `${config.apiHealthUrl}${config.apiHealthUrl.includes("?") ? "&" : "?"}cb=${Date.now()}`;
+  log("🔍", `Test de l'API : ${healthUrl}`);
   try {
     const start = Date.now();
-    const res = await fetch(config.apiHealthUrl);
+    const res = await fetch(healthUrl, { headers: { "Cache-Control": "no-cache" } });
     const duration = Date.now() - start;
     const text = await res.text();
     let json = null;
@@ -386,9 +437,41 @@ async function cmdHealth() {
       if (json) console.log("   Réponse :", JSON.stringify(json, null, 2));
     } else {
       log("❌", `API a retourné un statut d'erreur HTTP ${res.status} : ${text}`);
+      ok = false;
     }
   } catch (err) {
     log("❌", `Impossible de joindre l'API : ${err.message}`);
+    ok = false;
+  }
+
+  // --- Test de non-régression : héritage du fallback SPA sur le vhost API ---
+  //
+  // Signature de la panne du 11/09/2026 : Apache réécrivait toute URL ne
+  // correspondant pas à un fichier réel vers un /index.html absent du docroot de
+  // l'API, ce qui produisait un 500 AVANT même d'atteindre Node. On sonde donc
+  // volontairement une route inexistante : Express doit répondre 404. Un 500, ou
+  // du HTML de SPA en 200, signifie que la garde .htaccess a sauté.
+  const apiOrigin = new URL(config.apiHealthUrl).origin;
+  const probeUrl = `${apiOrigin}/__bleadin_probe_404__?cb=${Date.now()}`;
+  log("🔍", `Test de non-régression .htaccess : ${probeUrl}`);
+  try {
+    const res = await fetch(probeUrl);
+    const body = await res.text();
+    if (res.status === 500) {
+      log("❌", "500 sur une route inexistante : le fallback SPA parent s'applique de nouveau au vhost API.");
+      log("💡", "Correctif : `node scripts/cpanel-remote.js push` réinstalle la garde, ou voir scripts/api-htaccess-guard.conf");
+      ok = false;
+    } else if (res.status === 404) {
+      log("✅", "Routage API isolé du fallback SPA (404 Express attendu).");
+    } else if (body.includes("<!doctype html") || body.includes("<!DOCTYPE html")) {
+      log("❌", `Une route inexistante de l'API renvoie du HTML (statut ${res.status}) : le fallback SPA parent fuit sur le vhost API.`);
+      ok = false;
+    } else {
+      log("⚠️", `Statut inattendu ${res.status} sur la sonde de non-régression.`);
+    }
+  } catch (err) {
+    log("❌", `Sonde de non-régression injoignable : ${err.message}`);
+    ok = false;
   }
 
   log("🔍", `Test du Frontend : ${config.frontendUrl}`);
@@ -404,6 +487,8 @@ async function cmdHealth() {
   } catch (err) {
     log("⚠️", `Impossible de joindre le Frontend : ${err.message}`);
   }
+
+  return ok;
 }
 
 async function cmdDeployAll() {
@@ -418,7 +503,12 @@ async function cmdDeployAll() {
   log("⏳", "Attente de 3 secondes pour le rechargement de Phusion Passenger...");
   await new Promise(r => setTimeout(r, 3000));
   
-  await cmdHealth();
+  const healthy = await cmdHealth();
+  if (!healthy) {
+    log("❌", "Déploiement terminé mais les vérifications de santé ont ÉCHOUÉ — voir ci-dessus.");
+    process.exitCode = 1;
+    return;
+  }
   log("🎉", "Déploiement et vérifications terminés avec succès !");
 }
 
@@ -432,6 +522,7 @@ Commandes disponibles :
   package      Génère le dossier deploy/ et crée les archives ZIP (api.zip, client.zip)
   push         Synchronise les fichiers vers le serveur distant via SCP/SSH
   chmod        Applique les permissions indispensables (chmod -R 755 dist)
+  guard-htaccess  (Ré)installe la garde .htaccess isolant l'API du fallback SPA parent
   restart      Déclenche le redémarrage de l'application Phusion Passenger (tmp/restart.txt)
   logs         Affiche les dernières lignes de logs d'erreurs (stderr.log)
   diag         Lance 'node app.js' directement dans le nodevenv distant via SSH
@@ -459,6 +550,9 @@ switch (command) {
   case "push":
     cmdPush();
     break;
+  case "guard-htaccess":
+    cmdGuardApiHtaccess();
+    break;
   case "chmod":
     cmdChmod();
     break;
@@ -478,7 +572,7 @@ switch (command) {
     cmdDbPush();
     break;
   case "health":
-    await cmdHealth();
+    if (!(await cmdHealth())) process.exitCode = 1;
     break;
   case "deploy-all":
     await cmdDeployAll();
