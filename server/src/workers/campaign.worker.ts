@@ -147,6 +147,19 @@ function isUserInWorkingHours(user: any): boolean {
   }
 }
 
+/**
+ * Calcule la date d'exécution de l'étape suivante.
+ * Un délai de 0 jour est respecté (pas de "|| 1" qui le transformait en 1 jour) :
+ * l'action est alors planifiée dans 1 à 3 minutes (jitter anti-détection),
+ * et jamais avant `minDelayMs`.
+ */
+function computeNextExecution(delayDays: number | null | undefined, minDelayMs = 0): Date {
+  const days = typeof delayDays === "number" && delayDays > 0 ? delayDays : 0;
+  const jitterMs = 60 * 1000 + Math.floor(Math.random() * 120 * 1000);
+  const delayMs = days > 0 ? days * 24 * 60 * 60 * 1000 : jitterMs;
+  return new Date(Date.now() + Math.max(delayMs, minDelayMs));
+}
+
 type UnipileErrorAction = "CONTINUE" | "DEFER_ACTION" | "DISCONNECT_ACCOUNT";
 
 function categorizeUnipileError(errorMsg?: string): { action: UnipileErrorAction; reason: string } {
@@ -498,8 +511,7 @@ export async function processActionQueue(): Promise<void> {
             });
 
             if (nextStep) {
-              const delayDays = nextStep.delayDays || 2;
-              const nextExec = new Date(now.getTime() + delayDays * 24 * 60 * 60 * 1000);
+              const nextExec = computeNextExecution(nextStep.delayDays);
 
               await prisma.prospectCampaignState.updateMany({
                 where: { campaignId: action.campaignId, prospectId: prospect.id },
@@ -606,8 +618,7 @@ export async function processActionQueue(): Promise<void> {
             });
 
             if (nextStep) {
-              const delayDays = nextStep.delayDays || 1;
-              const nextExec = new Date(now.getTime() + delayDays * 24 * 60 * 60 * 1000);
+              const nextExec = computeNextExecution(nextStep.delayDays);
 
               await prisma.prospectCampaignState.updateMany({
                 where: { campaignId: action.campaignId, prospectId: prospect.id },
@@ -675,8 +686,7 @@ export async function processActionQueue(): Promise<void> {
             });
 
             if (nextStep) {
-              const delayDays = nextStep.delayDays || 1;
-              const nextExec = new Date(now.getTime() + delayDays * 24 * 60 * 60 * 1000);
+              const nextExec = computeNextExecution(nextStep.delayDays);
 
               await prisma.prospectCampaignState.updateMany({
                 where: { campaignId: action.campaignId, prospectId: prospect.id },
@@ -730,6 +740,100 @@ export async function processActionQueue(): Promise<void> {
     console.error("[CampaignWorker] Exception globale dans le worker:", error);
   } finally {
     isRunning = false;
+  }
+}
+
+/**
+ * Fait avancer un prospect dont l'invitation vient d'être acceptée :
+ * enrichissement du profil, passage à l'étape suivante (ex: MESSAGE) et planification dans ActionQueue.
+ * Utilisé par le polling `checkAcceptedInvitations` ET par le webhook Unipile `new_relation`.
+ * `state` doit inclure `prospect` et `campaign.steps`.
+ */
+export async function onInvitationAccepted(state: any, account: any, profile: any = {}): Promise<void> {
+  const p = profile || {};
+  console.log(`[CampaignWorker] Connexion acceptée confirmée pour ${state.prospect.firstName} ${state.prospect.lastName} !`);
+
+  // Extraction automatique des coordonnées du prospect (1er degré)
+  const contactInfo = p.contact_info;
+  const extractedEmail =
+    contactInfo?.emails?.[0]?.address ||
+    contactInfo?.emails?.[0] ||
+    p.email;
+  const rawPhone =
+    contactInfo?.phones?.[0]?.number ||
+    contactInfo?.phones?.[0] ||
+    contactInfo?.phone_numbers?.[0]?.number ||
+    contactInfo?.phone_numbers?.[0] ||
+    p.phone;
+  const extractedPhone = typeof rawPhone === "string" ? rawPhone.trim() : rawPhone ? String(rawPhone) : undefined;
+
+  const updateData: any = { connectionStatus: "CONNECTED" };
+  if (extractedEmail && !state.prospect.email) updateData.email = extractedEmail;
+  if (extractedPhone && !state.prospect.phone) updateData.phone = extractedPhone;
+  if (p.headline && (!state.prospect.headline || state.prospect.headline === "Professionnel")) {
+    updateData.headline = p.headline;
+  }
+  if (p.company && (!state.prospect.company || state.prospect.company === "—")) {
+    updateData.company = p.company;
+  }
+  if (p.profile_picture_url && (!state.prospect.avatarUrl || state.prospect.avatarUrl.includes("ui-avatars.com"))) {
+    updateData.avatarUrl = p.profile_picture_url;
+  }
+  if (p.provider_id && !state.prospect.providerProfileId?.startsWith("ACo")) {
+    updateData.providerProfileId = p.provider_id;
+  }
+
+  await prisma.prospect.update({
+    where: { id: state.prospect.id },
+    data: updateData,
+  });
+
+  if (extractedEmail || extractedPhone) {
+    console.log(`[CampaignWorker] Coordonnées extraites pour ${state.prospect.firstName} : email=${extractedEmail || "non"}, phone=${extractedPhone || "non"}`);
+  }
+
+  // Trouver l'étape suivant l'invitation dans cette campagne
+  const steps: any[] = state.campaign.steps || [];
+  const currentStep =
+    steps.find((s) => s.id === state.currentStepId) ||
+    steps.find((s) => s.actionType === "INVITATION");
+  const currentOrder = currentStep ? currentStep.stepOrder : 1;
+  const nextStep = steps.find((s) => s.stepOrder > currentOrder);
+
+  if (nextStep) {
+    // Délai configuré sur l'étape (0 jour respecté), avec un minimum de 5 min après l'acceptation
+    const scheduledFor = computeNextExecution(nextStep.delayDays, 5 * 60 * 1000);
+
+    await prisma.prospectCampaignState.update({
+      where: { id: state.id },
+      data: {
+        currentStepId: nextStep.id,
+        status: "WAITING_DELAY",
+        nextExecutionAt: scheduledFor,
+        lastActionAt: new Date(),
+      },
+    });
+
+    await prisma.actionQueue.create({
+      data: {
+        accountId: account.id,
+        prospectId: state.prospect.id,
+        campaignId: state.campaignId,
+        actionType: nextStep.actionType,
+        scheduledFor,
+        status: "QUEUED",
+        payload: {
+          stepId: nextStep.id,
+          messageText: nextStep.messageText,
+        },
+      },
+    });
+    console.log(`[CampaignWorker] Étape ${nextStep.actionType} planifiée pour ${state.prospect.firstName} ${state.prospect.lastName} le ${scheduledFor.toISOString()}`);
+  } else {
+    await prisma.prospectCampaignState.update({
+      where: { id: state.id },
+      data: { status: "COMPLETED", lastActionAt: new Date() },
+    });
   }
 }
 
@@ -794,90 +898,14 @@ export async function checkAcceptedInvitations(): Promise<void> {
       }
 
       if (profileRes.success && profileRes.profile) {
+        // GET /users/{id} renvoie network_distance = "FIRST_DEGREE" (et non "DISTANCE_1",
+        // qui n'existe que dans les résultats de recherche) : on passe par le parseur commun.
         const isConnected =
-          profileRes.profile.network_distance === "DISTANCE_1" ||
+          UnipileService.parseLinkedInConnectionStatus(profileRes.profile) === "CONNECTED" ||
           profileRes.profile.connection_status === "CONNECTED";
 
         if (isConnected) {
-          console.log(`[CampaignWorker] Connexion acceptée confirmée pour ${state.prospect.firstName} ${state.prospect.lastName} !`);
-
-          // Extraction automatique des coordonnées du prospect (1er degré)
-          const contactInfo = profileRes.profile.contact_info;
-          const extractedEmail =
-            contactInfo?.emails?.[0]?.address ||
-            contactInfo?.emails?.[0] ||
-            profileRes.profile.email;
-          const rawPhone =
-            contactInfo?.phones?.[0]?.number ||
-            contactInfo?.phones?.[0] ||
-            contactInfo?.phone_numbers?.[0]?.number ||
-            contactInfo?.phone_numbers?.[0] ||
-            profileRes.profile.phone;
-          const extractedPhone = typeof rawPhone === "string" ? rawPhone.trim() : rawPhone ? String(rawPhone) : undefined;
-
-          const updateData: any = { connectionStatus: "CONNECTED" };
-          if (extractedEmail && !state.prospect.email) updateData.email = extractedEmail;
-          if (extractedPhone && !state.prospect.phone) updateData.phone = extractedPhone;
-          if (profileRes.profile.headline && (!state.prospect.headline || state.prospect.headline === "Professionnel")) {
-            updateData.headline = profileRes.profile.headline;
-          }
-          if (profileRes.profile.company && (!state.prospect.company || state.prospect.company === "—")) {
-            updateData.company = profileRes.profile.company;
-          }
-          if (profileRes.profile.profile_picture_url && (!state.prospect.avatarUrl || state.prospect.avatarUrl.includes("ui-avatars.com"))) {
-            updateData.avatarUrl = profileRes.profile.profile_picture_url;
-          }
-
-          await prisma.prospect.update({
-            where: { id: state.prospect.id },
-            data: updateData,
-          });
-
-          if (extractedEmail || extractedPhone) {
-            console.log(`[CampaignWorker] Coordonnées extraites pour ${state.prospect.firstName} : email=${extractedEmail || "non"}, phone=${extractedPhone || "non"}`);
-          }
-
-          // Trouver l'étape suivant l'invitation dans cette campagne
-          const currentStep =
-            state.campaign.steps.find((s) => s.id === state.currentStepId) ||
-            state.campaign.steps.find((s) => s.actionType === "INVITATION");
-          const currentOrder = currentStep ? currentStep.stepOrder : 1;
-          const nextStep = state.campaign.steps.find((s) => s.stepOrder > currentOrder);
-
-          if (nextStep) {
-            const delayDays = nextStep.delayDays || 0;
-            const scheduledFor = new Date(Date.now() + Math.max(delayDays * 24 * 3600 * 1000, 5 * 60 * 1000));
-
-            await prisma.prospectCampaignState.update({
-              where: { id: state.id },
-              data: {
-                currentStepId: nextStep.id,
-                status: "WAITING_DELAY",
-                nextExecutionAt: scheduledFor,
-                lastActionAt: new Date(),
-              },
-            });
-
-            await prisma.actionQueue.create({
-              data: {
-                accountId: account.id,
-                prospectId: state.prospect.id,
-                campaignId: state.campaignId,
-                actionType: nextStep.actionType,
-                scheduledFor,
-                status: "QUEUED",
-                payload: {
-                  stepId: nextStep.id,
-                  messageText: nextStep.messageText,
-                },
-              },
-            });
-          } else {
-            await prisma.prospectCampaignState.update({
-              where: { id: state.id },
-              data: { status: "COMPLETED", lastActionAt: new Date() },
-            });
-          }
+          await onInvitationAccepted(state, account, profileRes.profile);
         } else {
           // Pas encore accepté : mettre à jour lastActionAt pour passer au prospect suivant lors du prochain cycle
           await prisma.prospectCampaignState.update({

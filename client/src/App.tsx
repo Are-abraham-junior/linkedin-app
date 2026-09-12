@@ -210,7 +210,8 @@ export const App: React.FC = () => {
           )
         }
       />
-      <Route path="/join" element={<JoinPageWrapper />} />
+      {/* Un utilisateur déjà connecté ne doit pas voir le formulaire de création de compte */}
+      <Route path="/join" element={user ? <Navigate to="/dashboard" replace /> : <JoinPageWrapper />} />
       <Route path="/setup" element={<SetupAdmin />} />
 
       {/* Routes Authentifiées (avec AppLayout & FloatingNavPill) */}

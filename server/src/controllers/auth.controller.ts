@@ -125,7 +125,8 @@ export async function setupSuperAdmin(req: AuthenticatedRequest, res: Response) 
       res.status(400).json({ success: false, error: error.issues?.[0]?.message || error.message });
       return;
     }
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[auth.controller:setupSuperAdmin]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -225,7 +226,8 @@ export async function register(req: AuthenticatedRequest, res: Response) {
       res.status(400).json({ success: false, error: error.issues?.[0]?.message || error.message });
       return;
     }
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[auth.controller:register]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -306,7 +308,8 @@ export async function login(req: AuthenticatedRequest, res: Response) {
       res.status(400).json({ success: false, error: error.issues?.[0]?.message || error.message });
       return;
     }
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[auth.controller:login]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -424,7 +427,8 @@ export async function getMe(req: AuthenticatedRequest, res: Response) {
       },
     });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[auth.controller:getMe]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -694,19 +698,23 @@ export async function linkedinAuth(req: AuthenticatedRequest, res: Response) {
       res.status(400).json({ success: false, error: error.issues?.[0]?.message || error.message });
       return;
     }
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[auth.controller:linkedinAuth]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
 const AcceptInvitationSchema = z.object({
   token: z.string().min(1, "Token requis"),
-  linkedinEmail: z.string().email("Email LinkedIn invalide"),
-  linkedinPassword: z.string().min(1, "Mot de passe LinkedIn requis"),
+  firstName: z.string().min(1, "Le prénom est obligatoire"),
+  lastName: z.string().min(1, "Le nom est obligatoire"),
+  password: z.string().min(8, "Le mot de passe doit contenir au moins 8 caractères"),
 });
 
 /**
  * POST /api/auth/join
- * Un membre accepte une invitation et connecte son LinkedIn.
+ * Un invité accepte une invitation en créant son compte Bleadin (identifiants
+ * applicatifs). L'email est celui de l'invitation. La connexion LinkedIn se
+ * fait ensuite depuis l'application (bandeau « Connecter LinkedIn »).
  */
 export async function acceptInvitation(req: AuthenticatedRequest, res: Response) {
   try {
@@ -715,7 +723,7 @@ export async function acceptInvitation(req: AuthenticatedRequest, res: Response)
     // 1. Valider l'invitation
     const invitation = await prisma.teamInvitation.findUnique({
       where: { token: body.token },
-      include: { organization: true, invitedBy: { select: { name: true } } },
+      include: { organization: true },
     });
 
     if (!invitation) {
@@ -732,152 +740,88 @@ export async function acceptInvitation(req: AuthenticatedRequest, res: Response)
       return;
     }
 
-    // 2. Connecter LinkedIn via Unipile
-    const connectResult = await UnipileService.connectLinkedInAccount(
-      body.linkedinEmail,
-      body.linkedinPassword
-    );
-
-    if (!connectResult.success) {
-      if (connectResult.status === "CHECKPOINT") {
-        res.status(202).json({
-          success: false,
-          status: "CHECKPOINT",
-          message: "LinkedIn demande une vérification supplémentaire. Validez sur LinkedIn puis réessayez.",
-        });
-        return;
-      }
-      res.status(401).json({ success: false, error: connectResult.error || "Identifiants LinkedIn incorrects." });
-      return;
-    }
-
-    const profileResult = await UnipileService.getConnectedAccountProfile(connectResult.accountId!);
-    const profile = profileResult.profile;
-
-    // 3. Vérifier si l'utilisateur existe déjà (peut-être il a déjà un compte owner)
-    let user = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { linkedinEmail: body.linkedinEmail },
-          { email: body.linkedinEmail },
-        ],
-      },
-      include: { organization: true, accounts: true },
+    // 2. Refuser si un compte existe déjà avec cet email (pas de rattachement automatique)
+    const email = invitation.email.toLowerCase().trim();
+    const existingUser = await prisma.user.findFirst({
+      where: { OR: [{ email }, { linkedinEmail: email }] },
+      select: { id: true },
     });
-
-    if (user && user.organizationId !== invitation.organizationId) {
-      // L'utilisateur appartient déjà à une autre org → refus
+    if (existingUser) {
       res.status(409).json({
         success: false,
-        error: "Ce compte LinkedIn est déjà associé à un autre espace de travail.",
+        error: "Un compte existe déjà avec cette adresse email. Connectez-vous avec vos identifiants habituels.",
       });
       return;
     }
 
-    if (!user) {
-      // Créer le nouveau membre
-      user = await prisma.user.create({
+    // 3. Créer le compte, sa liste par défaut et clore l'invitation — atomiquement
+    const firstName = body.firstName.trim();
+    const lastName = body.lastName.trim();
+    const fullName = `${firstName} ${lastName}`.trim();
+    const passwordHash = await bcrypt.hash(body.password, 10);
+
+    const user = await prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({
         data: {
-          email: body.linkedinEmail,
-          linkedinEmail: body.linkedinEmail,
-          linkedinProfileId: profile?.linkedinProfileId,
-          name: profile?.name || body.linkedinEmail.split("@")[0],
-          avatarUrl: profile?.avatarUrl,
+          email,
+          passwordHash,
+          name: fullName,
+          firstName,
+          lastName,
           role: "USER",
-          orgRole: "MEMBER",
+          orgRole: invitation.orgRole,
           status: "ACTIVE",
           organizationId: invitation.organizationId,
           maxDailyInvites: 30,
           maxDailyMsg: 70,
         },
-        include: { organization: true, accounts: true },
+        include: { organization: true },
       });
-    } else {
-      // Mise à jour si déjà dans la même org
-      user = await prisma.user.update({
-        where: { id: user.id },
+
+      await tx.prospectList.create({
         data: {
-          name: profile?.name || user.name,
-          avatarUrl: profile?.avatarUrl || user.avatarUrl,
-          status: "ACTIVE",
-          organizationId: invitation.organizationId,
-          orgRole: "MEMBER",
+          name: "Premiers prospects",
+          description: "Liste initiale créée automatiquement",
+          color: "#592eff",
+          userId: created.id,
         },
-        include: { organization: true, accounts: true },
       });
-    }
 
-    // Nettoyer les anciennes sessions Unipile de cet utilisateur s'il en avait
-    const oldInviteAccounts = await prisma.linkedInAccount.findMany({
-      where: { userId: user.id },
-    });
-    for (const oldAcc of oldInviteAccounts) {
-      if (oldAcc.unipileAccountId && oldAcc.unipileAccountId !== connectResult.accountId!) {
-        UnipileService.deleteAccount(oldAcc.unipileAccountId).catch((err) =>
-          console.warn(`[Reconnexion Invite] Échec suppression Unipile ${oldAcc.unipileAccountId}:`, err.message)
-        );
-      }
-    }
+      await tx.teamInvitation.update({
+        where: { id: invitation.id },
+        data: { status: "ACCEPTED" },
+      });
 
-    await prisma.linkedInAccount.deleteMany({
-      where: {
-        userId: user.id,
-        unipileAccountId: { not: connectResult.accountId! },
-      },
-    });
-
-    // 4. Créer/màj le LinkedInAccount
-    await prisma.linkedInAccount.upsert({
-      where: { unipileAccountId: connectResult.accountId! },
-      create: {
-        userId: user.id,
-        unipileAccountId: connectResult.accountId!,
-        accountName: profile?.name,
-        profilePicture: profile?.avatarUrl,
-        headline: profile?.headline,
-        status: "CONNECTED",
-        isPremium: profile?.isPremium ?? false,
-        hasSalesNavigator: profile?.hasSalesNavigator ?? false,
-        accountType: profile?.accountType ?? "STANDARD",
-      },
-      update: {
-        userId: user.id,
-        accountName: profile?.name,
-        profilePicture: profile?.avatarUrl,
-        headline: profile?.headline,
-        status: "CONNECTED",
-        isPremium: profile?.isPremium ?? false,
-        hasSalesNavigator: profile?.hasSalesNavigator ?? false,
-        accountType: profile?.accountType ?? "STANDARD",
-      },
-    });
-
-    // 5. Marquer l'invitation comme acceptée
-    await prisma.teamInvitation.update({
-      where: { id: invitation.id },
-      data: { status: "ACCEPTED" },
+      return created;
     });
 
     const token = generateToken({
       id: user.id,
       email: user.email,
-      role: user.role as "SUPER_ADMIN" | "USER",
+      role: user.role,
       name: user.name,
       organizationId: user.organizationId,
     });
 
-    res.json({
+    res.status(201).json({
       success: true,
+      message: `Bienvenue dans ${user.organization?.name || "l'équipe"} !`,
       token,
       user: {
         id: user.id,
         email: user.email,
         name: user.name,
-        avatarUrl: user.avatarUrl,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        avatarUrl: null,
         role: user.role,
-        orgRole: (user as any).orgRole,
+        orgRole: user.orgRole,
         status: user.status,
         organization: user.organization,
+        maxDailyInvites: user.maxDailyInvites,
+        maxDailyMsg: user.maxDailyMsg,
+        hasLinkedInAccount: false,
+        linkedInAccount: null,
       },
     });
   } catch (error: any) {
@@ -885,6 +829,7 @@ export async function acceptInvitation(req: AuthenticatedRequest, res: Response)
       res.status(400).json({ success: false, error: error.issues?.[0]?.message || error.message });
       return;
     }
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[auth.controller:acceptInvitation]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }

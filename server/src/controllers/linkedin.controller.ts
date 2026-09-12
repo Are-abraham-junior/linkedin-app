@@ -92,7 +92,8 @@ export async function searchProfiles(req: AuthenticatedRequest, res: Response) {
       return;
     }
 
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[linkedin.controller:searchProfiles]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -203,7 +204,8 @@ export async function getAccountHealth(req: AuthenticatedRequest, res: Response)
       throw unipileErr;
     }
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[linkedin.controller:getAccountHealth]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -231,6 +233,7 @@ export async function disconnectAccount(req: AuthenticatedRequest, res: Response
 
     res.json({ success: true, message: "Compte LinkedIn déconnecté avec succès." });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[linkedin.controller:disconnectAccount]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }

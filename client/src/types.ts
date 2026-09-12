@@ -37,6 +37,7 @@ export interface User {
   maxDailyInvites: number;
   maxDailyMsg: number;
   createdAt?: string;
+  linkedinEmail?: string | null;
   linkedInAccount?: LinkedInAccount | null;
   stats?: {
     lists?: number;

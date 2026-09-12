@@ -455,7 +455,7 @@ export async function getConversations(req: AuthenticatedRequest, res: Response)
     });
   } catch (error: any) {
     console.error("[Inbox] Erreur getConversations:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -475,7 +475,7 @@ export async function syncAllConversations(req: AuthenticatedRequest, res: Respo
     });
   } catch (error: any) {
     console.error("[Inbox] Erreur syncAllConversations:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -627,7 +627,7 @@ export async function getMessages(req: AuthenticatedRequest, res: Response) {
     });
   } catch (error: any) {
     console.error("[Inbox] Erreur getMessages:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -852,7 +852,7 @@ export async function sendMessage(req: AuthenticatedRequest, res: Response) {
     });
   } catch (error: any) {
     console.error("[Inbox] Erreur sendMessage:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -988,7 +988,7 @@ export async function startNewConversation(req: AuthenticatedRequest, res: Respo
     });
   } catch (error: any) {
     console.error("[Inbox] Erreur startNewConversation:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -1015,7 +1015,8 @@ export async function markAsRead(req: AuthenticatedRequest, res: Response) {
 
     res.json({ success: true });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[inbox.controller:markAsRead]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -1058,6 +1059,6 @@ export async function updateProspectDetails(req: AuthenticatedRequest, res: Resp
     });
   } catch (error: any) {
     console.error("[Inbox] Erreur updateProspectDetails:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }

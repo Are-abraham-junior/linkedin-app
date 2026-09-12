@@ -49,7 +49,7 @@ Si une étape échoue (erreur de compilation TypeScript, rupture de schéma Pris
 
 ---
 
-## 2. Matrice des 13 Sous-Agents (.agents/skills/)
+## 2. Matrice des 14 Sous-Agents (.agents/skills/)
 
 L'orchestrateur dispose d'une équipe de spécialistes dédiés :
 
@@ -68,6 +68,7 @@ L'orchestrateur dispose d'une équipe de spécialistes dédiés :
 | **cpanel-lws-expert** | `.agents/skills/cpanel-lws-expert/SKILL.md` | Expert déploiement cPanel LWS (CloudLinux/Passenger), transferts SSH/SCP, télé-maintenance, permissions Linux et diagnostics production. | `deploy/`, `scripts/cpanel-remote.js`, `.env.deploy` |
 | **debugger** | `.agents/skills/debugger/SKILL.md` | Analyse de stack traces, résolution d'erreurs TypeScript, diagnostic API Unipile ([ref](https://developer.unipile.com/reference)). | Diagnostic transversal & correction ciblée |
 | **skill-creator** | `.agents/skills/skill-creator/SKILL.md` | Création, enrichissement, optimisation de descriptions pushy et benchmarking de skills adaptés aux besoins émergents. | `.agents/skills/`, création modulaire de compétences |
+| **expert-tester** | `.agents/skills/expert-tester/SKILL.md` | Recette applicative locale, automatisation de tests (smoke/API/UI), production de rapports détaillés et handoff debugger. | `.agents/skills/expert-tester/`, `server/src/`, `client/src/` |
 
 ---
 
@@ -139,6 +140,22 @@ L'orchestrateur applique des protocoles prédéfinis pour les fonctionnalités m
    - Démasquage direct des erreurs masquées par Passenger : `node scripts/cpanel-remote.js diag` (exécution directe `node app.js` dans le `nodevenv`).
    - Extraction des logs d'erreurs : `node scripts/cpanel-remote.js logs` (`tail -n 80 stderr.log`).
 
+### Playbook G : Recette Locale, Assurance Qualité (QA) & Coopération Debugger
+*Scénario : Validation systématique en local des modifications, nouvelles fonctionnalités, API et interface avant tout déploiement.*
+1. **expert-tester (Cadrage & Analyse d'Impact) :**
+   - Identification des couches impactées (Prisma, Express, UI Adora, Queue).
+2. **expert-tester (Exécution Multi-Paliers) :**
+   - Paliers statiques (`npx prisma validate`, `npm run build:server`, `npm --prefix client run build`).
+   - Tests dynamiques API (`node .agents/skills/expert-tester/scripts/run-smoke-tests.js`).
+   - Vérifications UI & responsive Adora (micro-interactions, états loading/empty, zéro erreur console).
+3. **expert-tester & debugger (Boucle de Correction en cas de FAIL) :**
+   - Si anomalie : `expert-tester` génère une fiche d'anomalie précise (reproduction curl/log/stack trace) et mandate `debugger`.
+   - `debugger` applique le patch minimal chirurgical.
+   - `expert-tester` rejoue immédiatement la suite de tests pour certifier la non-régression.
+4. **expert-tester (Publication du Rapport) :**
+   - Rédaction du rapport détaillé selon `references/test-report-template.md`.
+5. **Quality Gate :** Validation complète de la **Gate Testing** (100% de réussite sur les tests critiques).
+
 ---
 
 ## 4. Contrats de Passage & Quality Gates
@@ -146,11 +163,11 @@ L'orchestrateur applique des protocoles prédéfinis pour les fonctionnalités m
 Avant d'autoriser la transition entre deux sous-agents, les validations techniques suivantes doivent impérativement réussir :
 
 ```
-┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
-│  Gate Database  │  ==>  │  Gate Backend   │  ==>  │  Gate Frontend  │  ==>  │   Gate Skill    │  ==>  │ Gate Deployment │
-│ prisma validate │       │ npm run build:  │       │ npm --prefix    │       │ YAML frontmatter│       │ curl /health 200│
-│ prisma generate │       │     server      │       │ client run build│       │ & pushy triggers│       │ + client 200 OK │
-└─────────────────┘       └─────────────────┘       └─────────────────┘       └─────────────────┘       └─────────────────┘
+┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
+│  Gate Database  │  ==>  │  Gate Backend   │  ==>  │  Gate Frontend  │  ==>  │  Gate Testing   │  ==>  │   Gate Skill    │  ==>  │ Gate Deployment │
+│ prisma validate │       │ npm run build:  │       │ npm --prefix    │       │ Smoke tests API │       │ YAML frontmatter│       │ curl /health 200│
+│ prisma generate │       │     server      │       │ client run build│       │ & rapport QA    │       │ & pushy triggers│       │ + client 200 OK │
+└─────────────────┘       └─────────────────┘       └─────────────────┘       └─────────────────┘       └─────────────────┘       └─────────────────┘
 ```
 
 1. **Gate Database (postgres-expert) :**
@@ -168,18 +185,23 @@ Avant d'autoriser la transition entre deux sous-agents, les validations techniqu
    - Respect strict des tokens de couleur et typographie d'Adora (`DESIGN (2).md`).
    - Traitement des états de chargement (`isLoading`), données vides (`empty`), et erreurs (`isError`).
 
-4. **Gate Skill (skill-creator) :**
+4. **Gate Testing (expert-tester) :**
+   - Exécution sans échec des tests locaux : `node .agents/skills/expert-tester/scripts/run-smoke-tests.js`.
+   - Rapport de test détaillé généré et validé (`references/test-report-template.md`).
+   - Validation conjointe avec `debugger` sur toutes les anomalies détectées (zéro régression).
+
+5. **Gate Skill (skill-creator) :**
    - Frontmatter YAML complet et syntaxiquement valide (`name`, `description`).
    - Description directive, contextualisée et proactive ("pushy") couvrant les formulations directes et indirectes de déclenchement.
    - Respect du principe de progressive disclosure (< 500 lignes pour le corps `SKILL.md`, séparation dans `references/` et `scripts/`).
    - Intégration et référencement effectifs dans la matrice de compétences de `AGENTS.md`.
 
-5. **Gate Deployment (cpanel-lws-expert) :**
+6. **Gate Deployment (cpanel-lws-expert) :**
    - Code HTTP 200 sur `GET /api/health` avec charge utile JSON valide.
    - Code HTTP 200 sur le Frontend (`https://app.bleadin.com`).
    - Permissions 755 appliquées sur `dist/` sans erreur `EACCES`.
 
-6. **Arbitrage en cas d'échec :**
+7. **Arbitrage en cas d'échec :**
    - Appel automatique à `debugger`.
    - Interdiction de masquer les erreurs par des `any` ou des `// @ts-ignore`.
 

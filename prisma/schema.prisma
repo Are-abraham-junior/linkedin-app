@@ -115,6 +115,7 @@ model TeamInvitation {
   email          String
   token          String       @unique @default(uuid())
   status         String       @default("PENDING") // PENDING | ACCEPTED | EXPIRED
+  orgRole        OrgRole      @default(MEMBER)
   invitedById    String
   invitedBy      User         @relation("InvitedBy", fields: [invitedById], references: [id], onDelete: Cascade)
   expiresAt      DateTime

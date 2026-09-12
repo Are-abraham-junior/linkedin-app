@@ -1,115 +1,28 @@
 import { Response } from "express";
 import { prisma } from "../../../lib/prisma.js";
-import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { AuthenticatedRequest } from "../middlewares/auth.middleware.js";
-
-const CreateMemberSchema = z.object({
-  firstName: z.string().optional(),
-  lastName: z.string().min(1, "Le nom est requis"),
-  email: z.string().email("Email invalide"),
-  password: z.string().min(8, "Le mot de passe doit contenir au moins 8 caractères"),
-  orgRole: z.enum(["ADMIN", "MEMBER"]).default("MEMBER"),
-});
+import { sendTeamInvitationEmail } from "../services/mail.service.js";
 
 /**
- * POST /api/team/members
- * Crée directement un membre dans l'organisation avec ses identifiants.
- * Réservé au Propriétaire ou Admin de l'espace.
+ * Journalise l'erreur réelle côté serveur et renvoie un message générique au
+ * client : les détails internes (requêtes Prisma, stack, etc.) ne doivent
+ * jamais fuiter dans la réponse HTTP.
  */
-export async function createMember(req: AuthenticatedRequest, res: Response) {
-  try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: "Non authentifié" });
-      return;
-    }
-
-    const body = CreateMemberSchema.parse(req.body);
-
-    const caller = await prisma.user.findUnique({
-      where: { id: req.user.id },
-      select: { organizationId: true, orgRole: true, role: true },
-    });
-
-    if (!caller || !caller.organizationId) {
-      res.status(400).json({ success: false, error: "Vous devez appartenir à une organisation pour ajouter des membres." });
-      return;
-    }
-
-    if (caller.orgRole !== "OWNER" && caller.orgRole !== "ADMIN" && caller.role !== "SUPER_ADMIN") {
-      res.status(403).json({ success: false, error: "Seul le propriétaire ou un administrateur peut ajouter des membres." });
-      return;
-    }
-
-    // Vérifier si un compte existe déjà avec cet email
-    const existing = await prisma.user.findUnique({
-      where: { email: body.email.toLowerCase().trim() },
-    });
-
-    if (existing) {
-      res.status(409).json({
-        success: false,
-        error: "Un compte utilisateur existe déjà avec cette adresse email.",
-      });
-      return;
-    }
-
-    const hashedPassword = await bcrypt.hash(body.password, 10);
-    const fullName = [body.firstName?.trim(), body.lastName.trim()].filter(Boolean).join(" ") || body.email.split("@")[0];
-
-    const newMember = await prisma.user.create({
-      data: {
-        email: body.email.toLowerCase().trim(),
-        passwordHash: hashedPassword,
-        firstName: body.firstName?.trim() || null,
-        lastName: body.lastName.trim(),
-        name: fullName,
-        organizationId: caller.organizationId,
-        orgRole: body.orgRole,
-        role: "USER",
-        status: "ACTIVE",
-      },
-      select: {
-        id: true,
-        name: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        orgRole: true,
-        status: true,
-        createdAt: true,
-      },
-    });
-
-    // Créer une liste de prospects initiale pour ce nouveau membre
-    await prisma.prospectList.create({
-      data: {
-        name: `Liste de ${fullName}`,
-        userId: newMember.id,
-      },
-    });
-
-    res.status(201).json({
-      success: true,
-      message: `Le membre ${newMember.name} a été ajouté avec succès à votre espace.`,
-      member: newMember,
-    });
-  } catch (error: any) {
-    if (error instanceof z.ZodError) {
-      res.status(400).json({ success: false, error: error.issues?.[0]?.message || error.message });
-      return;
-    }
-    res.status(500).json({ success: false, error: error.message });
-  }
+function handleUnexpectedError(res: Response, context: string, error: any) {
+  console.error(`[team.controller:${context}]`, error);
+  res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
 }
 
 const InviteMemberSchema = z.object({
   email: z.string().email("Email invalide"),
+  orgRole: z.enum(["ADMIN", "MEMBER"]).default("MEMBER"),
 });
 
 /**
  * POST /api/team/invite
- * Envoie une invitation email à un membre. Owner uniquement.
+ * Envoie une invitation par email à un membre. Réservé au Propriétaire ou
+ * Admin de l'espace.
  */
 export async function inviteMember(req: AuthenticatedRequest, res: Response) {
   try {
@@ -120,7 +33,6 @@ export async function inviteMember(req: AuthenticatedRequest, res: Response) {
 
     const body = InviteMemberSchema.parse(req.body);
 
-    // Vérifier que l'utilisateur est owner de son organisation
     const inviter = await prisma.user.findUnique({
       where: { id: req.user.id },
       include: { organization: true },
@@ -131,8 +43,8 @@ export async function inviteMember(req: AuthenticatedRequest, res: Response) {
       return;
     }
 
-    if (inviter.orgRole !== "OWNER" && inviter.role !== "SUPER_ADMIN") {
-      res.status(403).json({ success: false, error: "Seul le propriétaire de l'espace peut inviter des membres." });
+    if (inviter.orgRole !== "OWNER" && inviter.orgRole !== "ADMIN" && inviter.role !== "SUPER_ADMIN") {
+      res.status(403).json({ success: false, error: "Seul le propriétaire ou un administrateur peut inviter des membres." });
       return;
     }
 
@@ -160,7 +72,10 @@ export async function inviteMember(req: AuthenticatedRequest, res: Response) {
 
     // Vérifier si cet email est déjà membre de l'org
     const existingMember = await prisma.user.findFirst({
-      where: { linkedinEmail: body.email.toLowerCase(), organizationId: inviter.organizationId },
+      where: {
+        organizationId: inviter.organizationId,
+        OR: [{ email: body.email.toLowerCase() }, { linkedinEmail: body.email.toLowerCase() }],
+      },
     });
     if (existingMember) {
       res.status(409).json({ success: false, error: "Cet utilisateur est déjà membre de votre équipe." });
@@ -178,13 +93,31 @@ export async function inviteMember(req: AuthenticatedRequest, res: Response) {
         invitedById: inviter.id,
         expiresAt,
         status: "PENDING",
+        orgRole: body.orgRole,
       },
     });
 
-    // En production, envoyer un vrai email.
-    // En dev, on log le lien d'invitation.
     const inviteUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/join?token=${invitation.token}`;
-    console.log(`[INVITE] Lien d'invitation pour ${body.email}: ${inviteUrl}`);
+
+    try {
+      await sendTeamInvitationEmail({
+        to: invitation.email,
+        organizationName: inviter.organization?.name || "votre espace",
+        invitedByName: inviter.name || inviter.email,
+        inviteUrl,
+        expiresAt: invitation.expiresAt,
+      });
+    } catch (mailError: any) {
+      // On ne laisse pas une invitation "en attente" que le destinataire n'a
+      // jamais reçue : on l'annule et on informe clairement l'admin.
+      await prisma.teamInvitation.delete({ where: { id: invitation.id } });
+      console.error(`[INVITE] Échec d'envoi de l'email à ${invitation.email}:`, mailError);
+      res.status(502).json({
+        success: false,
+        error: "L'invitation n'a pas pu être envoyée par email. Vérifiez la configuration SMTP.",
+      });
+      return;
+    }
 
     res.status(201).json({
       success: true,
@@ -196,6 +129,7 @@ export async function inviteMember(req: AuthenticatedRequest, res: Response) {
         inviteUrl,
         expiresAt: invitation.expiresAt,
         status: invitation.status,
+        orgRole: invitation.orgRole,
       },
     });
   } catch (error: any) {
@@ -203,7 +137,7 @@ export async function inviteMember(req: AuthenticatedRequest, res: Response) {
       res.status(400).json({ success: false, error: error.issues?.[0]?.message || error.message });
       return;
     }
-    res.status(500).json({ success: false, error: error.message });
+    handleUnexpectedError(res, "inviteMember", error);
   }
 }
 
@@ -289,7 +223,7 @@ export async function getTeamMembers(req: AuthenticatedRequest, res: Response) {
       invitations: pendingInvitations,
     });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleUnexpectedError(res, "getTeamMembers", error);
   }
 }
 
@@ -336,7 +270,7 @@ export async function removeMember(req: AuthenticatedRequest, res: Response) {
 
     res.json({ success: true, message: "Membre retiré de l'équipe." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleUnexpectedError(res, "removeMember", error);
   }
 }
 
@@ -375,7 +309,7 @@ export async function cancelInvitation(req: AuthenticatedRequest, res: Response)
 
     res.json({ success: true, message: "Invitation annulée." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleUnexpectedError(res, "cancelInvitation", error);
   }
 }
 
@@ -416,7 +350,7 @@ export async function getInvitationInfo(req: AuthenticatedRequest, res: Response
       },
     });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleUnexpectedError(res, "getInvitationInfo", error);
   }
 }
 
@@ -566,7 +500,7 @@ export async function getTeamMetrics(req: AuthenticatedRequest, res: Response) {
       },
     });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleUnexpectedError(res, "getTeamMetrics", error);
   }
 }
 
@@ -620,6 +554,6 @@ export async function updateMemberRole(req: AuthenticatedRequest, res: Response)
       member: updated,
     });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleUnexpectedError(res, "updateMemberRole", error);
   }
 }

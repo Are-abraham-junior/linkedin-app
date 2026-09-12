@@ -1,12 +1,15 @@
 import { Request, Response } from "express";
 import { prisma } from "../../../lib/prisma.js";
 import { handleProspectReply } from "./inbox.controller.js";
+import { onInvitationAccepted } from "../workers/campaign.worker.js";
 
 /**
  * Webhook Unipile pour la réception d'événements asynchrones
  * Événements supportés :
  * - message_received / chat_message_received : nouveau message LinkedIn reçu
  * - message_sent : message envoyé
+ * - new_relation (source "users") : invitation acceptée -> avance la séquence de campagne
+ * - account_status : déconnexion / checkpoint du compte LinkedIn
  */
 export async function handleUnipileWebhook(req: Request, res: Response) {
   try {
@@ -53,6 +56,57 @@ export async function handleUnipileWebhook(req: Request, res: Response) {
       }
 
       res.status(200).json({ success: true, handled: "account_status" });
+      return;
+    }
+
+    // Invitation acceptée (webhook Unipile source "users", event "new_relation")
+    if (eventType === "new_relation" || eventType === "users.new_relation") {
+      const accountId = data.account_id || data.accountId;
+      const providerId: string | undefined = data.user_provider_id || data.provider_id;
+      const publicIdentifier: string | undefined = data.user_public_identifier || data.public_identifier;
+
+      const acc = accountId
+        ? await prisma.linkedInAccount.findUnique({ where: { unipileAccountId: accountId } })
+        : null;
+
+      if (!acc || (!providerId && !publicIdentifier)) {
+        console.warn(`[Webhook Unipile] new_relation ignoré (accountId=${accountId}, providerId=${providerId}, publicIdentifier=${publicIdentifier}).`);
+        res.status(200).json({ success: true, ignored: true });
+        return;
+      }
+
+      const prospectOr: any[] = [];
+      if (providerId) prospectOr.push({ providerProfileId: providerId });
+      if (publicIdentifier) prospectOr.push({ linkedinUrl: { contains: `/in/${publicIdentifier}`, mode: "insensitive" } });
+
+      const prospects = await prisma.prospect.findMany({
+        where: { userId: acc.userId, OR: prospectOr },
+      });
+
+      for (const prospect of prospects) {
+        await prisma.prospect.update({
+          where: { id: prospect.id },
+          data: {
+            connectionStatus: "CONNECTED",
+            ...(providerId && !prospect.providerProfileId?.startsWith("ACo") ? { providerProfileId: providerId } : {}),
+          },
+        });
+
+        const waitingStates = await prisma.prospectCampaignState.findMany({
+          where: { prospectId: prospect.id, status: "WAITING_CONDITION", campaign: { status: "ACTIVE" } },
+          include: { prospect: true, campaign: { include: { steps: { orderBy: { stepOrder: "asc" } } } } },
+        });
+
+        for (const state of waitingStates) {
+          await onInvitationAccepted(state, acc, {
+            provider_id: providerId,
+            profile_picture_url: data.user_picture_url,
+          });
+        }
+      }
+
+      console.log(`[Webhook Unipile] new_relation traité : ${prospects.length} prospect(s) marqué(s) CONNECTED pour le compte ${acc.id}.`);
+      res.status(200).json({ success: true, handled: "new_relation", prospects: prospects.length });
       return;
     }
 
@@ -163,6 +217,6 @@ export async function handleUnipileWebhook(req: Request, res: Response) {
     res.status(200).json({ success: true });
   } catch (error: any) {
     console.error("[Webhook Unipile] Erreur de traitement :", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }

@@ -66,7 +66,8 @@ export async function getLists(req: AuthenticatedRequest, res: Response) {
       })),
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[list.controller:getLists]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -106,7 +107,8 @@ export async function createList(req: AuthenticatedRequest, res: Response) {
       res.status(400).json({ success: false, error: err.issues?.[0]?.message || err.message });
       return;
     }
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[list.controller:createList]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -150,7 +152,8 @@ export async function updateList(req: AuthenticatedRequest, res: Response) {
       res.status(400).json({ success: false, error: err.issues?.[0]?.message || err.message });
       return;
     }
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[list.controller:updateList]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -182,6 +185,7 @@ export async function deleteList(req: AuthenticatedRequest, res: Response) {
       message: "Liste supprimée avec succès.",
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[list.controller:deleteList]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }

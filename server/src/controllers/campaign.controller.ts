@@ -135,7 +135,7 @@ export async function getCampaigns(req: AuthenticatedRequest, res: Response) {
     res.json({ success: true, campaigns: formatted });
   } catch (error: any) {
     console.error("Error getCampaigns:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -244,7 +244,7 @@ export async function getCampaignDetails(req: AuthenticatedRequest, res: Respons
     });
   } catch (error: any) {
     console.error("Error getCampaignDetails:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -467,7 +467,7 @@ export async function createCampaign(req: AuthenticatedRequest, res: Response) {
       return;
     }
     console.error("Error createCampaign:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -512,7 +512,8 @@ export async function toggleCampaignStatus(req: AuthenticatedRequest, res: Respo
       campaign: updated,
     });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[campaign.controller:toggleCampaignStatus]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -662,7 +663,8 @@ export async function updateCampaign(req: AuthenticatedRequest, res: Response) {
       res.status(400).json({ success: false, error: error.issues?.[0]?.message || error.message });
       return;
     }
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[campaign.controller:updateCampaign]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -726,6 +728,7 @@ export async function deleteCampaign(req: AuthenticatedRequest, res: Response) {
       action: "ARCHIVED",
     });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[campaign.controller:deleteCampaign]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }

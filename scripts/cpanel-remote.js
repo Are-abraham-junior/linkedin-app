@@ -9,13 +9,14 @@
  *   node scripts/cpanel-remote.js build        -> Compile TypeScript et Vite
  *   node scripts/cpanel-remote.js package      -> Assemble deploy/ et génère les archives .zip de secours
  *   node scripts/cpanel-remote.js push         -> Transfère les fichiers vers le serveur via SCP/SSH
+ *   node scripts/cpanel-remote.js install-deps -> Installe les dépendances npm de production sur le serveur (nodevenv distant)
  *   node scripts/cpanel-remote.js chmod        -> Rétablit les permissions Linux (chmod -R 755 dist)
  *   node scripts/cpanel-remote.js restart      -> Redémarre l'application Phusion Passenger
  *   node scripts/cpanel-remote.js logs         -> Affiche les logs d'erreur (stderr.log)
  *   node scripts/cpanel-remote.js diag         -> Lance l'exécution directe `node app.js` dans le nodevenv
  *   node scripts/cpanel-remote.js db-push [--seed] -> Synchronise le schéma Prisma (et optionnellement les données de démo) sur la DB de production, EN SSH
  *   node scripts/cpanel-remote.js health       -> Vérifie la santé de l'API (/api/health) et du client
- *   node scripts/cpanel-remote.js deploy-all   -> Pipeline complet : build -> package -> push -> chmod -> restart -> health
+ *   node scripts/cpanel-remote.js deploy-all   -> Pipeline complet : build -> package -> push -> install-deps -> chmod -> db-push -> restart -> health
  */
 
 import fs from "fs";
@@ -77,6 +78,28 @@ function getSshOptions() {
   opts.push(`-o`, `StrictHostKeyChecking=accept-new`);
   opts.push(`-o`, `ConnectTimeout=10`);
   return opts;
+}
+
+/**
+ * Aplatit un script shell distant multi-lignes en UNE seule ligne entre
+ * guillemets doubles, seule forme qui survit à `spawnSync(..., { shell: true })`
+ * sous Windows : cmd.exe coupe l'argument à la première fin de ligne, et ssh
+ * reçoit alors une commande vide — la session s'ouvre, n'exécute rien et sort
+ * en code 0, ce qui fait passer l'étape pour « validée » (panne du 11/09/2026 :
+ * db-push et install-deps n'ont jamais tourné depuis un poste Windows).
+ * Contraintes : pas de guillemets doubles à l'intérieur (utiliser des simples),
+ * pas de `%` (expansion cmd.exe).
+ */
+function oneLine(script) {
+  const flat = script
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .join(" ");
+  if (flat.includes('"')) {
+    throw new Error(`oneLine(): guillemets doubles interdits dans un script distant : ${flat}`);
+  }
+  return `"${flat}"`;
 }
 
 function runRemoteSsh(remoteCommand, label) {
@@ -302,6 +325,33 @@ function cmdPush() {
   log("✅", "Transferts terminés avec succès.");
 }
 
+/**
+ * Installe les dépendances de production sur le serveur distant.
+ *
+ * `cmdPush` ne fait que copier des fichiers (dist/, package.json, .env, ...) —
+ * il ne touche jamais à node_modules/ distant. Toute nouvelle dépendance
+ * ajoutée au package.json (ex: `nodemailer` pour l'envoi d'invitations) reste
+ * donc invisible côté serveur tant qu'un `npm install` n'y est pas rejoué, et
+ * l'app crashe au démarrage avec `Cannot find module '...'` — masqué par
+ * Passenger derrière une simple 500 générique (panne du 11/09/2026).
+ * `npm install` (et non `npm ci`) est utilisé volontairement : le nodevenv
+ * distant a déjà un node_modules pré-existant qu'on veut mettre à jour de
+ * façon incrémentale, pas recréer de zéro à chaque déploiement.
+ */
+function cmdInstallDeps() {
+  log("📦", "Installation des dépendances npm de production sur le serveur distant (nodevenv)...");
+
+  const remoteCmd = oneLine(`
+    set -e;
+    if [ -f ${config.remoteNodevenv} ]; then source ${config.remoteNodevenv}; fi;
+    cd ${config.remoteApiDir};
+    export TOKIO_WORKER_THREADS=2 UV_THREADPOOL_SIZE=2;
+    node -v; npm -v;
+    npm install --omit=dev --no-audit --no-fund;
+  `);
+  runRemoteSsh(remoteCmd, "npm install --omit=dev (distant, via nodevenv)");
+}
+
 // Marqueur d'idempotence : présent dans scripts/api-htaccess-guard.conf.
 const API_GUARD_MARKER = "BLEADIN-API-GUARD";
 
@@ -365,17 +415,17 @@ function cmdRestart() {
 
 function cmdLogs() {
   log("📋", "Consultation des logs d'erreurs en production...");
-  const remoteCmd = `
-    echo "=== [1/2] stderr.log (Dernières erreurs serveur) ===";
+  const remoteCmd = oneLine(`
+    echo '=== [1/2] stderr.log (Dernieres erreurs serveur) ===';
     if [ -f ${config.remoteApiDir}/stderr.log ]; then
       tail -n 60 ${config.remoteApiDir}/stderr.log;
     else
-      echo "Aucun fichier stderr.log trouvé dans ${config.remoteApiDir}";
+      echo 'Aucun fichier stderr.log trouve dans ${config.remoteApiDir}';
     fi;
-    echo "";
-    echo "=== [2/2] Passenger Status ===";
-    passenger-status 2>/dev/null || echo "passenger-status non disponible dans le PATH utilisateur.";
-  `;
+    echo '';
+    echo '=== [2/2] Passenger Status ===';
+    passenger-status 2>/dev/null || echo 'passenger-status non disponible dans le PATH utilisateur.';
+  `);
   runRemoteSsh(remoteCmd, "Récupération des logs de production");
 }
 
@@ -383,36 +433,46 @@ function cmdDiag() {
   log("🩺", "Exécution directe de `node app.js` dans l'environnement virtuel nodevenv...");
   log("💡", "Ceci permet de révéler instantanément les erreurs de démarrage sans les masquer derrière une 500 Passenger.");
   
-  const remoteCmd = `
-    if [ -f ${config.remoteNodevenv} ]; then
-      source ${config.remoteNodevenv} && cd ${config.remoteApiDir} && echo "Virtualenv activé : $(which node) $(node -v)" && node app.js;
-    else
-      cd ${config.remoteApiDir} && echo "Node standard : $(node -v)" && node app.js;
-    fi
-  `;
+  const remoteCmd = oneLine(`
+    if [ -f ${config.remoteNodevenv} ]; then source ${config.remoteNodevenv}; fi;
+    cd ${config.remoteApiDir};
+    export TOKIO_WORKER_THREADS=2 UV_THREADPOOL_SIZE=2;
+    echo 'Node :'; which node; node -v;
+    node app.js;
+  `);
   runRemoteSsh(remoteCmd, "Diagnostic direct en console");
 }
 
 function cmdDbPush() {
   log("🗄️", "Application du schéma Prisma EN SSH sur le serveur cPanel (la DB LWS locale n'est pas joignable depuis le poste de dev)...");
 
-  const pushCmd = `
+  // TOKIO_WORKER_THREADS / UV_THREADPOOL_SIZE : indispensables sur CloudLinux
+  // (voir CLAUDE.md). Sans eux, les binaires Prisma (schema-engine, générateur)
+  // échouent à spawner avec EAGAIN — et `prisma generate` termine alors en
+  // code 0 SANS rien régénérer, laissant un client périmé (panne du 11/09/2026 :
+  // « Unknown argument orgRole »). Le `prisma generate` explicite après le push
+  // garantit que le client reflète bien le schéma poussé, quel que soit le
+  // comportement de la régénération implicite du db push.
+  const pushCmd = oneLine(`
     set -e;
     if [ -f ${config.remoteNodevenv} ]; then source ${config.remoteNodevenv}; fi;
     cd ${config.remoteApiDir};
-    echo "Node: $(node -v)";
+    export TOKIO_WORKER_THREADS=2 UV_THREADPOOL_SIZE=2;
+    node -v;
     npx prisma db push --schema=./prisma/schema.prisma;
-  `;
-  const ok = runRemoteSsh(pushCmd, "prisma db push (distant, via nodevenv)");
+    npx prisma generate --schema=./prisma/schema.prisma;
+  `);
+  const ok = runRemoteSsh(pushCmd, "prisma db push + generate (distant, via nodevenv)");
 
   if (ok && process.argv.includes("--seed")) {
     log("🌱", "Option --seed détectée : exécution de `prisma db seed` en distant...");
-    const seedCmd = `
+    const seedCmd = oneLine(`
       set -e;
       if [ -f ${config.remoteNodevenv} ]; then source ${config.remoteNodevenv}; fi;
       cd ${config.remoteApiDir};
+      export TOKIO_WORKER_THREADS=2 UV_THREADPOOL_SIZE=2;
       npx prisma db seed;
-    `;
+    `);
     runRemoteSsh(seedCmd, "prisma db seed (distant)");
   }
 }
@@ -501,6 +561,7 @@ async function cmdDeployAll() {
   console.log("\n🚀 Démarrage du pipeline complet de déploiement cPanel LWS...\n");
   cmdPackage();
   cmdPush();
+  cmdInstallDeps();
   cmdChmod();
   cmdDbPush();
   cmdRestart();
@@ -527,6 +588,7 @@ Commandes disponibles :
   build        Compile le serveur TypeScript et build l'application Vite
   package      Génère le dossier deploy/ et crée les archives ZIP (api.zip, client.zip)
   push         Synchronise les fichiers vers le serveur distant via SCP/SSH
+  install-deps Installe les dépendances npm de production sur le serveur (nodevenv distant)
   chmod        Applique les permissions indispensables (chmod -R 755 dist)
   guard-htaccess  (Ré)installe la garde .htaccess isolant l'API du fallback SPA parent
   restart      Déclenche le redémarrage de l'application Phusion Passenger (tmp/restart.txt)
@@ -536,7 +598,7 @@ Commandes disponibles :
   db-push [--seed]  Applique 'prisma db push' DIRECTEMENT SUR LE SERVEUR via SSH (nodevenv distant).
                      Ajouter --seed pour exécuter 'prisma db seed' juste après.
   health       Interroge les endpoints de santé (/api/health et Frontend)
-  deploy-all   Exécute le cycle complet : package -> push -> chmod -> db-push -> restart -> health
+  deploy-all   Exécute le cycle complet : package -> push -> install-deps -> chmod -> db-push -> restart -> health
 
 Configuration :
   Fichier .env.deploy (voir .env.deploy.example)
@@ -555,6 +617,9 @@ switch (command) {
     break;
   case "push":
     cmdPush();
+    break;
+  case "install-deps":
+    cmdInstallDeps();
     break;
   case "guard-htaccess":
     cmdGuardApiHtaccess();

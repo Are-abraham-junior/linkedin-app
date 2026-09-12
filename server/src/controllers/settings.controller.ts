@@ -74,7 +74,8 @@ export async function getAccountSettings(req: AuthenticatedRequest, res: Respons
       },
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[settings.controller:getAccountSettings]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -170,7 +171,8 @@ export async function updateAccountSettings(req: AuthenticatedRequest, res: Resp
       res.status(400).json({ success: false, error: err.issues?.[0]?.message || err.message });
       return;
     }
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[settings.controller:updateAccountSettings]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -248,7 +250,8 @@ export async function getLinkedInSettings(req: AuthenticatedRequest, res: Respon
       liveDetails: details,
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[settings.controller:getLinkedInSettings]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -369,7 +372,8 @@ export async function reconnectLinkedInDirect(req: AuthenticatedRequest, res: Re
       res.status(400).json({ success: false, error: err.issues?.[0]?.message || err.message });
       return;
     }
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[settings.controller:reconnectLinkedInDirect]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -442,7 +446,8 @@ export async function resolveLinkedInCheckpoint(req: AuthenticatedRequest, res: 
       message: "Vérification validée ! Votre compte LinkedIn est maintenant actif et vos campagnes ont repris.",
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[settings.controller:resolveLinkedInCheckpoint]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -481,7 +486,8 @@ export async function getImportHistory(req: AuthenticatedRequest, res: Response)
       },
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[settings.controller:getImportHistory]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -500,7 +506,8 @@ export async function getImportDetails(req: AuthenticatedRequest, res: Response)
 
     res.json({ success: true, item });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[settings.controller:getImportDetails]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -525,7 +532,8 @@ export async function getApiKeys(req: AuthenticatedRequest, res: Response) {
 
     res.json({ success: true, keys });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[settings.controller:getApiKeys]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -561,7 +569,8 @@ export async function createApiKey(req: AuthenticatedRequest, res: Response) {
       secretKey: fullKey,
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[settings.controller:createApiKey]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -586,7 +595,8 @@ export async function revokeApiKey(req: AuthenticatedRequest, res: Response) {
 
     res.json({ success: true, message: "Clé API révoquée avec succès." });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[settings.controller:revokeApiKey]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -604,7 +614,8 @@ export async function getIntegrations(req: AuthenticatedRequest, res: Response) 
 
     res.json({ success: true, integrations: configs });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[settings.controller:getIntegrations]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -649,7 +660,8 @@ export async function saveIntegration(req: AuthenticatedRequest, res: Response) 
       integration: saved,
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[settings.controller:saveIntegration]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -783,7 +795,8 @@ export async function testIntegrationConnection(req: AuthenticatedRequest, res: 
 
     res.status(400).json({ success: false, error: "Fournisseur d'intégration inconnu." });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[settings.controller:testIntegrationConnection]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -902,7 +915,8 @@ export async function getBillingInfo(req: AuthenticatedRequest, res: Response) {
       },
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[settings.controller:getBillingInfo]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -1032,6 +1046,7 @@ export async function downloadInvoicePdf(req: AuthenticatedRequest, res: Respons
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.send(htmlInvoice);
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[settings.controller:downloadInvoicePdf]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }

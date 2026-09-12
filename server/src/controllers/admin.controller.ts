@@ -78,7 +78,8 @@ export async function getPlatformMetrics(req: AuthenticatedRequest, res: Respons
       recentUsers,
     });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[admin.controller:getPlatformMetrics]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -152,7 +153,8 @@ export async function getUsers(req: AuthenticatedRequest, res: Response) {
       })),
     });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[admin.controller:getUsers]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -185,7 +187,8 @@ export async function getUserDetails(req: AuthenticatedRequest, res: Response) {
 
     res.json({ success: true, user });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[admin.controller:getUserDetails]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -228,7 +231,8 @@ export async function createUser(req: AuthenticatedRequest, res: Response) {
       res.status(400).json({ success: false, error: error.issues?.[0]?.message || error.message });
       return;
     }
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[admin.controller:createUser]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -262,7 +266,8 @@ export async function updateUser(req: AuthenticatedRequest, res: Response) {
       res.status(400).json({ success: false, error: error.issues?.[0]?.message || error.message });
       return;
     }
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[admin.controller:updateUser]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -280,7 +285,8 @@ export async function deleteUser(req: AuthenticatedRequest, res: Response) {
 
     res.json({ success: true, message: "Utilisateur supprimé avec succès." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[admin.controller:deleteUser]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -295,7 +301,8 @@ export async function getOrganizations(req: AuthenticatedRequest, res: Response)
 
     res.json({ success: true, organizations: orgs });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[admin.controller:getOrganizations]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -324,7 +331,8 @@ export async function deleteOrganization(req: AuthenticatedRequest, res: Respons
 
     res.json({ success: true, message: "Organisation supprimée avec succès." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[admin.controller:deleteOrganization]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -375,7 +383,8 @@ export async function getOrganizationMembers(req: AuthenticatedRequest, res: Res
 
     res.json({ success: true, organization: org, members });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[admin.controller:getOrganizationMembers]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -437,7 +446,8 @@ export async function addOrganizationMember(req: AuthenticatedRequest, res: Resp
       res.status(400).json({ success: false, error: error.issues?.[0]?.message || error.message });
       return;
     }
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[admin.controller:addOrganizationMember]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -466,7 +476,8 @@ export async function removeOrganizationMember(req: AuthenticatedRequest, res: R
 
     res.json({ success: true, message: "Membre retiré de l'espace avec succès." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[admin.controller:removeOrganizationMember]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -500,6 +511,7 @@ export async function impersonateWorkspace(req: AuthenticatedRequest, res: Respo
       simulatedOwner: org.users[0] || null,
     });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[admin.controller:impersonateWorkspace]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }

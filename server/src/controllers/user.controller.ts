@@ -47,7 +47,8 @@ export async function getProfile(req: AuthenticatedRequest, res: Response) {
       },
     });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[user.controller:getProfile]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -108,7 +109,8 @@ export async function updateProfile(req: AuthenticatedRequest, res: Response) {
       res.status(400).json({ success: false, error: error.issues?.[0]?.message || error.message });
       return;
     }
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[user.controller:updateProfile]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -311,6 +313,6 @@ export async function getUserDashboardStats(req: AuthenticatedRequest, res: Resp
     });
   } catch (error: any) {
     console.error("[Stats] Erreur getUserDashboardStats:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }

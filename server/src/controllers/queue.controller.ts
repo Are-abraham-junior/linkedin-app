@@ -189,7 +189,7 @@ export async function getQueue(req: AuthenticatedRequest, res: Response): Promis
     });
   } catch (error: any) {
     console.error("[QueueController] Erreur getQueue:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -237,7 +237,7 @@ export async function deleteQueueItem(req: AuthenticatedRequest, res: Response):
     res.json({ success: true, message: "Action supprimée de la file d'attente" });
   } catch (error: any) {
     console.error("[QueueController] Erreur deleteQueueItem:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -288,7 +288,7 @@ export async function retryQueueItem(req: AuthenticatedRequest, res: Response): 
     res.json({ success: true, message: "Action remise en file d'attente pour exécution immédiate" });
   } catch (error: any) {
     console.error("[QueueController] Erreur retryQueueItem:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -329,7 +329,7 @@ export async function batchDeleteQueueItems(req: AuthenticatedRequest, res: Resp
     });
   } catch (error: any) {
     console.error("[QueueController] Erreur batchDeleteQueueItems:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -396,7 +396,7 @@ export async function batchRescheduleQueueItems(req: AuthenticatedRequest, res: 
     });
   } catch (error: any) {
     console.error("[QueueController] Erreur batchRescheduleQueueItems:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -440,7 +440,7 @@ export async function getScheduleSettings(req: AuthenticatedRequest, res: Respon
     });
   } catch (error: any) {
     console.error("[QueueController] Erreur getScheduleSettings:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -488,6 +488,6 @@ export async function updateScheduleSettings(req: AuthenticatedRequest, res: Res
     });
   } catch (error: any) {
     console.error("[QueueController] Erreur updateScheduleSettings:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }

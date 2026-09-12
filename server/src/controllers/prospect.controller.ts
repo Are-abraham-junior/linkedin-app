@@ -165,7 +165,8 @@ export async function getProspects(req: AuthenticatedRequest, res: Response) {
       prospects: enrichedProspects,
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[prospect.controller:getProspects]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -300,7 +301,8 @@ export async function bulkImportProspects(req: AuthenticatedRequest, res: Respon
       res.status(400).json({ success: false, error: err.issues?.[0]?.message || err.message });
       return;
     }
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[prospect.controller:bulkImportProspects]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -325,7 +327,8 @@ export async function updateProspect(req: AuthenticatedRequest, res: Response) {
 
     res.json({ success: true, prospect: updated });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[prospect.controller:updateProspect]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -361,7 +364,8 @@ export async function deleteProspect(req: AuthenticatedRequest, res: Response) {
 
     res.json({ success: true, message: "Prospect supprimé avec succès." });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[prospect.controller:deleteProspect]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -395,7 +399,8 @@ export async function bulkDeleteProspects(req: AuthenticatedRequest, res: Respon
 
     res.json({ success: true, message: `${ids.length} prospect(s) supprimé(s).` });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[prospect.controller:bulkDeleteProspects]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -433,7 +438,8 @@ export async function bulkMoveProspects(req: AuthenticatedRequest, res: Response
 
     res.json({ success: true, message: `${ids.length} prospect(s) déplacé(s) vers ${targetList.name}.` });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[prospect.controller:bulkMoveProspects]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -527,7 +533,8 @@ export async function syncProspectsStatus(req: AuthenticatedRequest, res: Respon
       message: `${updatedCount} prospect(s) synchronisé(s) avec succès.`,
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[prospect.controller:syncProspectsStatus]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -544,7 +551,8 @@ export async function checkProspectCollision(req: AuthenticatedRequest, res: Res
       collisions: [],
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[prospect.controller:checkProspectCollision]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -628,6 +636,7 @@ export async function transferProspects(req: AuthenticatedRequest, res: Response
       res.status(400).json({ success: false, error: err.issues?.[0]?.message || err.message });
       return;
     }
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[prospect.controller:transferProspects]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
