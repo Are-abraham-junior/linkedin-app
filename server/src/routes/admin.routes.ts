@@ -1,5 +1,8 @@
 import { Router } from "express";
 import {
+  getUnipileAccounts,
+  deleteUnipileAccount,
+  runUnipileReconcile,
   getPlatformMetrics,
   getUsers,
   getUserDetails,
@@ -32,5 +35,10 @@ router.get("/organizations/:id/members", getOrganizationMembers);
 router.post("/organizations/:id/members", addOrganizationMember);
 router.delete("/organizations/:orgId/members/:userId", removeOrganizationMember);
 router.post("/impersonate-workspace/:id", impersonateWorkspace);
+
+// Comptes Unipile (facturation)
+router.get("/unipile/accounts", getUnipileAccounts);
+router.delete("/unipile/accounts/:id", deleteUnipileAccount);
+router.post("/unipile/reconcile", runUnipileReconcile);
 
 export default router;

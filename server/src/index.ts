@@ -13,11 +13,16 @@ import inboxRoutes from "./routes/inbox.routes.js";
 import teamRoutes from "./routes/team.routes.js";
 import queueRoutes from "./routes/queue.routes.js";
 import settingsRoutes from "./routes/settings.routes.js";
+import reportRoutes from "./routes/report.routes.js";
+import { startReportScheduler } from "./workers/report.worker.js";
+import { startUnipileReconcileScheduler } from "./workers/unipile-reconcile.worker.js";
 import { handleUnipileWebhook } from "./controllers/webhook.controller.js";
-import { startCampaignScheduler } from "./workers/campaign.worker.js";
+import { startCampaignScheduler, getWorkerStatus } from "./workers/campaign.worker.js";
 
 import path from "path";
 import fs from "fs";
+
+const STARTED_AT = new Date();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -29,12 +34,21 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json());
+// 2 Mo : le logo de l'espace (Rapports) est envoyé en data URL base64
+app.use(express.json({ limit: "2mb" }));
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 
 // Health check
 app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString(), service: "Bleadin API" });
+  res.json({
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    service: "Bleadin API",
+    startedAt: STARTED_AT.toISOString(),
+    uptimeSeconds: Math.floor(process.uptime()),
+    pid: process.pid,
+    worker: getWorkerStatus(),
+  });
 });
 
 // API Routes
@@ -49,6 +63,7 @@ app.use("/api/inbox", inboxRoutes);
 app.use("/api/team", teamRoutes);
 app.use("/api/queue", queueRoutes);
 app.use("/api/settings", settingsRoutes);
+app.use("/api/reports", reportRoutes);
 app.post("/api/webhooks/unipile", handleUnipileWebhook);
 
 // Serve static client assets and SPA fallback (Production / Render)
@@ -76,6 +91,10 @@ app.listen(PORT, () => {
   console.log(`🚀 Bleadin API Server running on port ${PORT}`);
   // Initialiser le planificateur de tâches de campagne
   startCampaignScheduler();
+  // Rapports périodiques par e-mail (quotidien / hebdomadaire selon l'utilisateur)
+  startReportScheduler();
+  // Anti-doublon / anti-orphelin des comptes Unipile (facturés)
+  startUnipileReconcileScheduler();
 
   // Self-ping pour garder le processus actif (Passenger met en veille après inactivité)
   if (process.env.NODE_ENV === "production" && process.env.SELF_PING_URL) {

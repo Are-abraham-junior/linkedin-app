@@ -6,6 +6,7 @@ export interface Organization {
   name: string;
   slug: string;
   plan: string;
+  avatarUrl?: string | null;
 }
 
 export interface LinkedInAccount {
@@ -201,6 +202,119 @@ export interface ProspectItem {
   doNotContact: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+// ─── Rapports ────────────────────────────────────────────────────────────────
+
+export interface ReportActionCounters {
+  invitesSent: number;
+  messagesSent: number;
+  visits: number;
+  follows: number;
+  failedActions: number;
+  queued: number;
+  repliesReceived: number;
+}
+
+export interface ReportCampaignStats extends ReportActionCounters {
+  totalProspects: number;
+  acceptedCount: number;
+  repliedCount: number;
+  completedCount: number;
+  waitingCondition: number;
+  waitingDelay: number;
+  failed: number;
+  acceptanceRate: number;
+  replyRate: number;
+}
+
+export interface ReportTimelinePoint {
+  date: string;
+  invitesSent: number;
+  messagesSent: number;
+  replies: number;
+}
+
+export interface ReportProspect {
+  id: string;
+  firstName: string;
+  lastName: string;
+  headline?: string | null;
+  company?: string | null;
+  location?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  linkedinUrl: string;
+  connectionStatus: string;
+  status: ProspectStepStatus;
+  currentStepOrder: number | null;
+  currentStepType: ActionType | null;
+  lastActionAt?: string | null;
+  enrolledAt: string;
+}
+
+export interface ReportCampaign {
+  id: string;
+  name: string;
+  status: CampaignStatus;
+  type: string;
+  createdAt: string;
+  updatedAt: string;
+  author: { id: string; name: string; orgRole?: string | null } | null;
+  steps: CampaignStep[];
+  stats: ReportCampaignStats;
+  previousStats?: ReportActionCounters | null;
+  timeline: ReportTimelinePoint[];
+  prospects?: ReportProspect[];
+}
+
+export interface ReportComparison {
+  period: { from: string; to: string };
+  summary: ReportActionCounters;
+  deltas: Record<keyof ReportActionCounters, number | null>;
+}
+
+export type ReportEmailFrequency = "NONE" | "DAILY" | "WEEKLY";
+
+export interface ReportSettings {
+  emailFrequency: ReportEmailFrequency;
+  lastSentAt: string | null;
+  available: boolean;
+}
+
+export interface ReportHistoryEntry {
+  id: string;
+  userId: string;
+  userName: string;
+  kind: "PDF" | "XLSX" | "CONTACTS";
+  filename: string;
+  periodFrom: string;
+  periodTo: string;
+  campaignIds: string[];
+  campaignsCount: number;
+  prospectsCount?: number;
+  createdAt: string;
+}
+
+export interface ReportSummary extends ReportActionCounters {
+  campaigns: number;
+  activeCampaigns: number;
+  totalProspects: number;
+  acceptedCount: number;
+  repliedCount: number;
+  completedCount: number;
+  failed: number;
+  acceptanceRate: number;
+  replyRate: number;
+}
+
+export interface CampaignReport {
+  generatedAt: string;
+  period: { from: string; to: string };
+  owner: { name: string; email: string; organizationName: string | null };
+  summary: ReportSummary;
+  comparison?: ReportComparison | null;
+  campaigns: ReportCampaign[];
 }
 
 export interface DailyEvolutionPoint {

@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { prisma } from "../../../lib/prisma.js";
 import { handleProspectReply } from "./inbox.controller.js";
 import { onInvitationAccepted } from "../workers/campaign.worker.js";
+import { UnipileService } from "../services/unipile.service.js";
 
 /**
  * Webhook Unipile pour la réception d'événements asynchrones
@@ -119,6 +120,7 @@ export async function handleUnipileWebhook(req: Request, res: Response) {
       const text = data.text || data.message || "";
       const senderId = data.sender_id || data.senderId;
       const accountId = data.account_id || data.accountId;
+      const isOwn = UnipileService.isOwnMessage(data);
 
       if (chatId) {
         // 1. Trouver la conversation
@@ -190,7 +192,7 @@ export async function handleUnipileWebhook(req: Request, res: Response) {
             create: {
               conversationId: conv.id,
               unipileMessageId: messageId,
-              senderType: data.is_sender ? "USER" : "PROSPECT",
+              senderType: isOwn ? "USER" : "PROSPECT",
               text,
               sentAt: now,
             },
@@ -202,12 +204,12 @@ export async function handleUnipileWebhook(req: Request, res: Response) {
             data: {
               lastMessageText: text,
               lastMessageAt: now,
-              unreadCount: data.is_sender ? conv.unreadCount : { increment: 1 },
+              unreadCount: isOwn ? conv.unreadCount : { increment: 1 },
             },
           });
 
           // Arrêter la séquence de campagne pour ce prospect si c'est un message reçu
-          if (!data.is_sender) {
+          if (!isOwn) {
             await handleProspectReply(conv.prospectId, text, conv.userId || undefined);
           }
         }

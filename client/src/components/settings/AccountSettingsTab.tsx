@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { apiRequest } from "../../services/api";
+import { WorkspaceSettingsSection } from "./WorkspaceSettingsSection";
 import {
   User as UserIcon,
   Mail,
@@ -263,6 +264,9 @@ export const AccountSettingsTab: React.FC = () => {
           />
         </div>
       </div>
+
+      {/* Bloc 1b : Espace de travail (photo de profil de l'organisation, enregistrée immédiatement) */}
+      <WorkspaceSettingsSection />
 
       {/* Bloc 2 : Sécurité & Mot de passe */}
       <div className="adora-card p-6 sm:p-7 bg-white rounded-3xl border border-[#e0e0db]/80 shadow-xs space-y-6">

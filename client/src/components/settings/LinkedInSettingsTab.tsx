@@ -137,6 +137,22 @@ function formatCleanError(err?: string): string {
     }
   };
 
+  const [resendingCode, setResendingCode] = useState(false);
+  /** Nouveau code sur le MÊME account_id : pas de nouvelle authentification, donc pas de doublon Unipile */
+  const handleResendCheckpoint = async () => {
+    setResendingCode(true);
+    const res = await apiRequest("/settings/linkedin/checkpoint/resend", {
+      method: "POST",
+      body: { accountId: checkpointAccountId },
+    });
+    setMessage(
+      res.success
+        ? { type: "success", text: "Un nouveau code vient d'être envoyé." }
+        : { type: "error", text: res.error || "Impossible de renvoyer le code." }
+    );
+    setResendingCode(false);
+  };
+
   const handleVerifyCheckpoint = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!checkpointCode.trim()) {
@@ -363,6 +379,14 @@ function formatCleanError(err?: string): string {
               >
                 {verifyingCode ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
                 <span>Valider le code</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleResendCheckpoint}
+                disabled={resendingCode || verifyingCode}
+                className="px-3 py-2.5 text-xs font-bold text-[#592eff] hover:underline cursor-pointer disabled:opacity-50"
+              >
+                {resendingCode ? "Envoi…" : "Renvoyer le code"}
               </button>
             </div>
           </form>

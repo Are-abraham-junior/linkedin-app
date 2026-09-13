@@ -3,12 +3,14 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { apiRequest } from "../../services/api";
 import { Building2, Globe, Check, ChevronDown, Shield, Search } from "lucide-react";
+import { WorkspaceAvatar } from "../common/WorkspaceAvatar";
 
 interface OrganizationItem {
   id: string;
   name: string;
   slug: string;
   plan?: string;
+  avatarUrl?: string | null;
   _count?: {
     users?: number;
   };
@@ -74,7 +76,8 @@ export const WorkspaceSwitcher: React.FC = () => {
       : "Hub Global"
     : user?.organization?.name || "Mon Espace";
 
-  const currentInitial = isSuperAdmin && !impersonatedOrg ? "🌐" : currentSpaceName.charAt(0).toUpperCase();
+  // /auth/me renvoie l'organisation effective (impersonée ou non) avec sa photo
+  const currentAvatar = isSuperAdmin && !impersonatedOrg ? null : user?.organization?.avatarUrl || impersonatedOrg?.avatarUrl || null;
 
   const handleSelectGlobalHub = () => {
     setImpersonatedOrg(null);
@@ -87,6 +90,7 @@ export const WorkspaceSwitcher: React.FC = () => {
       id: org.id,
       name: org.name,
       slug: org.slug,
+      avatarUrl: org.avatarUrl || null,
     });
     setIsOpen(false);
     navigate("/dashboard");
@@ -109,16 +113,14 @@ export const WorkspaceSwitcher: React.FC = () => {
         }`}
         title="Changer d'espace de travail"
       >
-        {/* Pastille Logo / Initiale */}
-        <div
-          className={`w-6 h-6 rounded-xl flex items-center justify-center text-[11px] font-bold shrink-0 transition-colors ${
-            isSuperAdmin && !impersonatedOrg
-              ? "bg-[#592eff] text-white shadow-xs"
-              : "bg-[#592eff]/10 text-[#592eff] border border-[#592eff]/20"
-          }`}
-        >
-          {currentInitial}
-        </div>
+        {/* Photo de l'espace / Initiale */}
+        {isSuperAdmin && !impersonatedOrg ? (
+          <div className="w-6 h-6 rounded-xl flex items-center justify-center text-[11px] font-bold shrink-0 bg-[#592eff] text-white shadow-xs">
+            🌐
+          </div>
+        ) : (
+          <WorkspaceAvatar name={currentSpaceName} avatarUrl={currentAvatar} className="w-6 h-6 rounded-xl" />
+        )}
 
         {/* Nom de l'espace */}
         <div className="text-left flex flex-col">
@@ -235,11 +237,13 @@ export const WorkspaceSwitcher: React.FC = () => {
                     }`}
                   >
                     <div className="flex items-center gap-2.5 truncate">
-                      <div
-                        className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 border ${colorClass}`}
-                      >
-                        {org.name.charAt(0).toUpperCase()}
-                      </div>
+                      <WorkspaceAvatar
+                        name={org.name}
+                        avatarUrl={org.avatarUrl}
+                        className="w-8 h-8 rounded-xl"
+                        fallbackClassName={`border ${colorClass}`}
+                        textClassName="text-xs"
+                      />
                       <div className="truncate text-left">
                         <p className="font-bold text-xs text-[#21164c] truncate">{org.name}</p>
                         <p className="text-[10px] text-[#5f5f69] truncate flex items-center gap-1.5">

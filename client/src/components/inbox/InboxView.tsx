@@ -38,7 +38,12 @@ import { NewConversationModal } from "./NewConversationModal";
 import { useAuth } from "../../context/AuthContext";
 
 export const InboxView: React.FC = () => {
-  const { impersonatedOrg } = useAuth();
+  const { impersonatedOrg, user: currentUser } = useAuth();
+  const currentUserAvatar =
+    currentUser?.avatarUrl ||
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(
+      currentUser?.name || currentUser?.email || "Moi"
+    )}&background=592eff&color=fff`;
   const [conversations, setConversations] = useState<InboxConversation[]>([]);
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -709,31 +714,38 @@ export const InboxView: React.FC = () => {
               </div>
             ) : (
               messages.map((m, idx) => {
+                // Convention Bleadin : messages de l'utilisateur à GAUCHE (avec sa photo),
+                // messages du prospect à DROITE (avec la photo du prospect).
                 const isUser = m.senderType === "USER";
+                const prospectAvatar =
+                  currentProspect.avatarUrl ||
+                  `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                    `${currentProspect.firstName} ${currentProspect.lastName}`
+                  )}&background=592eff&color=fff`;
+                const avatarSrc = isUser ? currentUserAvatar : prospectAvatar;
+                const avatarTitle = isUser
+                  ? currentUser?.name || "Vous"
+                  : `${currentProspect.firstName} ${currentProspect.lastName}`;
                 return (
                   <div
                     key={m.id || idx}
-                    className={`flex items-end gap-2 ${isUser ? "justify-end" : "justify-start"}`}
+                    className={`flex items-end gap-2 ${isUser ? "justify-start" : "justify-end flex-row-reverse"}`}
                   >
-                    {!isUser && (
-                      <img
-                        src={
-                          currentProspect.avatarUrl ||
-                          `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                            `${currentProspect.firstName} ${currentProspect.lastName}`
-                          )}&background=592eff&color=fff`
-                        }
-                        alt=""
-                        className="w-6 h-6 rounded-full object-cover mb-1 shrink-0 border border-slate-200 dark:border-slate-700"
-                      />
-                    )}
+                    <img
+                      src={avatarSrc}
+                      alt=""
+                      title={avatarTitle}
+                      className={`w-6 h-6 rounded-full object-cover mb-1 shrink-0 border ${
+                        isUser ? "border-[#592eff]/40" : "border-slate-200 dark:border-slate-700"
+                      }`}
+                    />
 
-                    <div className={`max-w-[75%] sm:max-w-[65%] space-y-1 ${isUser ? "items-end" : "items-start"}`}>
+                    <div className={`max-w-[75%] sm:max-w-[65%] space-y-1 flex flex-col ${isUser ? "items-start" : "items-end"}`}>
                       <div
                         className={`px-3.5 py-2.5 rounded-2xl text-xs leading-relaxed shadow-xs break-words ${
                           isUser
-                            ? "bg-[#592eff] text-white rounded-tr-xs"
-                            : "bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200/80 dark:border-slate-700/80 rounded-tl-xs"
+                            ? "bg-[#592eff] text-white rounded-tl-xs"
+                            : "bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200/80 dark:border-slate-700/80 rounded-tr-xs"
                         }`}
                       >
                         <p className="whitespace-pre-wrap">{m.text}</p>
@@ -756,7 +768,7 @@ export const InboxView: React.FC = () => {
 
                       <div
                         className={`flex items-center gap-1 text-[10px] text-slate-400 px-1 ${
-                          isUser ? "justify-end" : "justify-start"
+                          isUser ? "justify-start" : "justify-end"
                         }`}
                       >
                         <span>{formatMessageTime(m.sentAt)}</span>

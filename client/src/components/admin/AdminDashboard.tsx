@@ -19,6 +19,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { ConfirmModal } from "../common/ConfirmModal";
+import { UnipileAccountsCard } from "./UnipileAccountsCard";
 
 interface AdminDashboardProps {
   onNavigateToUsers: () => void;
@@ -280,6 +281,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateToUser
           </div>
         )}
       </div>
+
+      {/* Comptes Unipile (facturation) : doublons et orphelins */}
+      <UnipileAccountsCard />
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -212,26 +212,36 @@ export async function getAccountHealth(req: AuthenticatedRequest, res: Response)
 export async function disconnectAccount(req: AuthenticatedRequest, res: Response) {
   try {
     const userId = req.user!.id;
-    const linkedAcc = await prisma.linkedInAccount.findFirst({
-      where: { userId, status: "CONNECTED" },
-      orderBy: { updatedAt: "desc" },
-    });
+    // Toutes les lignes de l'utilisateur (CONNECTED, DISCONNECTED, CHECKPOINT) : chacune est un compte facturé chez Unipile
+    const accounts = await prisma.linkedInAccount.findMany({ where: { userId } });
 
-    if (linkedAcc) {
-      if (linkedAcc.unipileAccountId) {
-        try {
-          await UnipileService.deleteAccount(linkedAcc.unipileAccountId);
-        } catch (delErr: any) {
-          console.warn(`[disconnectAccount] Unipile deletion notice: ${delErr.message}`);
+    const failed: string[] = [];
+    for (const acc of accounts) {
+      if (acc.unipileAccountId) {
+        const del = await UnipileService.deleteAccount(acc.unipileAccountId);
+        // 404 = déjà supprimé chez Unipile : on peut nettoyer la ligne
+        if (!del.success && !/404|not.?found/i.test(del.error || "")) {
+          failed.push(acc.unipileAccountId);
+          continue;
         }
       }
-      await prisma.linkedInAccount.update({
-        where: { id: linkedAcc.id },
-        data: { status: "DISCONNECTED" },
-      });
+      await prisma.linkedInAccount.delete({ where: { id: acc.id } }).catch(() => {});
     }
 
-    res.json({ success: true, message: "Compte LinkedIn déconnecté avec succès." });
+    if (failed.length > 0) {
+      // On garde la ligne : un compte encore facturé ne doit jamais devenir invisible
+      await prisma.linkedInAccount.updateMany({
+        where: { userId, unipileAccountId: { in: failed } },
+        data: { status: "DISCONNECTED" },
+      });
+      res.status(502).json({
+        success: false,
+        error: "Unipile n'a pas confirmé la suppression du compte. Réessayez dans quelques instants.",
+      });
+      return;
+    }
+
+    res.json({ success: true, message: "Compte LinkedIn déconnecté et supprimé avec succès." });
   } catch (err: any) {
     console.error("[linkedin.controller:disconnectAccount]", err);
     res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });

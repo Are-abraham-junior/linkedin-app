@@ -137,6 +137,20 @@ export const LinkedInReconnectModal: React.FC<LinkedInReconnectModalProps> = ({
     }
   };
 
+  const [resending, setResending] = useState(false);
+  /** Renvoie un nouveau code sur le MÊME account_id (pas de nouvelle authentification = pas de doublon Unipile) */
+  const handleResendCode = async () => {
+    setResending(true);
+    setError(null);
+    const res = await apiRequest("/settings/linkedin/checkpoint/resend", {
+      method: "POST",
+      body: { accountId: activeAccountId },
+    });
+    if (res.success) setSuccess("Un nouveau code vient d'être envoyé.");
+    else setError(res.error || "Impossible de renvoyer le code.");
+    setResending(false);
+  };
+
   const handleGoToSettings = () => {
     onClose();
     navigate("/settings?tab=linkedin");
@@ -298,13 +312,23 @@ export const LinkedInReconnectModal: React.FC<LinkedInReconnectModalProps> = ({
               </div>
 
               <div className="pt-2 flex items-center justify-between gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsCheckpoint(false)}
-                  className="text-xs text-gray-500 hover:text-gray-700 font-bold transition-colors cursor-pointer"
-                >
-                  Retour
-                </button>
+                <div className="flex items-center gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setIsCheckpoint(false)}
+                    className="text-xs text-gray-500 hover:text-gray-700 font-bold transition-colors cursor-pointer"
+                  >
+                    Retour
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleResendCode}
+                    disabled={resending || verifyingCode}
+                    className="text-xs text-[#592eff] hover:underline font-bold transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    {resending ? "Envoi…" : "Renvoyer le code"}
+                  </button>
+                </div>
 
                 <button
                   type="submit"

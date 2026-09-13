@@ -557,10 +557,10 @@ export async function getMessages(req: AuthenticatedRequest, res: Response) {
 
         if (unipileMessages.success && Array.isArray(unipileMessages.items)) {
           for (const m of unipileMessages.items) {
-            const senderType =
-              m.is_sender === true || m.sender_id === "self" || m.sender_id === "me"
-                ? "USER"
-                : "PROSPECT";
+            // is_sender est un nombre 0|1 côté Unipile : passer par le helper, sinon
+            // les messages de l'utilisateur sont pris pour des réponses du prospect
+            // et handleProspectReply stoppe la campagne à tort.
+            const senderType = UnipileService.isOwnMessage(m) ? "USER" : "PROSPECT";
             const text = m.text || "";
             const sentAt = m.timestamp ? new Date(m.timestamp) : new Date();
 
@@ -568,7 +568,7 @@ export async function getMessages(req: AuthenticatedRequest, res: Response) {
             if (msgId) {
               await prisma.message.upsert({
                 where: { unipileMessageId: msgId },
-                update: { text, sentAt },
+                update: { text, sentAt, senderType }, // corrige aussi les anciens messages mal attribués
                 create: {
                   conversationId: conversation.id,
                   unipileMessageId: msgId,

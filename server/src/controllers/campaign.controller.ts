@@ -42,38 +42,46 @@ const UpdateCampaignSchema = z.object({
 });
 
 /**
+ * Détermine le périmètre (clause `where` Prisma sur Campaign) visible par l'appelant :
+ * SUPER_ADMIN impersoné → toute l'organisation (ou un membre via ?memberId=),
+ * OWNER → lui-même ou un membre de son organisation, sinon → lui-même uniquement.
+ * Partagé entre les campagnes et les rapports.
+ */
+export async function resolveCampaignScope(req: AuthenticatedRequest): Promise<any> {
+  const requestedMemberId = (req.query.memberId || req.query.userId) as string;
+
+  if (req.user!.role === "SUPER_ADMIN" && req.user!.organizationId) {
+    if (requestedMemberId && requestedMemberId !== "ALL") {
+      return { userId: requestedMemberId, user: { organizationId: req.user!.organizationId } };
+    }
+    return { user: { organizationId: req.user!.organizationId } };
+  }
+
+  let targetUserId = req.user!.id;
+  if (requestedMemberId && requestedMemberId !== targetUserId) {
+    const caller = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+      select: { role: true, orgRole: true, organizationId: true },
+    });
+
+    if (caller?.orgRole === "OWNER" && caller.organizationId) {
+      const member = await prisma.user.findFirst({
+        where: { id: requestedMemberId, organizationId: caller.organizationId },
+      });
+      if (member) {
+        targetUserId = requestedMemberId;
+      }
+    }
+  }
+  return { userId: targetUserId };
+}
+
+/**
  * Récupère toutes les campagnes de l'utilisateur avec statistiques consolidées
  */
 export async function getCampaigns(req: AuthenticatedRequest, res: Response) {
   try {
-    const requestedMemberId = (req.query.memberId || req.query.userId) as string;
-    let whereClause: any = {};
-
-    if (req.user!.role === "SUPER_ADMIN" && req.user!.organizationId) {
-      if (requestedMemberId && requestedMemberId !== "ALL") {
-        whereClause = { userId: requestedMemberId, user: { organizationId: req.user!.organizationId } };
-      } else {
-        whereClause = { user: { organizationId: req.user!.organizationId } };
-      }
-    } else {
-      let targetUserId = req.user!.id;
-      if (requestedMemberId && requestedMemberId !== targetUserId) {
-        const caller = await prisma.user.findUnique({
-          where: { id: req.user!.id },
-          select: { role: true, orgRole: true, organizationId: true },
-        });
-
-        if (caller?.orgRole === "OWNER" && caller.organizationId) {
-          const member = await prisma.user.findFirst({
-            where: { id: requestedMemberId, organizationId: caller.organizationId },
-          });
-          if (member) {
-            targetUserId = requestedMemberId;
-          }
-        }
-      }
-      whereClause = { userId: targetUserId };
-    }
+    const whereClause = await resolveCampaignScope(req);
 
     const campaigns = await prisma.campaign.findMany({
       where: whereClause,

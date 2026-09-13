@@ -266,12 +266,26 @@ async function handleActionResultFailure(
 
 let isRunning = false;
 
+// Horodatages des derniers passages du planificateur (exposés par /api/health)
+const workerStatus = {
+  lastQueueRunAt: null as Date | null,
+  lastAcceptCheckAt: null as Date | null,
+};
+
+export function getWorkerStatus() {
+  return {
+    lastQueueRunAt: workerStatus.lastQueueRunAt?.toISOString() || null,
+    lastAcceptCheckAt: workerStatus.lastAcceptCheckAt?.toISOString() || null,
+  };
+}
+
 /**
  * Traite les actions en attente dans la queue
  */
 export async function processActionQueue(): Promise<void> {
   if (isRunning) return;
   isRunning = true;
+  workerStatus.lastQueueRunAt = new Date();
 
   try {
     const now = new Date();
@@ -841,6 +855,7 @@ export async function onInvitationAccepted(state: any, account: any, profile: an
  * Tâche de synchronisation périodique des acceptations LinkedIn
  */
 export async function checkAcceptedInvitations(): Promise<void> {
+  workerStatus.lastAcceptCheckAt = new Date();
   try {
     const activeStates = await prisma.prospectCampaignState.findMany({
       where: {

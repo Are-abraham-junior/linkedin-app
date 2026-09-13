@@ -16,6 +16,7 @@ import {
   X,
   Layers,
   Settings,
+  FileBarChart,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -110,6 +111,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           label: "Campagnes",
           path: "/campaigns",
           icon: Send,
+        },
+        {
+          id: "reports",
+          label: "Rapports",
+          path: "/reports",
+          icon: FileBarChart,
         },
       ],
     },

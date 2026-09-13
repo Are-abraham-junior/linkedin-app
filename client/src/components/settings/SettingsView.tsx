@@ -62,13 +62,13 @@ export const SettingsView: React.FC = () => {
             Paramètres Bleadin
           </h1>
           <p className="text-[#5f5f69] text-xs sm:text-sm mt-1">
-            Gérez votre profil, votre connexion LinkedIn, l'historique d'importation, vos intégrations et votre facturation.
+            Gérez votre profil, votre espace de travail, votre connexion LinkedIn, l'historique d'importation, vos intégrations et votre facturation.
           </p>
         </div>
       </div>
 
       {/* Barre d'onglets fluide Adora */}
-      <div className="border-b border-[#e0e0db]/80 flex gap-2 sm:gap-3 overflow-x-auto no-scrollbar pb-px">
+      <div className="border-b border-[#e0e0db]/80 flex flex-wrap gap-2 sm:gap-3 pb-px">
         {TABS.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -78,7 +78,7 @@ export const SettingsView: React.FC = () => {
               key={tab.id}
               type="button"
               onClick={() => handleTabChange(tab.id)}
-              className={`flex items-center gap-2 px-4 sm:px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              className={`flex items-center gap-2 px-4 sm:px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
                 isActive
                   ? "bg-[#592eff] text-white shadow-md shadow-[#592eff]/25 scale-[1.02]"
                   : "text-[#5f5f69] hover:text-[#21164c] hover:bg-white/80"

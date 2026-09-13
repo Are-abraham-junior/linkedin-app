@@ -1,0 +1,23 @@
+import { Router } from "express";
+import { requireAuth } from "../middlewares/auth.middleware.js";
+import {
+  getCampaignsReport,
+  getReportSettings,
+  updateReportSettings,
+  sendReportNow,
+  getReportHistory,
+  addReportHistory,
+} from "../controllers/report.controller.js";
+
+const router = Router();
+
+router.use(requireAuth);
+
+router.get("/campaigns", getCampaignsReport);
+router.get("/settings", getReportSettings);
+router.put("/settings", updateReportSettings);
+router.post("/email/send-now", sendReportNow);
+router.get("/history", getReportHistory);
+router.post("/history", addReportHistory);
+
+export default router;

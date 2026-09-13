@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useAuth } from "../../context/AuthContext";
+import { WorkspaceAvatar } from "../common/WorkspaceAvatar";
 import { apiRequest } from "../../services/api";
 import { TeamMetrics, DashboardStats, DailyEvolutionPoint } from "../../types";
 import {
@@ -634,8 +635,14 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({ onStartCampaign })
                 <h3 className="font-extrabold text-[#21164c] text-base mt-2 truncate">
                   {stats?.owner?.name || user?.name || user?.email}
                 </h3>
-                <p className="text-xs text-[#5f5f69] truncate">
-                  {stats?.owner?.organizationName || user?.organization?.name || "Espace de travail"}
+                <p className="text-xs text-[#5f5f69] truncate flex items-center justify-center gap-1.5">
+                  <WorkspaceAvatar
+                    name={stats?.owner?.organizationName || user?.organization?.name || "Espace de travail"}
+                    avatarUrl={user?.organization?.avatarUrl}
+                    className="w-4 h-4 rounded-md"
+                    textClassName="text-[9px]"
+                  />
+                  <span className="truncate">{stats?.owner?.organizationName || user?.organization?.name || "Espace de travail"}</span>
                 </p>
               </div>
 

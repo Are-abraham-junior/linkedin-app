@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { apiRequest } from "../../services/api";
 import { User } from "../../types";
-import { ShieldCheck, Sparkles, Lock, Mail, ArrowRight, LogOut, CheckCircle2, Clock, Users } from "lucide-react";
+import { ShieldCheck, Sparkles, Lock, Mail, ArrowRight, LogOut, CheckCircle2, Users } from "lucide-react";
+import { LinkedInCheckpointForm } from "../common/LinkedInCheckpointForm";
 
 const LinkedInIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
   <svg className={className} fill="currentColor" viewBox="0 0 24 24">
@@ -22,8 +23,23 @@ export const LinkedInOnboardingWall: React.FC<LinkedInOnboardingWallProps> = ({ 
   const [linkedinPassword, setLinkedinPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [checkpointMsg, setCheckpointMsg] = useState<string | null>(null);
+  // account_id Unipile en attente de code : le même compte est réutilisé, aucun doublon facturé
+  const [checkpointAccountId, setCheckpointAccountId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+
+  /** Connexion réussie (directe ou après code 2FA) : session + félicitations + redirection */
+  const handleConnected = async (res: { token: string; user: User }) => {
+    login(res.token, res.user);
+    await refreshUser();
+    setCheckpointAccountId(null);
+    setSuccess(true);
+    setIsLoading(false);
+    setTimeout(() => {
+      onDismiss?.();
+      navigate("/dashboard");
+    }, 2000);
+  };
 
   const handleConnect = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,7 +48,7 @@ export const LinkedInOnboardingWall: React.FC<LinkedInOnboardingWallProps> = ({ 
     setIsLoading(true);
 
     try {
-      const res = await apiRequest<{ token: string; user: User; status?: string; message?: string }>(
+      const res = await apiRequest<{ token: string; user: User; status?: string; message?: string; checkpoint?: any }>(
         "/auth/linkedin",
         {
           method: "POST",
@@ -44,23 +60,14 @@ export const LinkedInOnboardingWall: React.FC<LinkedInOnboardingWallProps> = ({ 
       );
 
       if (res.status === "CHECKPOINT") {
-        setCheckpointMsg(
-          res.message || "LinkedIn demande une vérification (2FA ou notification mobile). Validez sur votre application LinkedIn puis réessayez ici."
-        );
+        setCheckpointMsg(res.message || null);
+        setCheckpointAccountId(res.checkpoint?.account_id || res.checkpoint?.id || null);
         setIsLoading(false);
         return;
       }
 
       if (res.success && res.token && res.user) {
-        login(res.token, res.user);
-        await refreshUser();
-        // Message de félicitations avant de fermer la modale et de rediriger vers le dashboard
-        setSuccess(true);
-        setIsLoading(false);
-        setTimeout(() => {
-          onDismiss?.();
-          navigate("/dashboard");
-        }, 2000);
+        await handleConnected(res as any);
         return;
       } else {
         setError((res as any).error || "Identifiants LinkedIn incorrects ou compte introuvable.");
@@ -125,16 +132,21 @@ export const LinkedInOnboardingWall: React.FC<LinkedInOnboardingWallProps> = ({ 
             </div>
           )}
 
-          {checkpointMsg && (
-            <div className="mb-5 p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
-              <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-bold text-amber-950">Code de sécurité requis</p>
-                <p className="text-[11px] text-amber-800 mt-0.5">{checkpointMsg}</p>
-              </div>
-            </div>
-          )}
-
+          {checkpointAccountId ? (
+            <LinkedInCheckpointForm
+              accountId={checkpointAccountId}
+              solveEndpoint="/auth/linkedin/checkpoint"
+              resendEndpoint="/auth/linkedin/checkpoint/resend"
+              extraBody={{ linkedinEmail: linkedinEmail.trim() }}
+              message={checkpointMsg}
+              onSolved={(res) => handleConnected(res)}
+              onNewCheckpoint={(cp) => setCheckpointAccountId(cp?.account_id || checkpointAccountId)}
+              onCancel={() => {
+                setCheckpointAccountId(null);
+                setCheckpointMsg(null);
+              }}
+            />
+          ) : (
           <form onSubmit={handleConnect} className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-[#21164c] uppercase tracking-wider mb-1.5">
@@ -191,6 +203,7 @@ export const LinkedInOnboardingWall: React.FC<LinkedInOnboardingWallProps> = ({ 
               </button>
             </div>
           </form>
+          )}
 
           {/* Footer Action: Logout / Switch account */}
           <div className="mt-6 pt-4 border-t border-[#e0e0db]/50 flex items-center justify-between text-xs text-[#5f5f69]">
