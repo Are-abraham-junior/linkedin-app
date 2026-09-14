@@ -5,6 +5,78 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { z } from "zod";
 import { UnipileService } from "../services/unipile.service.js";
+import { resolveOrganization } from "../utils/organization.js";
+import { getWorkspaceAvatar, setWorkspaceAvatar, WORKSPACE_PROVIDER } from "../services/workspace.service.js";
+import { REPORTS_PROVIDER } from "../services/reportSettings.service.js";
+import {
+  connectOrReconnect,
+  finalizeConnection,
+  persistLinkedInAccount,
+  pendingCheckpointFor,
+  resumePausedCampaigns,
+} from "../services/linkedinConnection.service.js";
+
+const INTERNAL_PROVIDERS = [REPORTS_PROVIDER, WORKSPACE_PROVIDER];
+
+// ==========================================
+// 0. ESPACE DE TRAVAIL (photo de profil de l'organisation)
+// ==========================================
+
+const UpdateWorkspaceSchema = z.object({
+  // Data URL PNG/JPEG/WebP (image redimensionnée côté client) ; null pour supprimer
+  avatarUrl: z
+    .string()
+    .max(400 * 1024, "Image trop volumineuse (max ~300 Ko).")
+    .regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/, "Format d'image invalide (PNG, JPEG ou WebP).")
+    .nullable(),
+});
+
+export async function getWorkspaceSettings(req: AuthenticatedRequest, res: Response) {
+  try {
+    const { organizationId, isAdmin } = await resolveOrganization(req);
+    if (!organizationId) {
+      res.json({ success: true, workspace: null });
+      return;
+    }
+    const [org, avatarUrl] = await Promise.all([
+      prisma.organization.findUnique({ where: { id: organizationId }, select: { id: true, name: true, slug: true } }),
+      getWorkspaceAvatar(organizationId),
+    ]);
+    if (!org) {
+      res.json({ success: true, workspace: null });
+      return;
+    }
+    res.json({ success: true, workspace: { ...org, avatarUrl, canEdit: isAdmin } });
+  } catch (err: any) {
+    console.error("[settings.controller:getWorkspaceSettings]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
+  }
+}
+
+export async function updateWorkspaceSettings(req: AuthenticatedRequest, res: Response) {
+  try {
+    const parsed = UpdateWorkspaceSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ success: false, error: parsed.error.issues[0]?.message || "Données invalides." });
+      return;
+    }
+    const { organizationId, isAdmin } = await resolveOrganization(req);
+    if (!organizationId) {
+      res.status(400).json({ success: false, error: "Aucun espace de travail associé à ce compte." });
+      return;
+    }
+    if (!isAdmin) {
+      res.status(403).json({ success: false, error: "Seul un propriétaire ou administrateur peut modifier la photo de l'espace." });
+      return;
+    }
+    await setWorkspaceAvatar(organizationId, parsed.data.avatarUrl);
+    const org = await prisma.organization.findUnique({ where: { id: organizationId }, select: { id: true, name: true, slug: true } });
+    res.json({ success: true, workspace: { ...org, avatarUrl: parsed.data.avatarUrl, canEdit: true } });
+  } catch (err: any) {
+    console.error("[settings.controller:updateWorkspaceSettings]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
+  }
+}
 
 // ==========================================
 // 1. COMPTE BIME LINK
@@ -74,7 +146,8 @@ export async function getAccountSettings(req: AuthenticatedRequest, res: Respons
       },
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[settings.controller:getAccountSettings]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -170,7 +243,8 @@ export async function updateAccountSettings(req: AuthenticatedRequest, res: Resp
       res.status(400).json({ success: false, error: err.issues?.[0]?.message || err.message });
       return;
     }
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[settings.controller:updateAccountSettings]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -248,7 +322,8 @@ export async function getLinkedInSettings(req: AuthenticatedRequest, res: Respon
       liveDetails: details,
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[settings.controller:getLinkedInSettings]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -264,185 +339,149 @@ export async function reconnectLinkedInDirect(req: AuthenticatedRequest, res: Re
 
     console.log(`[reconnectLinkedInDirect] Tentative reconnexion directe pour l'utilisateur ${userId}...`);
 
-    // 1. Authentification LinkedIn directe
-    const connectResult = await UnipileService.connectLinkedInAccount(
-      body.linkedinEmail.trim(),
-      body.linkedinPassword
-    );
-
-    if (!connectResult.success) {
-      if (connectResult.status === "CHECKPOINT") {
-        res.status(202).json({
-          success: false,
-          status: "CHECKPOINT",
-          checkpoint: connectResult.checkpoint,
-          message: "LinkedIn demande une vérification de sécurité (2FA / code de confirmation). Entrez le code reçu.",
-        });
-        return;
-      }
-      const httpStatus = connectResult.statusCode === 502 || connectResult.statusCode === 503 ? 503 : 400;
-      res.status(httpStatus).json({
+    // 0. Un checkpoint est déjà en attente (< 5 min) : ne pas relancer une authentification (doublon Unipile)
+    const pending = await pendingCheckpointFor(userId);
+    if (pending) {
+      res.status(202).json({
         success: false,
-        error: connectResult.error || "Identifiants LinkedIn invalides. Veuillez vérifier votre mot de passe.",
+        status: "CHECKPOINT",
+        checkpoint: pending.checkpoint,
+        message: "Un code de vérification LinkedIn est déjà attendu. Entrez le code reçu (ou demandez-en un nouveau).",
       });
       return;
     }
 
-    const newAccountId = connectResult.accountId!;
-
-    // 2. Profil connecté
-    const profileResult = await UnipileService.getConnectedAccountProfile(newAccountId);
-    const profile = profileResult.profile;
-
-    // 3. Nettoyer les anciennes sessions de l'utilisateur
-    const existingAccounts = await prisma.linkedInAccount.findMany({
-      where: { userId },
+    // 1. Reconnexion sur l'account_id existant (même déconnecté) → aucun nouveau compte facturé
+    const existing = await prisma.linkedInAccount.findFirst({
+      where: { userId, unipileAccountId: { not: "" } },
+      orderBy: { updatedAt: "desc" },
+    });
+    const outcome = await connectOrReconnect({
+      email: body.linkedinEmail,
+      password: body.linkedinPassword,
+      existingAccountId: existing?.unipileAccountId || null,
     });
 
-    for (const oldAcc of existingAccounts) {
-      if (oldAcc.unipileAccountId && oldAcc.unipileAccountId !== newAccountId) {
-        console.log(`[reconnectLinkedInDirect] Suppression ancien compte ${oldAcc.unipileAccountId}...`);
-        UnipileService.deleteAccount(oldAcc.unipileAccountId).catch(() => {});
-      }
+    if (outcome.kind === "CHECKPOINT") {
+      // Persister le compte en attente : resolveLinkedInCheckpoint et le rejeu s'appuient dessus
+      await persistLinkedInAccount(userId, outcome.accountId, null, "CHECKPOINT", body.linkedinEmail.trim());
+      res.status(202).json({
+        success: false,
+        status: "CHECKPOINT",
+        checkpoint: outcome.checkpoint,
+        message: "LinkedIn demande une vérification de sécurité (2FA / code de confirmation). Entrez le code reçu.",
+      });
+      return;
     }
 
-    await prisma.linkedInAccount.deleteMany({
-      where: {
-        userId,
-        unipileAccountId: { not: newAccountId },
-      },
-    });
+    if (outcome.kind === "ERROR") {
+      const httpStatus = outcome.statusCode === 502 || outcome.statusCode === 503 ? 503 : 400;
+      res.status(httpStatus).json({ success: false, error: outcome.error });
+      return;
+    }
 
-    // 4. Upsert du compte LinkedIn actif
-    const updatedAccount = await prisma.linkedInAccount.upsert({
-      where: { unipileAccountId: newAccountId },
-      create: {
-        userId,
-        unipileAccountId: newAccountId,
-        accountName: profile?.name || body.linkedinEmail,
-        profilePicture: profile?.avatarUrl,
-        headline: profile?.headline,
-        status: "CONNECTED",
-        isPremium: profile?.isPremium ?? false,
-        hasSalesNavigator: profile?.hasSalesNavigator ?? false,
-        accountType: profile?.accountType ?? "STANDARD",
-      },
-      update: {
-        userId,
-        accountName: profile?.name || body.linkedinEmail,
-        profilePicture: profile?.avatarUrl,
-        headline: profile?.headline,
-        status: "CONNECTED",
-        isPremium: profile?.isPremium ?? false,
-        hasSalesNavigator: profile?.hasSalesNavigator ?? false,
-        accountType: profile?.accountType ?? "STANDARD",
-      },
-    });
+    const updatedAccount = await persistLinkedInAccount(userId, outcome.accountId, outcome.profile, "CONNECTED", body.linkedinEmail.trim());
 
-    // Mettre à jour l'utilisateur si besoin
     await prisma.user.update({
       where: { id: userId },
       data: {
         linkedinEmail: body.linkedinEmail.trim(),
-        avatarUrl: profile?.avatarUrl || undefined,
+        avatarUrl: outcome.profile?.avatarUrl || undefined,
+        ...(outcome.profile?.linkedinProfileId ? { linkedinProfileId: outcome.profile.linkedinProfileId } : {}),
       },
     });
 
-    // 5. Reprendre automatiquement les campagnes actives qui étaient en pause
-    await prisma.campaign.updateMany({
-      where: {
-        userId,
-        status: "PAUSED",
-      },
-      data: {
-        status: "ACTIVE",
-      },
-    }).catch(() => {});
+    await resumePausedCampaigns(userId);
 
     res.json({
       success: true,
-      message: "Compte LinkedIn reconnecté avec succès ! Vos campagnes ont été réactivées.",
+      message: outcome.reused
+        ? "Compte LinkedIn reconnecté avec succès ! Vos campagnes ont été réactivées."
+        : "Compte LinkedIn connecté avec succès ! Vos campagnes ont été réactivées.",
       account: updatedAccount,
+      reused: outcome.reused,
+      removedDuplicates: outcome.removedDuplicates,
     });
   } catch (err: any) {
     if (err instanceof z.ZodError) {
       res.status(400).json({ success: false, error: err.issues?.[0]?.message || err.message });
       return;
     }
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[settings.controller:reconnectLinkedInDirect]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
 export async function resolveLinkedInCheckpoint(req: AuthenticatedRequest, res: Response) {
   try {
+    const userId = req.user!.id;
     const { accountId, code } = req.body;
     if (!accountId || !code) {
       res.status(400).json({ success: false, error: "Identifiant de session et code de vérification requis." });
       return;
     }
 
-    const baseUrl = UnipileService.getBaseUrl();
-    const apiKey = process.env.UNIPILE_API_KEY || "";
-
-    const response = await fetch(`${baseUrl}/api/v1/accounts/checkpoint`, {
-      method: "POST",
-      headers: {
-        "X-API-KEY": apiKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        account_id: accountId,
-        code: code.trim(),
-      }),
-    });
-
-    const { ok, status, data, rawText } = await UnipileService.safeJsonParse(response);
-
-    if (!ok) {
-      const errorMsg = UnipileService.parseErrorResponse(status, rawText);
-      res.status(400).json({
-        success: false,
-        error: data?.message || errorMsg || "Code de vérification invalide ou expiré.",
-      });
+    const solved = await UnipileService.solveCheckpoint(String(accountId), String(code).trim());
+    if (!solved.success) {
+      if (solved.checkpoint) {
+        res.status(202).json({
+          success: false,
+          status: "CHECKPOINT",
+          checkpoint: solved.checkpoint,
+          message: "LinkedIn demande une vérification supplémentaire. Entrez le nouveau code reçu.",
+        });
+        return;
+      }
+      res.status(400).json({ success: false, error: solved.error || "Code de vérification invalide ou expiré." });
       return;
     }
 
-    // Mise à jour du profil, abonnement et statut en base
-    const profileResult = await UnipileService.getConnectedAccountProfile(accountId).catch(() => null);
-    const profile = profileResult?.profile;
-
-    await prisma.linkedInAccount.updateMany({
-      where: { unipileAccountId: accountId },
-      data: {
-        status: "CONNECTED",
-        ...(profile ? {
-          accountName: profile.name,
-          profilePicture: profile.avatarUrl,
-          headline: profile.headline,
-          isPremium: profile.isPremium ?? false,
-          hasSalesNavigator: profile.hasSalesNavigator ?? false,
-          accountType: profile.accountType ?? "STANDARD",
-        } : {}),
-      },
-    });
-
-    // Reprendre les campagnes en pause pour l'utilisateur concerné
-    const acc = await prisma.linkedInAccount.findFirst({
-      where: { unipileAccountId: accountId },
-    });
-    if (acc?.userId) {
-      await prisma.campaign.updateMany({
-        where: { userId: acc.userId, status: "PAUSED" },
-        data: { status: "ACTIVE" },
+    // Profil + dédoublonnage Unipile, puis une seule ligne en base pour cet utilisateur
+    const outcome = await finalizeConnection(solved.accountId || String(accountId), true);
+    if (outcome.kind !== "CONNECTED") {
+      res.status(400).json({ success: false, error: "Vérification validée mais le compte reste indisponible. Réessayez." });
+      return;
+    }
+    await persistLinkedInAccount(userId, outcome.accountId, outcome.profile, "CONNECTED");
+    if (outcome.profile?.linkedinProfileId || outcome.profile?.avatarUrl) {
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          ...(outcome.profile?.linkedinProfileId ? { linkedinProfileId: outcome.profile.linkedinProfileId } : {}),
+          ...(outcome.profile?.avatarUrl ? { avatarUrl: outcome.profile.avatarUrl } : {}),
+        },
       }).catch(() => {});
     }
+    await resumePausedCampaigns(userId);
 
     res.json({
       success: true,
       message: "Vérification validée ! Votre compte LinkedIn est maintenant actif et vos campagnes ont repris.",
+      removedDuplicates: outcome.removedDuplicates,
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[settings.controller:resolveLinkedInCheckpoint]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
+  }
+}
+
+/** POST /api/settings/linkedin/checkpoint/resend — renvoie un nouveau code sans recréer de compte */
+export async function resendLinkedInCheckpoint(req: AuthenticatedRequest, res: Response) {
+  try {
+    const { accountId } = req.body;
+    if (!accountId) {
+      res.status(400).json({ success: false, error: "Identifiant de session requis." });
+      return;
+    }
+    const result = await UnipileService.resendCheckpoint(String(accountId));
+    if (!result.success) {
+      res.status(400).json({ success: false, error: result.error || "Impossible de renvoyer le code." });
+      return;
+    }
+    res.json({ success: true, message: "Un nouveau code vient d'être envoyé." });
+  } catch (err: any) {
+    console.error("[settings.controller:resendLinkedInCheckpoint]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -481,7 +520,8 @@ export async function getImportHistory(req: AuthenticatedRequest, res: Response)
       },
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[settings.controller:getImportHistory]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -500,7 +540,8 @@ export async function getImportDetails(req: AuthenticatedRequest, res: Response)
 
     res.json({ success: true, item });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[settings.controller:getImportDetails]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -525,7 +566,8 @@ export async function getApiKeys(req: AuthenticatedRequest, res: Response) {
 
     res.json({ success: true, keys });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[settings.controller:getApiKeys]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -561,7 +603,8 @@ export async function createApiKey(req: AuthenticatedRequest, res: Response) {
       secretKey: fullKey,
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[settings.controller:createApiKey]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -586,7 +629,8 @@ export async function revokeApiKey(req: AuthenticatedRequest, res: Response) {
 
     res.json({ success: true, message: "Clé API révoquée avec succès." });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[settings.controller:revokeApiKey]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -599,12 +643,14 @@ export async function getIntegrations(req: AuthenticatedRequest, res: Response) 
     }
 
     const configs = await prisma.integrationConfig.findMany({
-      where: { organizationId },
+      // Les lignes BLEADIN_* sont du stockage interne (rapports, photo de l'espace), pas des intégrations
+      where: { organizationId, provider: { notIn: INTERNAL_PROVIDERS } },
     });
 
     res.json({ success: true, integrations: configs });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[settings.controller:getIntegrations]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -649,7 +695,8 @@ export async function saveIntegration(req: AuthenticatedRequest, res: Response) 
       integration: saved,
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[settings.controller:saveIntegration]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -783,7 +830,8 @@ export async function testIntegrationConnection(req: AuthenticatedRequest, res: 
 
     res.status(400).json({ success: false, error: "Fournisseur d'intégration inconnu." });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[settings.controller:testIntegrationConnection]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -902,7 +950,8 @@ export async function getBillingInfo(req: AuthenticatedRequest, res: Response) {
       },
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[settings.controller:getBillingInfo]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -1032,6 +1081,7 @@ export async function downloadInvoicePdf(req: AuthenticatedRequest, res: Respons
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.send(htmlInvoice);
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[settings.controller:downloadInvoicePdf]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }

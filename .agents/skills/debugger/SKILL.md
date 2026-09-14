@@ -40,9 +40,10 @@ Follow this structured 4-step diagnostic method:
    - Implement the minimal corrective patch without rewriting unrelated files or altering proven business logic.
    - For Unipile fixes: align payloads and parameters strictly with [https://developer.unipile.com/reference](https://developer.unipile.com/reference).
    - Never silence errors using `any` or `@ts-ignore` unless strictly necessary for third-party un-typed libraries.
-4. **Validation & Quality Gate Verification**:
+4. **Validation & Handoff à `expert-tester` (Contre-Validation)** :
    - Run `npm run build:server` for backend verification.
    - Run `npm --prefix client run build` for frontend verification.
+   - Notifier le sous-agent `expert-tester` pour qu'il rejoue la suite de tests et valide la **Gate Testing** (non-régression).
 
 ---
 

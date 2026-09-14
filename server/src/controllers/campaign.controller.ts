@@ -42,38 +42,46 @@ const UpdateCampaignSchema = z.object({
 });
 
 /**
+ * Détermine le périmètre (clause `where` Prisma sur Campaign) visible par l'appelant :
+ * SUPER_ADMIN impersoné → toute l'organisation (ou un membre via ?memberId=),
+ * OWNER → lui-même ou un membre de son organisation, sinon → lui-même uniquement.
+ * Partagé entre les campagnes et les rapports.
+ */
+export async function resolveCampaignScope(req: AuthenticatedRequest): Promise<any> {
+  const requestedMemberId = (req.query.memberId || req.query.userId) as string;
+
+  if (req.user!.role === "SUPER_ADMIN" && req.user!.organizationId) {
+    if (requestedMemberId && requestedMemberId !== "ALL") {
+      return { userId: requestedMemberId, user: { organizationId: req.user!.organizationId } };
+    }
+    return { user: { organizationId: req.user!.organizationId } };
+  }
+
+  let targetUserId = req.user!.id;
+  if (requestedMemberId && requestedMemberId !== targetUserId) {
+    const caller = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+      select: { role: true, orgRole: true, organizationId: true },
+    });
+
+    if (caller?.orgRole === "OWNER" && caller.organizationId) {
+      const member = await prisma.user.findFirst({
+        where: { id: requestedMemberId, organizationId: caller.organizationId },
+      });
+      if (member) {
+        targetUserId = requestedMemberId;
+      }
+    }
+  }
+  return { userId: targetUserId };
+}
+
+/**
  * Récupère toutes les campagnes de l'utilisateur avec statistiques consolidées
  */
 export async function getCampaigns(req: AuthenticatedRequest, res: Response) {
   try {
-    const requestedMemberId = (req.query.memberId || req.query.userId) as string;
-    let whereClause: any = {};
-
-    if (req.user!.role === "SUPER_ADMIN" && req.user!.organizationId) {
-      if (requestedMemberId && requestedMemberId !== "ALL") {
-        whereClause = { userId: requestedMemberId, user: { organizationId: req.user!.organizationId } };
-      } else {
-        whereClause = { user: { organizationId: req.user!.organizationId } };
-      }
-    } else {
-      let targetUserId = req.user!.id;
-      if (requestedMemberId && requestedMemberId !== targetUserId) {
-        const caller = await prisma.user.findUnique({
-          where: { id: req.user!.id },
-          select: { role: true, orgRole: true, organizationId: true },
-        });
-
-        if (caller?.orgRole === "OWNER" && caller.organizationId) {
-          const member = await prisma.user.findFirst({
-            where: { id: requestedMemberId, organizationId: caller.organizationId },
-          });
-          if (member) {
-            targetUserId = requestedMemberId;
-          }
-        }
-      }
-      whereClause = { userId: targetUserId };
-    }
+    const whereClause = await resolveCampaignScope(req);
 
     const campaigns = await prisma.campaign.findMany({
       where: whereClause,
@@ -135,7 +143,7 @@ export async function getCampaigns(req: AuthenticatedRequest, res: Response) {
     res.json({ success: true, campaigns: formatted });
   } catch (error: any) {
     console.error("Error getCampaigns:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -244,7 +252,7 @@ export async function getCampaignDetails(req: AuthenticatedRequest, res: Respons
     });
   } catch (error: any) {
     console.error("Error getCampaignDetails:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -467,7 +475,7 @@ export async function createCampaign(req: AuthenticatedRequest, res: Response) {
       return;
     }
     console.error("Error createCampaign:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -512,7 +520,8 @@ export async function toggleCampaignStatus(req: AuthenticatedRequest, res: Respo
       campaign: updated,
     });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[campaign.controller:toggleCampaignStatus]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -662,7 +671,8 @@ export async function updateCampaign(req: AuthenticatedRequest, res: Response) {
       res.status(400).json({ success: false, error: error.issues?.[0]?.message || error.message });
       return;
     }
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[campaign.controller:updateCampaign]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -726,6 +736,7 @@ export async function deleteCampaign(req: AuthenticatedRequest, res: Response) {
       action: "ARCHIVED",
     });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[campaign.controller:deleteCampaign]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }

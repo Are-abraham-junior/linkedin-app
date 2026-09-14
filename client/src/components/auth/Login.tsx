@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { apiRequest } from "../../services/api";
 import { User } from "../../types";
@@ -112,7 +113,7 @@ export const Login: React.FC = () => {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
                 </div>
-                <span className="text-xl font-extrabold text-gray-900 tracking-wider">BLEADIN</span>
+                <span className="text-xl font-extrabold text-gray-900 tracking-wider">Bleadin</span>
               </div>
 
               <h1 className="text-2xl font-bold text-gray-900 mb-2">
@@ -212,6 +213,11 @@ export const Login: React.FC = () => {
                     required
                     className="w-full px-4 py-2.5 bg-[#f8f9fc] border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#592eff] focus:bg-white focus:ring-3 focus:ring-[#592eff]/10 transition-all font-medium"
                   />
+                  <div className="text-right mt-1.5">
+                    <Link to="/forgot-password" className="text-[11px] font-bold text-[#592eff] hover:underline">
+                      Mot de passe oublié ?
+                    </Link>
+                  </div>
                 </div>
 
                 <div className="pt-2">

@@ -3,6 +3,9 @@ import { prisma } from "../../../lib/prisma.js";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { AuthenticatedRequest } from "../middlewares/auth.middleware.js";
+import { getWorkspaceAvatars } from "../services/workspace.service.js";
+import { UnipileService } from "../services/unipile.service.js";
+import { listReconciledAccounts, deleteUnipileAccountIfOrphan, reconcileUnipileAccounts } from "../services/unipileReconcile.service.js";
 
 const CreateUserSchema = z.object({
   name: z.string().min(2, "Le nom est obligatoire"),
@@ -78,7 +81,8 @@ export async function getPlatformMetrics(req: AuthenticatedRequest, res: Respons
       recentUsers,
     });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[admin.controller:getPlatformMetrics]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -152,7 +156,8 @@ export async function getUsers(req: AuthenticatedRequest, res: Response) {
       })),
     });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[admin.controller:getUsers]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -185,7 +190,8 @@ export async function getUserDetails(req: AuthenticatedRequest, res: Response) {
 
     res.json({ success: true, user });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[admin.controller:getUserDetails]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -228,7 +234,8 @@ export async function createUser(req: AuthenticatedRequest, res: Response) {
       res.status(400).json({ success: false, error: error.issues?.[0]?.message || error.message });
       return;
     }
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[admin.controller:createUser]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -262,7 +269,8 @@ export async function updateUser(req: AuthenticatedRequest, res: Response) {
       res.status(400).json({ success: false, error: error.issues?.[0]?.message || error.message });
       return;
     }
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[admin.controller:updateUser]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -276,11 +284,26 @@ export async function deleteUser(req: AuthenticatedRequest, res: Response) {
       return;
     }
 
+    // Libérer les comptes Unipile (facturés) AVANT la suppression en cascade des lignes LinkedInAccount
+    const accounts = await prisma.linkedInAccount.findMany({ where: { userId: id }, select: { unipileAccountId: true } });
+    for (const acc of accounts) {
+      if (!acc.unipileAccountId) continue;
+      const del = await UnipileService.deleteAccount(acc.unipileAccountId);
+      if (!del.success && !/404|not.?found/i.test(del.error || "")) {
+        res.status(502).json({
+          success: false,
+          error: `Le compte LinkedIn ${acc.unipileAccountId} n'a pas pu être supprimé chez Unipile. Réessayez avant de supprimer l'utilisateur.`,
+        });
+        return;
+      }
+    }
+
     await prisma.user.delete({ where: { id } });
 
     res.json({ success: true, message: "Utilisateur supprimé avec succès." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[admin.controller:deleteUser]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -292,10 +315,12 @@ export async function getOrganizations(req: AuthenticatedRequest, res: Response)
       },
       orderBy: { name: "asc" },
     });
+    const avatars = await getWorkspaceAvatars(orgs.map((o) => o.id));
 
-    res.json({ success: true, organizations: orgs });
+    res.json({ success: true, organizations: orgs.map((o) => ({ ...o, avatarUrl: avatars.get(o.id) || null })) });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[admin.controller:getOrganizations]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -324,7 +349,8 @@ export async function deleteOrganization(req: AuthenticatedRequest, res: Respons
 
     res.json({ success: true, message: "Organisation supprimée avec succès." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[admin.controller:deleteOrganization]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -375,7 +401,8 @@ export async function getOrganizationMembers(req: AuthenticatedRequest, res: Res
 
     res.json({ success: true, organization: org, members });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[admin.controller:getOrganizationMembers]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -437,7 +464,8 @@ export async function addOrganizationMember(req: AuthenticatedRequest, res: Resp
       res.status(400).json({ success: false, error: error.issues?.[0]?.message || error.message });
       return;
     }
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[admin.controller:addOrganizationMember]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -466,7 +494,8 @@ export async function removeOrganizationMember(req: AuthenticatedRequest, res: R
 
     res.json({ success: true, message: "Membre retiré de l'espace avec succès." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[admin.controller:removeOrganizationMember]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -500,6 +529,53 @@ export async function impersonateWorkspace(req: AuthenticatedRequest, res: Respo
       simulatedOwner: org.users[0] || null,
     });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[admin.controller:impersonateWorkspace]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
+  }
+}
+
+// ==========================================
+// COMPTES UNIPILE (facturation : zéro doublon, zéro orphelin)
+// ==========================================
+
+/** GET /api/admin/unipile/accounts */
+export async function getUnipileAccounts(req: AuthenticatedRequest, res: Response) {
+  try {
+    const result = await listReconciledAccounts();
+    if (!result.success) {
+      res.status(502).json({ success: false, error: result.error || "Unipile indisponible." });
+      return;
+    }
+    res.json({ success: true, accounts: result.accounts });
+  } catch (error: any) {
+    console.error("[admin.controller:getUnipileAccounts]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
+  }
+}
+
+/** DELETE /api/admin/unipile/accounts/:id — refusé si le compte est rattaché à un utilisateur */
+export async function deleteUnipileAccount(req: AuthenticatedRequest, res: Response) {
+  try {
+    const id = req.params.id as string;
+    const result = await deleteUnipileAccountIfOrphan(id);
+    if (!result.success) {
+      res.status(400).json({ success: false, error: result.error || "Suppression impossible." });
+      return;
+    }
+    res.json({ success: true, message: "Compte Unipile supprimé." });
+  } catch (error: any) {
+    console.error("[admin.controller:deleteUnipileAccount]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
+  }
+}
+
+/** POST /api/admin/unipile/reconcile — passe de réconciliation immédiate (doublons supprimés, orphelins listés) */
+export async function runUnipileReconcile(req: AuthenticatedRequest, res: Response) {
+  try {
+    const result = await reconcileUnipileAccounts({ autoDeleteOrphans: req.body?.deleteOrphans === true });
+    res.json({ success: true, ...result });
+  } catch (error: any) {
+    console.error("[admin.controller:runUnipileReconcile]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }

@@ -6,9 +6,6 @@ import {
   Shield,
   User as UserIcon,
   Mail,
-  Lock,
-  Eye,
-  EyeOff,
   CheckCircle2,
   X,
   Sparkles,
@@ -59,14 +56,10 @@ export const TeamPage: React.FC = () => {
   const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Modale Ajouter un membre
+  // Modale Inviter un membre
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [orgRole, setOrgRole] = useState<"MEMBER" | "ADMIN">("MEMBER");
-  const [showPassword, setShowPassword] = useState(false);
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
 
@@ -108,50 +101,36 @@ export const TeamPage: React.FC = () => {
     }
   }, [toastMessage]);
 
-  // Création directe d'un membre avec ses identifiants
+  // Envoi d'une invitation par email
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
     setAddError(null);
 
-    if (!lastName.trim()) {
-      setAddError("Le nom du collaborateur est requis.");
-      return;
-    }
     if (!email.trim()) {
       setAddError("L'adresse email est requise.");
-      return;
-    }
-    if (password.length < 8) {
-      setAddError("Le mot de passe initial doit contenir au moins 8 caractères.");
       return;
     }
 
     setAddLoading(true);
 
     try {
-      const res = await apiRequest<{ success: boolean; message: string; member: TeamMember }>("/team/members", {
+      const res = await apiRequest<{ success: boolean; message: string }>("/team/invite", {
         method: "POST",
         body: {
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
           email: email.trim(),
-          password,
           orgRole,
         },
       });
 
       if (res.success) {
         setShowAddMemberModal(false);
-        setToastMessage(res.message || `Le membre ${firstName} ${lastName} a été ajouté avec succès !`);
+        setToastMessage(res.message || `Invitation envoyée à ${email}.`);
         // Réinitialiser le formulaire
-        setFirstName("");
-        setLastName("");
         setEmail("");
-        setPassword("");
         setOrgRole("MEMBER");
         loadTeam();
       } else {
-        setAddError((res as any).error || "Erreur lors de l'ajout du membre.");
+        setAddError((res as any).error || "Erreur lors de l'envoi de l'invitation.");
       }
     } catch (err: any) {
       setAddError(err.message || "Erreur inattendue. Veuillez vérifier vos informations.");
@@ -473,8 +452,8 @@ export const TeamPage: React.FC = () => {
                   <UserPlus className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-[#21164c] text-base">Ajouter un membre</h3>
-                  <p className="text-[#5f5f69] text-[11px]">Créez ses identifiants pour l'intégrer à votre espace.</p>
+                  <h3 className="font-extrabold text-[#21164c] text-base">Inviter un membre</h3>
+                  <p className="text-[#5f5f69] text-[11px]">Une invitation sera envoyée directement par email.</p>
                 </div>
               </div>
               <button
@@ -497,42 +476,6 @@ export const TeamPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Prénom & Nom */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-[#21164c] uppercase tracking-wider mb-1.5">
-                    Prénom
-                  </label>
-                  <div className="relative">
-                    <UserIcon className="w-4 h-4 text-[#5f5f69] absolute left-3.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
-                      placeholder="Jean"
-                      className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#f8f9fc] border border-[#e0e0db] text-[#21164c] text-xs focus:outline-none focus:border-[#592eff] focus:bg-white focus:ring-3 focus:ring-[#592eff]/10 transition-all font-medium"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-[#21164c] uppercase tracking-wider mb-1.5">
-                    Nom <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <UserIcon className="w-4 h-4 text-[#5f5f69] absolute left-3.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      required
-                      value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
-                      placeholder="Dupont"
-                      className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#f8f9fc] border border-[#e0e0db] text-[#21164c] text-xs focus:outline-none focus:border-[#592eff] focus:bg-white focus:ring-3 focus:ring-[#592eff]/10 transition-all font-medium"
-                    />
-                  </div>
-                </div>
-              </div>
-
               {/* Email professionnel */}
               <div>
                 <label className="block text-xs font-bold text-[#21164c] uppercase tracking-wider mb-1.5">
@@ -548,32 +491,6 @@ export const TeamPage: React.FC = () => {
                     placeholder="jean.dupont@entreprise.com"
                     className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#f8f9fc] border border-[#e0e0db] text-[#21164c] text-xs focus:outline-none focus:border-[#592eff] focus:bg-white focus:ring-3 focus:ring-[#592eff]/10 transition-all font-medium"
                   />
-                </div>
-              </div>
-
-              {/* Mot de passe initial */}
-              <div>
-                <label className="block text-xs font-bold text-[#21164c] uppercase tracking-wider mb-1.5">
-                  Mot de passe initial (8 car. min) <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-[#5f5f69] absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    required
-                    minLength={8}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••••••"
-                    className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-[#f8f9fc] border border-[#e0e0db] text-[#21164c] text-xs focus:outline-none focus:border-[#592eff] focus:bg-white focus:ring-3 focus:ring-[#592eff]/10 transition-all font-medium"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#5f5f69] hover:text-[#21164c] cursor-pointer"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
                 </div>
               </div>
 
@@ -632,12 +549,12 @@ export const TeamPage: React.FC = () => {
                   {addLoading ? (
                     <>
                       <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      <span>Création en cours...</span>
+                      <span>Envoi en cours...</span>
                     </>
                   ) : (
                     <>
-                      <UserPlus className="w-4 h-4" />
-                      <span>Ajouter le membre à l'espace</span>
+                      <Send className="w-4 h-4" />
+                      <span>Envoyer l'invitation</span>
                     </>
                   )}
                 </button>

@@ -1,6 +1,5 @@
 import { Router } from "express";
 import {
-  createMember,
   inviteMember,
   getTeamMembers,
   removeMember,
@@ -14,7 +13,6 @@ import { requireAuth } from "../middlewares/auth.middleware.js";
 const router = Router();
 
 router.get("/members", requireAuth, getTeamMembers);
-router.post("/members", requireAuth, createMember);
 router.get("/metrics", requireAuth, getTeamMetrics);
 router.post("/invite", requireAuth, inviteMember);
 router.put("/members/:userId/role", requireAuth, updateMemberRole);

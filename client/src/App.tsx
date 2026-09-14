@@ -12,6 +12,8 @@ import { useAuth } from "./context/AuthContext";
 import { SetupAdmin } from "./components/auth/SetupAdmin";
 import { Login } from "./components/auth/Login";
 import { JoinPage } from "./components/auth/JoinPage";
+import { ForgotPasswordPage } from "./components/auth/ForgotPasswordPage";
+import { ResetPasswordPage } from "./components/auth/ResetPasswordPage";
 import { Sidebar } from "./components/layout/Sidebar";
 import { Header } from "./components/layout/Header";
 import { AdminDashboard } from "./components/admin/AdminDashboard";
@@ -21,6 +23,7 @@ import { MainDashboard } from "./components/dashboard/MainDashboard";
 import { ProspectsView } from "./components/prospects/ProspectsView";
 import { CampaignsView } from "./components/campaigns/CampaignsView";
 import { InboxView } from "./components/inbox/InboxView";
+import { ReportsView } from "./components/reports/ReportsView";
 import { ProfileModal } from "./components/profile/ProfileModal";
 import { LinkedInOnboardingWall } from "./components/auth/LinkedInOnboardingWall";
 import { SettingsView } from "./components/settings/SettingsView";
@@ -41,6 +44,20 @@ const JoinPageWrapper: React.FC = () => {
   }
 
   return <JoinPage token={token} onJoined={() => navigate("/dashboard")} />;
+};
+
+/**
+ * Wrapper pour la page /reset-password?token=...
+ */
+const ResetPasswordPageWrapper: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get("token") || "";
+
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <ResetPasswordPage token={token} />;
 };
 
 /**
@@ -210,8 +227,12 @@ export const App: React.FC = () => {
           )
         }
       />
-      <Route path="/join" element={<JoinPageWrapper />} />
+      {/* Un utilisateur déjà connecté ne doit pas voir le formulaire de création de compte */}
+      <Route path="/join" element={user ? <Navigate to="/dashboard" replace /> : <JoinPageWrapper />} />
       <Route path="/setup" element={<SetupAdmin />} />
+      {/* Mot de passe oublié : demande de lien, puis réinitialisation via le jeton reçu par e-mail */}
+      <Route path="/forgot-password" element={user ? <Navigate to="/dashboard" replace /> : <ForgotPasswordPage />} />
+      <Route path="/reset-password" element={user ? <Navigate to="/dashboard" replace /> : <ResetPasswordPageWrapper />} />
 
       {/* Routes Authentifiées (avec AppLayout & FloatingNavPill) */}
       <Route element={<AppLayout />}>
@@ -220,6 +241,7 @@ export const App: React.FC = () => {
           element={<MainDashboard onStartCampaign={() => navigate("/campaigns")} />}
         />
         <Route path="/campaigns" element={<CampaignsView />} />
+        <Route path="/reports" element={<ReportsView />} />
         <Route
           path="/prospects"
           element={<ProspectsView onStartCampaign={() => navigate("/campaigns")} />}

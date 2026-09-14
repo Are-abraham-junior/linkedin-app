@@ -249,11 +249,26 @@ export const TemplateDetailModal: React.FC<TemplateDetailModalProps> = ({
                           {meta.icon}
                         </div>
                         <div>
-                          <p className="text-xs font-bold text-[#21164c]">
-                            {step.label}
-                          </p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-xs font-bold text-[#21164c]">
+                              {step.label}
+                            </p>
+                            {step.actionType === "INVITATION" && (
+                              step.defaultMessage && step.defaultMessage.trim().length > 0 ? (
+                                <span className="text-[10px] font-bold text-[#592eff] bg-[#592eff]/10 px-2 py-0.5 rounded-full">
+                                  Note au choix (avec ou sans)
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
+                                  Sans note
+                                </span>
+                              )
+                            )}
+                          </div>
                           <p className="text-[11px] text-[#5f5f69] font-medium">
-                            Action automatisée sur le profil LinkedIn
+                            {step.actionType === "INVITATION" && step.defaultMessage && step.defaultMessage.trim().length > 0
+                              ? "Note d'invitation suggérée (vous pourrez l'accepter ou la refuser à l'étape 3)"
+                              : "Action automatisée sur le profil LinkedIn"}
                           </p>
                         </div>
                       </div>

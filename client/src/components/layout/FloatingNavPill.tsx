@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { WorkspaceAvatar } from "../common/WorkspaceAvatar";
 import { apiRequest } from "../../services/api";
 import {
   ShieldAlert,
@@ -12,7 +13,6 @@ import {
   LogOut,
   ChevronDown,
   UserCheck,
-  Building2,
   ExternalLink,
   Contact,
   ArrowRightLeft,
@@ -91,7 +91,7 @@ export const FloatingNavPill: React.FC<FloatingNavPillProps> = ({
             </div>
             {user.organization && (
               <span className="text-xs text-[#5f5f69] flex items-center gap-1">
-                <Building2 className="w-3 h-3 text-[#592eff]" /> {user.organization.name}
+                <WorkspaceAvatar name={user.organization.name} avatarUrl={user.organization.avatarUrl} className="w-4 h-4 rounded-md" textClassName="text-[9px]" /> {user.organization.name}
               </span>
             )}
           </div>

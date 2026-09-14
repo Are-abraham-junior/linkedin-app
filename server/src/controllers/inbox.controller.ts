@@ -455,7 +455,7 @@ export async function getConversations(req: AuthenticatedRequest, res: Response)
     });
   } catch (error: any) {
     console.error("[Inbox] Erreur getConversations:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -475,7 +475,7 @@ export async function syncAllConversations(req: AuthenticatedRequest, res: Respo
     });
   } catch (error: any) {
     console.error("[Inbox] Erreur syncAllConversations:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -557,10 +557,10 @@ export async function getMessages(req: AuthenticatedRequest, res: Response) {
 
         if (unipileMessages.success && Array.isArray(unipileMessages.items)) {
           for (const m of unipileMessages.items) {
-            const senderType =
-              m.is_sender === true || m.sender_id === "self" || m.sender_id === "me"
-                ? "USER"
-                : "PROSPECT";
+            // is_sender est un nombre 0|1 côté Unipile : passer par le helper, sinon
+            // les messages de l'utilisateur sont pris pour des réponses du prospect
+            // et handleProspectReply stoppe la campagne à tort.
+            const senderType = UnipileService.isOwnMessage(m) ? "USER" : "PROSPECT";
             const text = m.text || "";
             const sentAt = m.timestamp ? new Date(m.timestamp) : new Date();
 
@@ -568,7 +568,7 @@ export async function getMessages(req: AuthenticatedRequest, res: Response) {
             if (msgId) {
               await prisma.message.upsert({
                 where: { unipileMessageId: msgId },
-                update: { text, sentAt },
+                update: { text, sentAt, senderType }, // corrige aussi les anciens messages mal attribués
                 create: {
                   conversationId: conversation.id,
                   unipileMessageId: msgId,
@@ -627,7 +627,7 @@ export async function getMessages(req: AuthenticatedRequest, res: Response) {
     });
   } catch (error: any) {
     console.error("[Inbox] Erreur getMessages:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -852,7 +852,7 @@ export async function sendMessage(req: AuthenticatedRequest, res: Response) {
     });
   } catch (error: any) {
     console.error("[Inbox] Erreur sendMessage:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -988,7 +988,7 @@ export async function startNewConversation(req: AuthenticatedRequest, res: Respo
     });
   } catch (error: any) {
     console.error("[Inbox] Erreur startNewConversation:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -1015,7 +1015,8 @@ export async function markAsRead(req: AuthenticatedRequest, res: Response) {
 
     res.json({ success: true });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[inbox.controller:markAsRead]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
 
@@ -1058,6 +1059,6 @@ export async function updateProspectDetails(req: AuthenticatedRequest, res: Resp
     });
   } catch (error: any) {
     console.error("[Inbox] Erreur updateProspectDetails:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }

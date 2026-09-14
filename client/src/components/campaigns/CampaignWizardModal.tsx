@@ -233,6 +233,9 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Sauvegarde temporaire du texte de note d'invitation (mémorise la note si l'utilisateur bascule entre avec/sans note)
+  const [savedInviteNotes, setSavedInviteNotes] = useState<Record<number, string>>({});
+
   // Étape 2 : Chargement des prospects de la liste et mode de sélection (Style Waalaxy)
   const [listProspects, setListProspects] = useState<any[]>([]);
   const [loadingProspects, setLoadingProspects] = useState<boolean>(false);
@@ -306,6 +309,15 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
     if (!draftCampaignId) {
       setCampaignName(`Campagne - ${tmpl.title}`);
     }
+    // Mémoriser les notes d'invitation par défaut du modèle
+    const defaultNotesMap: Record<number, string> = {};
+    tmpl.steps.forEach((s, idx) => {
+      if (s.actionType === "INVITATION" && s.defaultMessage) {
+        defaultNotesMap[idx] = s.defaultMessage;
+      }
+    });
+    setSavedInviteNotes(defaultNotesMap);
+
     setConfiguredSteps(
       tmpl.steps.map((s, idx) => ({
         stepOrder: idx + 1,
@@ -320,6 +332,16 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
 
   // Validation séquentielle pas-à-pas (Étape 3)
   const handleValidateCurrentStepTab = () => {
+    const currentStepObj = configuredSteps[activeStepTab];
+    if (
+      currentStepObj &&
+      currentStepObj.actionType === "INVITATION" &&
+      (currentStepObj.messageText || "").length > 300
+    ) {
+      setError("La note d'invitation ne peut pas dépasser 300 caractères (limite LinkedIn).");
+      return;
+    }
+    setError(null);
     if (!validatedStepTabs.includes(activeStepTab)) {
       setValidatedStepTabs((prev) => [...prev, activeStepTab]);
     }
@@ -416,6 +438,48 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
     const updated = [...configuredSteps];
     if (updated[activeStepTab]) {
       updated[activeStepTab].delayDays = days;
+      setConfiguredSteps(updated);
+    }
+  };
+
+  // Bascule pour accepter ou refuser la note d'invitation
+  const handleToggleInviteNote = (accept: boolean) => {
+    const updated = [...configuredSteps];
+    const currentStepObj = updated[activeStepTab];
+    if (!currentStepObj || currentStepObj.actionType !== "INVITATION") return;
+
+    if (!accept) {
+      // Refuser la note : sauvegarder le texte actuel avant de vider
+      const currentNote = (currentStepObj.messageText || "").trim();
+      if (currentNote.length > 0) {
+        setSavedInviteNotes((prev) => ({
+          ...prev,
+          [activeStepTab]: currentNote,
+        }));
+      }
+      currentStepObj.messageText = "";
+    } else {
+      // Accepter la note : restaurer la note mémorisée ou celle par défaut du modèle
+      const tmpl = TEMPLATES.find((t) => t.id === selectedTemplateId) || TEMPLATES[0];
+      const tmplStep = tmpl.steps[activeStepTab] || tmpl.steps.find((s) => s.actionType === "INVITATION");
+      const defaultNote = tmplStep?.defaultMessage || "";
+      const restored =
+        savedInviteNotes[activeStepTab]?.trim() ||
+        defaultNote ||
+        "Bonjour {{firstName}}, j'ai découvert votre profil chez {{company}} et vos réalisations ont retenu mon attention. Au plaisir d'échanger avec vous !";
+      currentStepObj.messageText = restored;
+    }
+    setConfiguredSteps(updated);
+  };
+
+  // Rétablir la note par défaut suggérée par le modèle
+  const handleResetInviteNoteToDefault = () => {
+    const tmpl = TEMPLATES.find((t) => t.id === selectedTemplateId) || TEMPLATES[0];
+    const tmplStep = tmpl.steps[activeStepTab] || tmpl.steps.find((s) => s.actionType === "INVITATION");
+    const defaultNote = tmplStep?.defaultMessage || "";
+    const updated = [...configuredSteps];
+    if (updated[activeStepTab]) {
+      updated[activeStepTab].messageText = defaultNote;
       setConfiguredSteps(updated);
     }
   };
@@ -1300,7 +1364,14 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                       )}
                       <span>Étape {step.stepOrder}</span>
                       <span className="text-[10px] opacity-80">
-                        ({getActionTypeLabel(step.actionType)})
+                        ({getActionTypeLabel(step.actionType)}
+                        {step.actionType === "INVITATION" && (
+                          <span className="ml-1 font-semibold">
+                            {step.messageText && step.messageText.trim().length > 0
+                              ? "• avec note"
+                              : "• sans note"}
+                          </span>
+                        )})
                       </span>
                       {isValidated && isActive && (
                         <span className="w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-white ml-0.5" />
@@ -1420,48 +1491,275 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                         </div>
                       </div>
 
-                      {/* Variables d'insertion */}
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <label className="text-xs font-bold text-[#21164c] uppercase tracking-wider">
-                            {configuredSteps[activeStepTab].actionType === "INVITATION"
-                              ? "Note d'invitation (Optionnelle - Max 300 car.)"
-                              : "Contenu du message"}
-                          </label>
-                          <div className="flex items-center gap-1">
-                            <span className="text-[10px] text-[#5f5f69] mr-1">Variables :</span>
-                            {["firstName", "lastName", "company"].map((varName) => (
-                              <button
-                                key={varName}
-                                type="button"
-                                onClick={() => handleInsertVariable(varName)}
-                                className="px-2 py-0.5 text-[10px] font-bold bg-[#f0f0f5] text-[#592eff] hover:bg-[#592eff]/10 rounded-md transition-colors cursor-pointer"
-                              >
-                                + {varName}
-                              </button>
-                            ))}
+                      {/* Choix et Édition de la Note d'Invitation ou du Message */}
+                      {configuredSteps[activeStepTab].actionType === "INVITATION" ? (
+                        <div className="space-y-4">
+                          {/* En-tête & Statut du choix */}
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div>
+                              <label className="text-xs font-bold text-[#21164c] uppercase tracking-wider flex items-center gap-2">
+                                <Send className="w-3.5 h-3.5 text-[#592eff]" />
+                                <span>Note d'invitation LinkedIn (Optionnelle)</span>
+                              </label>
+                              <p className="text-xs text-[#5f5f69] mt-0.5">
+                                Décidez si vous souhaitez accompagner votre invitation d'un mot personnalisé.
+                              </p>
+                            </div>
+                            {Boolean(configuredSteps[activeStepTab].messageText?.trim()) ? (
+                              <span className="text-[11px] font-bold text-[#592eff] bg-[#592eff]/10 px-2.5 py-1 rounded-full flex items-center gap-1 self-start sm:self-center">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-[#592eff]" /> Note acceptée
+                              </span>
+                            ) : (
+                              <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/80 flex items-center gap-1 self-start sm:self-center">
+                                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Sans note (Recommandé)
+                              </span>
+                            )}
                           </div>
+
+                          {/* 2 Cartes de Choix : Refuser vs Accepter la note */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {/* Option 1 : Refuser la note */}
+                            <div
+                              onClick={() => handleToggleInviteNote(false)}
+                              className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between relative overflow-hidden ${
+                                !configuredSteps[activeStepTab].messageText?.trim()
+                                  ? "border-emerald-600 bg-emerald-50/40 ring-2 ring-emerald-500/20 shadow-xs"
+                                  : "border-[#e0e0db] bg-white hover:border-emerald-500/50 hover:bg-[#fafbfd]"
+                              }`}
+                            >
+                              <div>
+                                <div className="flex items-start justify-between gap-2 mb-2">
+                                  <div className="flex items-center gap-2.5">
+                                    <div
+                                      className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors ${
+                                        !configuredSteps[activeStepTab].messageText?.trim()
+                                          ? "bg-emerald-600 text-white"
+                                          : "bg-gray-100 text-[#5f5f69]"
+                                      }`}
+                                    >
+                                      <ShieldCheck className="w-4 h-4" />
+                                    </div>
+                                    <div>
+                                      <h4 className="text-xs font-bold text-[#21164c]">
+                                        Refuser la note
+                                      </h4>
+                                      <p className="text-[11px] text-[#5f5f69]">
+                                        Invitation directe sans message
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-200 shrink-0">
+                                    Recommandé
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-[#5f5f69] leading-relaxed">
+                                  Sur LinkedIn, les invitations sans note obtiennent en moyenne <strong>+10% à +20% d'acceptation</strong> car elles semblent plus spontanées.
+                                </p>
+                              </div>
+
+                              <div className="mt-3 pt-2.5 border-t border-[#e0e0db]/60 flex items-center justify-between text-[11px] font-bold">
+                                <span
+                                  className={
+                                    !configuredSteps[activeStepTab].messageText?.trim()
+                                      ? "text-emerald-700 font-extrabold flex items-center gap-1"
+                                      : "text-[#5f5f69]"
+                                  }
+                                >
+                                  {!configuredSteps[activeStepTab].messageText?.trim() ? (
+                                    <>
+                                      <Check className="w-3.5 h-3.5 stroke-[3]" /> Option active
+                                    </>
+                                  ) : (
+                                    "Cliquer pour refuser la note"
+                                  )}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Option 2 : Accepter la note */}
+                            <div
+                              onClick={() => handleToggleInviteNote(true)}
+                              className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between relative overflow-hidden ${
+                                Boolean(configuredSteps[activeStepTab].messageText?.trim())
+                                  ? "border-[#592eff] bg-[#592eff]/[0.03] ring-2 ring-[#592eff]/20 shadow-xs"
+                                  : "border-[#e0e0db] bg-white hover:border-[#592eff]/50 hover:bg-[#fafbfd]"
+                              }`}
+                            >
+                              <div>
+                                <div className="flex items-start justify-between gap-2 mb-2">
+                                  <div className="flex items-center gap-2.5">
+                                    <div
+                                      className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors ${
+                                        Boolean(configuredSteps[activeStepTab].messageText?.trim())
+                                          ? "bg-[#592eff] text-white"
+                                          : "bg-gray-100 text-[#5f5f69]"
+                                      }`}
+                                    >
+                                      <MessageSquare className="w-4 h-4" />
+                                    </div>
+                                    <div>
+                                      <h4 className="text-xs font-bold text-[#21164c]">
+                                        Accepter la note
+                                      </h4>
+                                      <p className="text-[11px] text-[#5f5f69]">
+                                        Message personnalisé d'accroche
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#592eff]/10 text-[#592eff] shrink-0">
+                                    Max 300 car.
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-[#5f5f69] leading-relaxed">
+                                  Idéal si vous avez une accroche spécifique, un contact partagé ou une proposition de valeur courte à contextualiser.
+                                </p>
+                              </div>
+
+                              <div className="mt-3 pt-2.5 border-t border-[#e0e0db]/60 flex items-center justify-between text-[11px] font-bold">
+                                <span
+                                  className={
+                                    Boolean(configuredSteps[activeStepTab].messageText?.trim())
+                                      ? "text-[#592eff] font-extrabold flex items-center gap-1"
+                                      : "text-[#5f5f69]"
+                                  }
+                                >
+                                  {Boolean(configuredSteps[activeStepTab].messageText?.trim()) ? (
+                                    <>
+                                      <Check className="w-3.5 h-3.5 stroke-[3]" /> Option active
+                                    </>
+                                  ) : (
+                                    "Cliquer pour inclure la note"
+                                  )}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Affichage conditionnel selon le choix */}
+                          {!configuredSteps[activeStepTab].messageText?.trim() ? (
+                            <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-50/70 to-white border border-emerald-200/80 space-y-2.5 animate-in fade-in duration-200">
+                              <div className="flex items-start gap-3">
+                                <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
+                                  <CheckCircle2 className="w-4 h-4" />
+                                </div>
+                                <div className="flex-1 text-xs">
+                                  <h5 className="font-bold text-[#21164c] mb-1">
+                                    Invitation directe sans note d'accompagnement sélectionnée
+                                  </h5>
+                                  <p className="text-[#5f5f69] leading-relaxed mb-2.5">
+                                    Votre demande de connexion sera envoyée directement sur LinkedIn sans message. C'est le format recommandé pour maximiser le taux d'acceptation. Vos messages de relance configurés aux étapes suivantes seront envoyés automatiquement dès que le prospect acceptera la connexion.
+                                  </p>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleInviteNote(true)}
+                                    className="text-xs font-bold text-[#592eff] hover:text-[#4520cc] hover:underline inline-flex items-center gap-1.5 cursor-pointer"
+                                  >
+                                    <MessageSquare className="w-3.5 h-3.5" />
+                                    Vous changez d'avis ? Cliquer ici pour rédiger une note d'invitation
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="space-y-2 animate-in fade-in duration-200">
+                              <div className="flex items-center justify-between mb-1.5">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[10px] text-[#5f5f69]">Variables disponibles :</span>
+                                  {["firstName", "lastName", "company"].map((varName) => (
+                                    <button
+                                      key={varName}
+                                      type="button"
+                                      onClick={() => handleInsertVariable(varName)}
+                                      className="px-2 py-0.5 text-[10px] font-bold bg-[#f0f0f5] text-[#592eff] hover:bg-[#592eff] hover:text-white rounded-md transition-colors cursor-pointer"
+                                    >
+                                      + {varName}
+                                    </button>
+                                  ))}
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={handleResetInviteNoteToDefault}
+                                  className="text-[10px] font-bold text-[#5f5f69] hover:text-[#21164c] hover:bg-gray-100 px-2 py-0.5 rounded-md transition-colors cursor-pointer border border-[#e0e0db]"
+                                  title="Rétablir le texte par défaut proposé par le modèle"
+                                >
+                                  Rétablir modèle
+                                </button>
+                              </div>
+
+                              <textarea
+                                rows={4}
+                                value={configuredSteps[activeStepTab].messageText || ""}
+                                onChange={(e) => handleStepMessageChange(e.target.value)}
+                                placeholder="Bonjour {{firstName}}, je découvre votre profil et votre activité..."
+                                className={`w-full p-4 rounded-2xl border text-xs leading-relaxed text-[#21164c] focus:outline-none focus:ring-2 font-normal ${
+                                  (configuredSteps[activeStepTab].messageText || "").length > 300
+                                    ? "border-red-400 focus:border-red-500 focus:ring-red-100"
+                                    : "border-[#e0e0db] focus:border-[#592eff] focus:ring-[#592eff]/10"
+                                }`}
+                              />
+
+                              <div className="flex items-center justify-between text-[11px] mt-1">
+                                <span
+                                  className={`flex items-center gap-1 font-semibold ${
+                                    (configuredSteps[activeStepTab].messageText || "").length > 300
+                                      ? "text-red-600 font-bold"
+                                      : (configuredSteps[activeStepTab].messageText || "").length > 270
+                                      ? "text-amber-600"
+                                      : "text-[#5f5f69]"
+                                  }`}
+                                >
+                                  <Info className="w-3.5 h-3.5" />
+                                  Caractères : {(configuredSteps[activeStepTab].messageText || "").length} / 300
+                                  {(configuredSteps[activeStepTab].messageText || "").length > 300 && (
+                                    <span className="text-red-600 ml-1">
+                                      (Dépassement de {(configuredSteps[activeStepTab].messageText || "").length - 300} car.)
+                                    </span>
+                                  )}
+                                </span>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleInviteNote(false)}
+                                  className="text-[11px] font-bold text-slate-500 hover:text-red-600 transition-colors cursor-pointer"
+                                >
+                                  Refuser la note (envoyer sans note)
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
+                      ) : (
+                        /* CAS DU MESSAGE CLASSIQUE (ÉTAPE SUIVANTE) */
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="text-xs font-bold text-[#21164c] uppercase tracking-wider">
+                              Contenu du message
+                            </label>
+                            <div className="flex items-center gap-1">
+                              <span className="text-[10px] text-[#5f5f69] mr-1">Variables :</span>
+                              {["firstName", "lastName", "company"].map((varName) => (
+                                <button
+                                  key={varName}
+                                  type="button"
+                                  onClick={() => handleInsertVariable(varName)}
+                                  className="px-2 py-0.5 text-[10px] font-bold bg-[#f0f0f5] text-[#592eff] hover:bg-[#592eff]/10 rounded-md transition-colors cursor-pointer"
+                                >
+                                  + {varName}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
 
-                        <textarea
-                          rows={5}
-                          value={configuredSteps[activeStepTab].messageText || ""}
-                          onChange={(e) => handleStepMessageChange(e.target.value)}
-                          placeholder={
-                            configuredSteps[activeStepTab].actionType === "INVITATION"
-                              ? "Laissez vide pour envoyer une invitation sans note..."
-                              : "Écrivez votre message de prospection..."
-                          }
-                          className="w-full p-4 rounded-2xl border border-[#e0e0db] text-xs leading-relaxed text-[#21164c] focus:outline-none focus:border-[#592eff] focus:ring-2 focus:ring-[#592eff]/10 font-normal"
-                        />
-
-                        {configuredSteps[activeStepTab].actionType === "INVITATION" && (
-                          <p className="text-[11px] text-[#5f5f69] flex items-center gap-1.5 mt-1.5">
-                            <Info className="w-3.5 h-3.5 text-[#592eff]" />
-                            Caractères : {(configuredSteps[activeStepTab].messageText || "").length} / 300
-                          </p>
-                        )}
-                      </div>
+                          <textarea
+                            rows={5}
+                            value={configuredSteps[activeStepTab].messageText || ""}
+                            onChange={(e) => handleStepMessageChange(e.target.value)}
+                            placeholder="Écrivez votre message de prospection..."
+                            className="w-full p-4 rounded-2xl border border-[#e0e0db] text-xs leading-relaxed text-[#21164c] focus:outline-none focus:border-[#592eff] focus:ring-2 focus:ring-[#592eff]/10 font-normal"
+                          />
+                        </div>
+                      )}
                     </>
                   )}
 
@@ -1543,6 +1841,13 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                         {getActionTypeIcon(step.actionType)}
                         <span className="font-bold text-[#21164c]">
                           {getActionTypeLabel(step.actionType)}
+                          {step.actionType === "INVITATION" && (
+                            <span className="ml-1.5 text-[10px] font-semibold text-[#592eff]">
+                              {step.messageText && step.messageText.trim().length > 0
+                                ? "• avec note"
+                                : "• sans note (recommandé)"}
+                            </span>
+                          )}
                         </span>
                       </div>
                       <span className="text-[11px] text-[#5f5f69]">

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { WorkspaceAvatar } from "../common/WorkspaceAvatar";
 import { apiRequest } from "../../services/api";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import {
@@ -10,7 +11,6 @@ import {
   ChevronDown,
   Check,
   Shield,
-  Building2,
   Plus,
   Bell,
   Sparkles,
@@ -94,7 +94,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Badge discret si le Super Admin est en supervision d'espace */}
           {isSuperAdmin && impersonatedOrg && (
             <div className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#592eff]/10 text-[#592eff] border border-[#592eff]/20 text-[11px] font-bold">
-              <Shield className="w-3 h-3" />
+              <WorkspaceAvatar name={impersonatedOrg.name} avatarUrl={user?.organization?.avatarUrl || impersonatedOrg.avatarUrl} className="w-4 h-4 rounded-md" textClassName="text-[9px]" />
               <span className="truncate">{impersonatedOrg.name}</span>
             </div>
           )}

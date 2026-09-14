@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { apiRequest } from "../../services/api";
-import { User, Lock, Building2, Shield, X, Check, ArrowRight } from "lucide-react";
+import { User, Lock, Shield, X, Check, ArrowRight } from "lucide-react";
+import { WorkspaceAvatar } from "../common/WorkspaceAvatar";
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -105,7 +106,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 </span>
                 {user.organization && (
                   <span className="text-xs text-[#5f5f69] flex items-center gap-1 font-medium">
-                    <Building2 className="w-3 h-3 text-[#592eff]" /> {user.organization.name}
+                    <WorkspaceAvatar name={user.organization.name} avatarUrl={user.organization.avatarUrl} className="w-4 h-4 rounded-md" textClassName="text-[9px]" /> {user.organization.name}
                   </span>
                 )}
               </div>

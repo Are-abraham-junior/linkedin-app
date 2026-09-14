@@ -2,6 +2,13 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { User } from "../types";
 import { apiRequest } from "../services/api";
 
+export interface ImpersonatedOrg {
+  id: string;
+  name: string;
+  slug: string;
+  avatarUrl?: string | null;
+}
+
 interface AuthContextType {
   user: User | null;
   token: string | null;
@@ -9,8 +16,8 @@ interface AuthContextType {
   setupNeeded: boolean;
   selectedMemberId: string | null;
   setSelectedMemberId: (id: string | null) => void;
-  impersonatedOrg: { id: string; name: string; slug: string } | null;
-  setImpersonatedOrg: (org: { id: string; name: string; slug: string } | null) => void;
+  impersonatedOrg: ImpersonatedOrg | null;
+  setImpersonatedOrg: (org: ImpersonatedOrg | null) => void;
   showLinkedInModal: boolean;
   setShowLinkedInModal: (show: boolean) => void;
   openLinkedInModal: () => void;
@@ -42,12 +49,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [setupNeeded, setSetupNeeded] = useState<boolean>(false);
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
-  const [impersonatedOrg, setImpersonatedOrgState] = useState<{ id: string; name: string; slug: string } | null>(() => {
+  const [impersonatedOrg, setImpersonatedOrgState] = useState<ImpersonatedOrg | null>(() => {
     const saved = getStoredItem("bleadin_impersonated_org", "bime_impersonated_org");
     return saved ? JSON.parse(saved) : null;
   });
 
-  const setImpersonatedOrg = (org: { id: string; name: string; slug: string } | null) => {
+  const setImpersonatedOrg = (org: ImpersonatedOrg | null) => {
     if (org) {
       localStorage.setItem("bleadin_impersonated_org", JSON.stringify(org));
     } else {

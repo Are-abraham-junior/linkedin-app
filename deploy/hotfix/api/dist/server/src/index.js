@@ -1,0 +1,100 @@
+import express from "express";
+import cors from "cors";
+import morgan from "morgan";
+import "dotenv/config";
+import authRoutes from "./routes/auth.routes.js";
+import adminRoutes from "./routes/admin.routes.js";
+import userRoutes from "./routes/user.routes.js";
+import listRoutes from "./routes/list.routes.js";
+import prospectRoutes from "./routes/prospect.routes.js";
+import linkedinRoutes from "./routes/linkedin.routes.js";
+import campaignRoutes from "./routes/campaign.routes.js";
+import inboxRoutes from "./routes/inbox.routes.js";
+import teamRoutes from "./routes/team.routes.js";
+import queueRoutes from "./routes/queue.routes.js";
+import settingsRoutes from "./routes/settings.routes.js";
+import reportRoutes from "./routes/report.routes.js";
+import { startReportScheduler } from "./workers/report.worker.js";
+import { startUnipileReconcileScheduler } from "./workers/unipile-reconcile.worker.js";
+import { handleUnipileWebhook } from "./controllers/webhook.controller.js";
+import { startCampaignScheduler, getWorkerStatus } from "./workers/campaign.worker.js";
+import path from "path";
+import fs from "fs";
+const STARTED_AT = new Date();
+const app = express();
+const PORT = process.env.PORT || 5000;
+const FRONTEND_URL = process.env.FRONTEND_URL || "https://bleadin.com";
+app.use(cors({
+    origin: true,
+    credentials: true,
+}));
+// 2 Mo : le logo de l'espace (Rapports) est envoyé en data URL base64
+app.use(express.json({ limit: "2mb" }));
+app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
+// Health check
+app.get("/api/health", (req, res) => {
+    res.json({
+        status: "ok",
+        timestamp: new Date().toISOString(),
+        service: "Bleadin API",
+        startedAt: STARTED_AT.toISOString(),
+        uptimeSeconds: Math.floor(process.uptime()),
+        pid: process.pid,
+        worker: getWorkerStatus(),
+    });
+});
+// API Routes
+app.use("/api/auth", authRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api/user", userRoutes);
+app.use("/api/lists", listRoutes);
+app.use("/api/prospects", prospectRoutes);
+app.use("/api/linkedin", linkedinRoutes);
+app.use("/api/campaigns", campaignRoutes);
+app.use("/api/inbox", inboxRoutes);
+app.use("/api/team", teamRoutes);
+app.use("/api/queue", queueRoutes);
+app.use("/api/settings", settingsRoutes);
+app.use("/api/reports", reportRoutes);
+app.post("/api/webhooks/unipile", handleUnipileWebhook);
+// Serve static client assets and SPA fallback (Production / Render)
+const clientDistPath = path.resolve(process.cwd(), "client/dist");
+if (fs.existsSync(clientDistPath)) {
+    app.use(express.static(clientDistPath));
+    app.use((req, res, next) => {
+        if (req.method === "GET" && !req.path.startsWith("/api")) {
+            return res.sendFile(path.join(clientDistPath, "index.html"));
+        }
+        next();
+    });
+}
+// Global Error Handler
+app.use((err, req, res, next) => {
+    console.error("🔥 Global Error Handler:", err);
+    res.status(err.status || 500).json({
+        success: false,
+        error: err.message || "Erreur interne du serveur",
+    });
+});
+app.listen(PORT, () => {
+    console.log(`🚀 Bleadin API Server running on port ${PORT}`);
+    // Initialiser le planificateur de tâches de campagne
+    startCampaignScheduler();
+    // Rapports périodiques par e-mail (quotidien / hebdomadaire selon l'utilisateur)
+    startReportScheduler();
+    // Anti-doublon / anti-orphelin des comptes Unipile (facturés)
+    startUnipileReconcileScheduler();
+    // Self-ping pour garder le processus actif (Passenger met en veille après inactivité)
+    if (process.env.NODE_ENV === "production" && process.env.SELF_PING_URL) {
+        setInterval(async () => {
+            try {
+                await fetch(process.env.SELF_PING_URL);
+            }
+            catch {
+                // Ignorer les erreurs de ping
+            }
+        }, 4 * 60 * 1000); // Ping toutes les 4 minutes
+        console.log(`🏓 Self-ping activé vers ${process.env.SELF_PING_URL}`);
+    }
+});
+export default app;

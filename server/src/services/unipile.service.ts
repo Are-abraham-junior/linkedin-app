@@ -48,6 +48,18 @@ function unipileFetch(url: string, options?: RequestInit): Promise<Response> {
   return fetch(`${url}${sep}port=${port}`, options);
 }
 
+/** Compte tel que listé par GET /api/v1/accounts, avec l'identité LinkedIn extraite de connection_params.im */
+export interface UnipileAccountSummary {
+  id: string;
+  name: string;
+  type: string;
+  created_at: string;
+  sources: Array<{ id: string; status: string }>;
+  providerId: string | null;
+  publicIdentifier: string | null;
+  username: string | null;
+}
+
 export interface LinkedInProfileResult {
   providerProfileId: string;
   firstName: string;
@@ -120,13 +132,7 @@ export class UnipileService {
    */
   static async getAllAccounts(): Promise<{
     success: boolean;
-    items?: Array<{
-      id: string;
-      name: string;
-      type: string;
-      created_at: string;
-      sources: Array<{ id: string; status: string }>;
-    }>;
+    items?: UnipileAccountSummary[];
     error?: string;
   }> {
     try {
@@ -138,10 +144,51 @@ export class UnipileService {
       if (!ok) {
         return { success: false, error: this.parseErrorResponse(status, rawText) };
       }
-      return { success: true, items: data?.items || [] };
+      const items: UnipileAccountSummary[] = (data?.items || []).map((a: any) => {
+        const im = a?.connection_params?.im || {};
+        return {
+          id: a.id,
+          name: a.name,
+          type: a.type,
+          created_at: a.created_at,
+          sources: a.sources || [],
+          // Identité LinkedIn : provider_id "ACo..." + slug public — clé de dédoublonnage
+          providerId: im.id || null,
+          publicIdentifier: im.publicIdentifier || null,
+          username: im.username || null,
+        };
+      });
+      return { success: true, items };
     } catch (err: any) {
       return { success: false, error: this.parseErrorResponse(500, err.message) };
     }
+  }
+
+  /**
+   * Comptes Unipile partageant la même identité LinkedIn (provider_id "ACo...").
+   */
+  static async findAccountsByProviderId(providerId: string): Promise<UnipileAccountSummary[]> {
+    if (!providerId) return [];
+    const list = await this.getAllAccounts();
+    if (!list.success || !list.items) return [];
+    return list.items.filter((a) => a.type === "LINKEDIN" && a.providerId === providerId);
+  }
+
+  /**
+   * Supprime chez Unipile tous les comptes ayant la même identité LinkedIn que `keepAccountId`,
+   * sauf lui. Chaque compte Unipile étant facturé, c'est le filet de sécurité anti-doublon
+   * appelé après toute connexion réussie. Renvoie les ids supprimés.
+   */
+  static async dedupeUnipileAccounts(keepAccountId: string, providerId: string | null | undefined): Promise<string[]> {
+    if (!keepAccountId || !providerId) return [];
+    const duplicates = (await this.findAccountsByProviderId(providerId)).filter((a) => a.id !== keepAccountId);
+    const removed: string[] = [];
+    for (const dup of duplicates) {
+      console.warn(`[LinkedIn Gateway] Doublon Unipile détecté pour ${providerId} : ${dup.id} (garde ${keepAccountId}) → suppression`);
+      const del = await this.deleteAccount(dup.id);
+      if (del.success) removed.push(dup.id);
+    }
+    return removed;
   }
 
   /**
@@ -151,6 +198,12 @@ export class UnipileService {
   static async deleteAccount(accountId: string): Promise<{ success: boolean; error?: string }> {
     if (!accountId) {
       return { success: false, error: "accountId manquant" };
+    }
+    // GARDE-FOU : le .env local pointe sur l'instance Unipile de production. Hors production,
+    // aucune suppression réelle sauf opt-in explicite (UNIPILE_ALLOW_DELETE=true).
+    if (process.env.NODE_ENV !== "production" && process.env.UNIPILE_ALLOW_DELETE !== "true") {
+      console.warn(`[LinkedIn Gateway] Suppression du compte ${accountId} IGNORÉE (hors production, UNIPILE_ALLOW_DELETE non défini)`);
+      return { success: false, error: "Suppression Unipile désactivée hors production (UNIPILE_ALLOW_DELETE=true pour autoriser)." };
     }
     try {
       console.log(`[LinkedIn Gateway] Suppression/Déconnexion du compte ${accountId}...`);
@@ -223,6 +276,113 @@ export class UnipileService {
     } catch (err: any) {
       console.error("[LinkedIn Gateway] connectLinkedInAccount exception:", err.message);
       return { success: false, statusCode: 500, error: this.parseErrorResponse(500, err.message) };
+    }
+  }
+
+  /**
+   * Reconnecte un compte LinkedIn EXISTANT sur son account_id (Doc : POST /api/v1/accounts/{id}).
+   * Contrairement à connectLinkedInAccount, aucun nouveau compte facturé n'est créé : l'id,
+   * l'historique et les webhooks sont conservés. LinkedIn revérifie les identifiants.
+   * `notFound: true` si l'account_id n'existe plus chez Unipile (→ l'appelant peut créer).
+   */
+  static async reconnectLinkedInAccount(
+    accountId: string,
+    linkedinEmail: string,
+    linkedinPassword: string
+  ): Promise<{
+    success: boolean;
+    accountId?: string;
+    status?: string;
+    checkpoint?: any;
+    error?: string;
+    statusCode?: number;
+    notFound?: boolean;
+  }> {
+    try {
+      const baseUrl = this.getBaseUrl();
+      const res = await unipileFetch(`${baseUrl}/api/v1/accounts/${accountId}`, {
+        method: "POST",
+        headers: this.getHeaders(),
+        body: JSON.stringify({
+          provider: "LINKEDIN",
+          username: linkedinEmail,
+          password: linkedinPassword,
+        }),
+      });
+
+      const { ok, status, data, rawText } = await this.safeJsonParse(res);
+
+      if (!ok) {
+        const parsedMsg = this.parseErrorResponse(status, rawText);
+        console.error("[LinkedIn Gateway] reconnectLinkedInAccount error:", status, parsedMsg);
+        return {
+          success: false,
+          statusCode: status,
+          notFound: status === 404,
+          error: data?.message || data?.error || parsedMsg,
+        };
+      }
+
+      if (data?.object === "AccountCheckpoint" || data?.status === "CHECKPOINT") {
+        return { success: false, status: "CHECKPOINT", checkpoint: { ...data, account_id: data?.account_id || accountId } };
+      }
+
+      return { success: true, accountId: data?.account_id || data?.id || accountId, status: data?.status || "RECONNECTED" };
+    } catch (err: any) {
+      console.error("[LinkedIn Gateway] reconnectLinkedInAccount exception:", err.message);
+      return { success: false, statusCode: 500, error: this.parseErrorResponse(500, err.message) };
+    }
+  }
+
+  /**
+   * Résout un checkpoint (2FA / OTP / validation in-app) — Doc : POST /api/v1/accounts/checkpoint.
+   * L'intent d'authentification Unipile expire au bout de 5 minutes.
+   */
+  static async solveCheckpoint(accountId: string, code: string): Promise<{
+    success: boolean;
+    accountId?: string;
+    checkpoint?: any;
+    error?: string;
+    statusCode?: number;
+  }> {
+    try {
+      const baseUrl = this.getBaseUrl();
+      const res = await unipileFetch(`${baseUrl}/api/v1/accounts/checkpoint`, {
+        method: "POST",
+        headers: this.getHeaders(),
+        body: JSON.stringify({ provider: "LINKEDIN", account_id: accountId, code }),
+      });
+      const { ok, status, data, rawText } = await this.safeJsonParse(res);
+      if (!ok) {
+        const parsedMsg = this.parseErrorResponse(status, rawText);
+        return { success: false, statusCode: status, error: data?.message || data?.error || parsedMsg };
+      }
+      // Un second checkpoint peut être demandé (ex. 2FA puis validation in-app)
+      if (data?.object === "AccountCheckpoint" || data?.status === "CHECKPOINT") {
+        return { success: false, checkpoint: { ...data, account_id: data?.account_id || accountId } };
+      }
+      return { success: true, accountId: data?.account_id || accountId };
+    } catch (err: any) {
+      return { success: false, statusCode: 500, error: this.parseErrorResponse(500, err.message) };
+    }
+  }
+
+  /**
+   * Renvoie la notification de checkpoint (nouveau code) — Doc : POST /api/v1/accounts/checkpoint/resend.
+   */
+  static async resendCheckpoint(accountId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const baseUrl = this.getBaseUrl();
+      const res = await unipileFetch(`${baseUrl}/api/v1/accounts/checkpoint/resend`, {
+        method: "POST",
+        headers: this.getHeaders(),
+        body: JSON.stringify({ provider: "LINKEDIN", account_id: accountId }),
+      });
+      const { ok, status, rawText } = await this.safeJsonParse(res);
+      if (!ok) return { success: false, error: this.parseErrorResponse(status, rawText) };
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: this.parseErrorResponse(500, err.message) };
     }
   }
 
@@ -1137,6 +1297,18 @@ export class UnipileService {
     } catch (err: any) {
       return { success: false, error: err.message };
     }
+  }
+
+  /**
+   * Indique si un message Unipile a été envoyé par le compte connecté (l'utilisateur) et non par le prospect.
+   * Doc : `is_sender` est un nombre 0 | 1 (pas un booléen) — on tolère aussi true / "1".
+   */
+  static isOwnMessage(m: any): boolean {
+    if (!m) return false;
+    const flag = m.is_sender;
+    if (flag === 1 || flag === true || flag === "1" || flag === "true") return true;
+    if (flag === 0 || flag === false || flag === "0" || flag === "false") return false;
+    return m.sender_id === "self" || m.sender_id === "me";
   }
 
   /**
