@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { planLabel } from "../../marketing/content/plans";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { apiRequest } from "../../services/api";
@@ -246,7 +247,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateToUser
                       </div>
                     </div>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#592eff]/10 text-[#592eff]">
-                      {org.plan || "PRO"}
+                      {planLabel(org.plan)}
                     </span>
                   </div>
                   <div className="flex items-center gap-3 text-xs text-[#5f5f69] mt-3">

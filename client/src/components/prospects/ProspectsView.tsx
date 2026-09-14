@@ -673,7 +673,7 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                 </p>
                 {p.list?.user?.id && p.list.user.id !== user?.id && (
                   <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-[#592eff]/10 text-[#592eff] font-bold border border-[#592eff]/20 shrink-0">
-                    👤 {p.list.user.firstName || p.list.user.name || "Collègue"}
+                    {p.list.user.firstName || p.list.user.name || "Collègue"}
                   </span>
                 )}
                 {p.linkedinUrl && (
@@ -749,7 +749,7 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
               borderColor: `${p.list?.color || "#592eff"}30`,
             }}
           >
-            📁 {p.list?.name || "Sans liste"}
+            {p.list?.name || "Sans liste"}
           </span>
         );
 
@@ -934,7 +934,7 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
 
                   {/* Prospect Count Badge */}
                   <span className="badge-tag bg-[#592eff]/10 text-[#592eff] border border-[#592eff]/20 text-[11px] font-bold px-2 py-0.5">
-                    👥 {total}
+                    {total}
                   </span>
                 </div>
 
@@ -1116,10 +1116,10 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                         : "bg-white border-[#e0e0db] text-[#5f5f69] hover:bg-[#f8f9fc]"
                     }`}
                   >
-                    <option value="ALL">🌟 Collaborateur : Toute l'équipe (360°)</option>
+                    <option value="ALL">Collaborateur : toute l'équipe</option>
                     {teamMembers.map((m) => (
                       <option key={m.id} value={m.id}>
-                        👤 {m.name || m.email} {m.orgRole === "OWNER" ? "(Propriétaire)" : ""}
+                        {m.name || m.email} {m.orgRole === "OWNER" ? "(Propriétaire)" : ""}
                       </option>
                     ))}
                   </select>

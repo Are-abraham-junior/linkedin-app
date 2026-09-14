@@ -116,7 +116,7 @@ export const WorkspaceSwitcher: React.FC = () => {
         {/* Photo de l'espace / Initiale */}
         {isSuperAdmin && !impersonatedOrg ? (
           <div className="w-6 h-6 rounded-xl flex items-center justify-center text-[11px] font-bold shrink-0 bg-[#592eff] text-white shadow-xs">
-            🌐
+            B
           </div>
         ) : (
           <WorkspaceAvatar name={currentSpaceName} avatarUrl={currentAvatar} className="w-6 h-6 rounded-xl" />
@@ -173,7 +173,7 @@ export const WorkspaceSwitcher: React.FC = () => {
                     <Globe className="w-4 h-4" />
                   </div>
                   <div className="truncate">
-                    <p className="font-bold text-xs text-[#21164c] truncate">🌐 Hub Global Plateforme</p>
+                    <p className="font-bold text-xs text-[#21164c] truncate">Hub global plateforme</p>
                     <p className="text-[10px] text-[#5f5f69] truncate">Vue macro supervision & organisations</p>
                   </div>
                 </div>

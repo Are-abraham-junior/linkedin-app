@@ -29,7 +29,12 @@ import { LinkedInOnboardingWall } from "./components/auth/LinkedInOnboardingWall
 import { SettingsView } from "./components/settings/SettingsView";
 import { LinkedInSessionExpiredBanner } from "./components/common/LinkedInSessionExpiredBanner";
 import { LinkedInReconnectModal } from "./components/modals/LinkedInReconnectModal";
-import { Sparkles, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
+import { MarketingLayout } from "./marketing/MarketingLayout";
+import { HomePage } from "./marketing/pages/HomePage";
+import { FeaturesPage } from "./marketing/pages/FeaturesPage";
+import { AudiencesPage } from "./marketing/pages/AudiencesPage";
+import { PricingPage } from "./marketing/pages/PricingPage";
 
 /**
  * Wrapper pour la page /join?token=...
@@ -40,7 +45,7 @@ const JoinPageWrapper: React.FC = () => {
   const navigate = useNavigate();
 
   if (!token) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/connexion" replace />;
   }
 
   return <JoinPage token={token} onJoined={() => navigate("/dashboard")} />;
@@ -54,7 +59,7 @@ const ResetPasswordPageWrapper: React.FC = () => {
   const token = searchParams.get("token") || "";
 
   if (!token) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/connexion" replace />;
   }
 
   return <ResetPasswordPage token={token} />;
@@ -81,7 +86,7 @@ const AppLayout: React.FC = () => {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/connexion" replace />;
   }
 
   const isSuperAdmin = user.role === "SUPER_ADMIN";
@@ -127,26 +132,18 @@ const AppLayout: React.FC = () => {
         ) : (
           /* 2. Invitation initiale pour les collaborateurs sans compte LinkedIn lié */
           !user.hasLinkedInAccount && !isSuperAdmin && (
-            <div className="bg-gradient-to-r from-[#592eff]/15 via-[#7c3aed]/10 to-[#0a66c2]/15 border-b border-[#592eff]/25 px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs z-20 shrink-0 shadow-xs">
-              <div className="flex items-center gap-2.5 text-[#21164c] flex-1 min-w-0">
-                <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#592eff] text-white font-extrabold text-[10px] uppercase tracking-wider shadow-xs shrink-0">
-                  <Sparkles className="w-3 h-3 animate-pulse" />
-                  Action Requise
-                </span>
-                <p className="text-xs text-[#21164c] truncate">
-                  <strong className="font-extrabold">Activez votre prospection :</strong>{" "}
-                  <span className="text-[#3b2b73] font-medium">
-                    Connectez votre compte LinkedIn pour lancer vos campagnes et générer des leads qualifiés en continu.
-                  </span>
-                </p>
-              </div>
+            <div className="z-20 flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[#e0e0db] bg-white px-4 py-2.5 sm:px-6">
+              <p className="min-w-0 truncate text-[13px] text-[#21164c]">
+                <span className="font-semibold">Compte LinkedIn non connecté.</span>{" "}
+                <span className="text-[#5f5f69]">Connectez-le pour lancer vos campagnes.</span>
+              </p>
               <button
                 type="button"
                 onClick={() => setShowLinkedInModal(true)}
-                className="px-3.5 py-1.5 bg-[#592eff] hover:bg-[#4a22e0] text-white font-bold text-xs rounded-xl shadow-md shadow-[#592eff]/25 hover:shadow-[#592eff]/40 active:scale-[0.98] transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+                className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-[#592eff] px-3 text-[13px] font-semibold text-white transition-colors hover:bg-[#4a22e0]"
               >
-                <span>Connecter LinkedIn</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                Connecter LinkedIn
+                <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} />
               </button>
             </div>
           )
@@ -214,8 +211,12 @@ export const App: React.FC = () => {
   return (
     <Routes>
       {/* Routes Publiques */}
+      {/* La page de connexion vit sur /connexion : l'edge LWS (« Portail »/Varnish)
+          coupe la connexion (ERR_CONNECTION_RESET) sur le chemin exact /login,
+          avant meme qu'Apache ne reponde. /login reste un alias interne. */}
+      <Route path="/login" element={<Navigate to="/connexion" replace />} />
       <Route
-        path="/login"
+        path="/connexion"
         element={
           user ? (
             <Navigate
@@ -234,7 +235,7 @@ export const App: React.FC = () => {
       <Route path="/forgot-password" element={user ? <Navigate to="/dashboard" replace /> : <ForgotPasswordPage />} />
       <Route path="/reset-password" element={user ? <Navigate to="/dashboard" replace /> : <ResetPasswordPageWrapper />} />
 
-      {/* Routes Authentifiées (avec AppLayout & FloatingNavPill) */}
+      {/* Routes Authentifiées (AppLayout : Sidebar + Header) */}
       <Route element={<AppLayout />}>
         <Route
           path="/dashboard"
@@ -273,31 +274,20 @@ export const App: React.FC = () => {
         />
       </Route>
 
-      {/* Route Racine */}
-      <Route
-        path="/"
-        element={
-          <Navigate
-            to={
-              setupNeeded
-                ? "/setup"
-                : user
-                ? isSuperAdmin && !impersonatedOrg
-                  ? "/admin"
-                  : "/dashboard"
-                : "/login"
-            }
-            replace
-          />
-        }
-      />
+      {/* Site vitrine (public, visible aussi connecté) */}
+      <Route element={<MarketingLayout />}>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/fonctionnalites" element={<FeaturesPage />} />
+        <Route path="/fait-pour" element={<AudiencesPage />} />
+        <Route path="/tarifs" element={<PricingPage />} />
+      </Route>
 
       {/* 404 / Route inconnue */}
       <Route
         path="*"
         element={
           <Navigate
-            to={user ? (isSuperAdmin && !impersonatedOrg ? "/admin" : "/dashboard") : "/login"}
+            to={user ? (isSuperAdmin && !impersonatedOrg ? "/admin" : "/dashboard") : "/connexion"}
             replace
           />
         }

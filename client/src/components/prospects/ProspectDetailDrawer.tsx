@@ -152,7 +152,7 @@ export const ProspectDetailDrawer: React.FC<ProspectDetailDrawerProps> = ({
               <p className="text-xs text-[#5f5f69] line-clamp-1">{formData.headline || "Sans titre"}</p>
               <div className="flex items-center gap-2 mt-1.5">
                 <span className="badge-tag bg-[#592eff]/10 text-[#592eff] text-[10px]">
-                  📁 {prospect.list?.name || "Liste"}
+                  {prospect.list?.name || "Liste"}
                 </span>
                 <span
                   className={`badge-tag text-[10px] ${

@@ -420,7 +420,7 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
 
       if (res.success) {
         setSuccessMsg(
-          `🎉 ${res.createdCount} prospect(s) importé(s) dans la liste ! (${res.duplicateCount} doublon(s) ignoré(s))`
+          `${res.createdCount} prospect(s) importé(s) dans la liste ! (${res.duplicateCount} doublon(s) ignoré(s))`
         );
         onSuccess();
         setTimeout(() => {
@@ -599,7 +599,7 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                         <span>Sales Nav</span>
                         {!hasSalesNavigator && (
                           <span className="text-[8px] bg-amber-100 text-amber-700 px-1 py-0.2 rounded font-bold">
-                            🔒
+                            Sales Nav
                           </span>
                         )}
                       </button>
@@ -1130,7 +1130,7 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                 >
                   {lists.map((l) => (
                     <option key={l.id} value={l.id}>
-                      📁 {l.name}
+                      {l.name}
                     </option>
                   ))}
                 </select>

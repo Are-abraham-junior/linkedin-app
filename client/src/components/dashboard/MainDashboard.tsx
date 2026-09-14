@@ -248,7 +248,7 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({ onStartCampaign })
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-[#21164c] tracking-tight">
-            Bonjour, {user?.name || "Cher utilisateur"} 👋
+            Bonjour, {user?.name || "Cher utilisateur"}
           </h1>
           <p className="text-xs text-[#5f5f69] mt-1">
             {viewMode === "team"
@@ -507,7 +507,7 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({ onStartCampaign })
                     </div>
                     <div>
                       <h2 className="font-black text-base sm:text-lg text-white leading-tight">
-                        🚀 Activez votre machine à leads LinkedIn
+                        Connectez votre compte LinkedIn
                       </h2>
                       <p className="text-xs sm:text-[13px] text-white/85 font-medium mt-1 leading-snug">
                         Connectez votre compte pour lancer vos campagnes et générer des opportunités qualifiées.

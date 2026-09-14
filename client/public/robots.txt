@@ -1,0 +1,17 @@
+User-agent: *
+Allow: /
+Disallow: /connexion
+Disallow: /join
+Disallow: /setup
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /dashboard
+Disallow: /campaigns
+Disallow: /prospects
+Disallow: /inbox
+Disallow: /reports
+Disallow: /team
+Disallow: /settings
+Disallow: /admin
+
+Sitemap: https://bleadin.com/sitemap.xml

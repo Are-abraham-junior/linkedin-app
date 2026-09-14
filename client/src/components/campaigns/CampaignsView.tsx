@@ -386,10 +386,10 @@ export const CampaignsView: React.FC = () => {
               onChange={(e) => setSelectedMemberId(e.target.value === "ALL" ? null : e.target.value)}
               className="text-xs font-bold text-[#21164c] bg-transparent border-none focus:outline-none cursor-pointer pr-1"
             >
-              <option value="ALL">🌟 Toute l'équipe (Vue 360°)</option>
+              <option value="ALL">Toute l'équipe</option>
               {teamMembers.map((m) => (
                 <option key={m.id} value={m.id}>
-                  👤 {m.name || m.email} {m.orgRole === "OWNER" ? "(Propriétaire)" : ""}
+                  {m.name || m.email} {m.orgRole === "OWNER" ? "(Propriétaire)" : ""}
                 </option>
               ))}
             </select>

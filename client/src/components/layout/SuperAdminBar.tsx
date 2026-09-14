@@ -53,11 +53,11 @@ export const SuperAdminBar: React.FC<SuperAdminBarProps> = ({ organizationName, 
               className="bg-white/10 hover:bg-white/15 text-white text-xs font-bold rounded-lg px-2.5 py-1 border border-white/20 focus:outline-none focus:ring-1 focus:ring-[#2ed6ff] cursor-pointer transition-colors"
             >
               <option value="ALL" className="bg-[#21164c] text-white font-bold">
-                🌟 Toute l'équipe (Vue 360°)
+                Toute l'équipe
               </option>
               {members.map((m) => (
                 <option key={m.id} value={m.id} className="bg-[#21164c] text-white">
-                  👤 {m.name || m.email} {m.orgRole === "OWNER" ? "(Propriétaire)" : ""}
+                  {m.name || m.email} {m.orgRole === "OWNER" ? "(Propriétaire)" : ""}
                 </option>
               ))}
             </select>
