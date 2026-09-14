@@ -171,7 +171,7 @@ interface ReportEmailKpi {
 }
 
 interface SendCampaignReportEmailParams {
-  to: string;
+  to: string | string[];
   recipientName: string;
   frequencyLabel: string;
   periodLabel: string;
@@ -283,7 +283,7 @@ export async function sendCampaignReportEmail(params: SendCampaignReportEmailPar
           Télécharger le rapport complet (PDF / Excel)
         </a>
         <p style="font-size:11px;color:#b5b5bd;margin:16px 0 0;">
-          Vous recevez cet e-mail car vous avez activé le rapport ${escapeHtml(params.frequencyLabel)} dans Bleadin › Rapports. Vous pouvez le désactiver à tout moment depuis cette page.
+          Vous recevez cet e-mail car cette adresse a été configurée comme destinataire du rapport ${escapeHtml(params.frequencyLabel)} dans Bleadin › Rapports. Les destinataires, l'heure et le jour d'envoi se modifient à tout moment depuis cette page.
         </p>
       </div>
     </div>

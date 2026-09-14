@@ -2,23 +2,23 @@ import { prisma } from "../../../lib/prisma.js";
 import { buildCampaignsReport } from "../services/report.service.js";
 import { sendCampaignReportEmail } from "../services/mail.service.js";
 import {
-  listReportsConfigs,
-  getUserPrefs,
-  setUserPrefs,
+  REPORT_PREFS_SELECT,
+  toReportPrefs,
+  resolveRecipients,
+  migrateLegacyReportPrefs,
   type ReportEmailFrequency,
-  type ReportsConfig,
+  type ReportUserPrefs,
 } from "../services/reportSettings.service.js";
 
 /**
  * Planificateur des rapports périodiques par e-mail.
  * Tourne toutes les 15 minutes ; pour chaque utilisateur ayant activé un
  * rapport quotidien ou hebdomadaire, envoie le résumé HTML dès que l'heure
- * locale (fuseau de l'utilisateur) atteint SEND_HOUR et que le précédent
- * envoi date d'assez longtemps.
+ * locale (fuseau de l'utilisateur) atteint `reportHour` (et, en hebdo, que
+ * le jour local est `reportDay`), au plus une fois par jour local.
  */
 
 const CHECK_INTERVAL_MS = 15 * 60 * 1000;
-const SEND_HOUR = 8; // heure locale d'envoi
 const STATUS_LABELS: Record<string, string> = {
   ACTIVE: "En cours",
   PAUSED: "En pause",
@@ -43,6 +43,15 @@ function localNow(timezone: string): { hour: number; weekday: string } {
     return { hour, weekday };
   } catch {
     return { hour: new Date().getUTCHours(), weekday: "" };
+  }
+}
+
+/** Clé `YYYY-MM-DD` d'une date dans le fuseau donné (anti double-envoi le même jour local). */
+function localDateKey(timezone: string, date: Date): string {
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
+  } catch {
+    return date.toISOString().slice(0, 10);
   }
 }
 
@@ -72,14 +81,15 @@ export function reportWindow(frequency: ReportEmailFrequency, now = new Date()):
 export async function sendReportEmailToUser(
   userId: string,
   frequency: ReportEmailFrequency
-): Promise<{ sent: boolean; reason?: string }> {
+): Promise<{ sent: boolean; reason?: string; recipients?: string[] }> {
   if (frequency === "NONE") return { sent: false, reason: "Rapport désactivé." };
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, email: true, name: true, status: true },
+    select: { id: true, email: true, name: true, status: true, reportEmails: true },
   });
   if (!user || user.status !== "ACTIVE") return { sent: false, reason: "Utilisateur introuvable ou inactif." };
+  const recipients = resolveRecipients(user);
 
   const { from, to } = reportWindow(frequency);
   const report = await buildCampaignsReport({ scope: { userId }, from, to, compare: true });
@@ -89,7 +99,7 @@ export async function sendReportEmailToUser(
   const frontendBase = (process.env.FRONTEND_URL || "https://bleadin.com").replace(/\/$/, "");
 
   await sendCampaignReportEmail({
-    to: user.email,
+    to: recipients,
     recipientName: user.name || user.email,
     frequencyLabel: frequency === "WEEKLY" ? "hebdomadaire" : "quotidien",
     periodLabel: periodLabel(from, to),
@@ -119,46 +129,45 @@ export async function sendReportEmailToUser(
     reportsUrl: `${frontendBase}/reports`,
   });
 
-  return { sent: true };
+  return { sent: true, recipients };
 }
 
-function isDue(frequency: ReportEmailFrequency, lastSentAt: string | null | undefined, timezone: string): boolean {
-  if (frequency === "NONE") return false;
+export function isDue(prefs: ReportUserPrefs, timezone: string, now = new Date()): boolean {
+  if (prefs.emailFrequency === "NONE") return false;
   const { hour, weekday } = localNow(timezone);
-  if (hour < SEND_HOUR) return false;
-  if (frequency === "WEEKLY" && weekday !== "MON") return false;
+  if (hour < prefs.hour) return false;
+  if (prefs.emailFrequency === "WEEKLY" && weekday !== prefs.day) return false;
 
-  const last = lastSentAt ? new Date(lastSentAt).getTime() : 0;
-  const minGap = frequency === "WEEKLY" ? 6 * DAY_MS : 20 * 60 * 60 * 1000;
-  return Date.now() - last >= minGap;
+  if (!prefs.lastSentAt) return true;
+  const last = new Date(prefs.lastSentAt);
+  if (Number.isNaN(last.getTime())) return true;
+  // Jamais deux envois le même jour local (permet de changer l'heure sans doublon) ;
+  // en hebdo, on exige en plus au moins 6 jours d'écart avec le précédent envoi.
+  if (localDateKey(timezone, last) === localDateKey(timezone, now)) return false;
+  if (prefs.emailFrequency === "WEEKLY" && now.getTime() - last.getTime() < 6 * DAY_MS) return false;
+  return true;
 }
 
-async function processScheduledReports() {
+export async function processScheduledReports() {
   if (isRunning) return;
   isRunning = true;
   try {
-    const configs = await listReportsConfigs();
-    for (const { organizationId, config } of configs) {
-      const userIds = Object.keys(config.users).filter((id) => config.users[id]?.emailFrequency && config.users[id].emailFrequency !== "NONE");
-      if (userIds.length === 0) continue;
+    const users = await prisma.user.findMany({
+      where: { status: "ACTIVE", reportEmailFrequency: { in: ["DAILY", "WEEKLY"] } },
+      select: { id: true, email: true, ...REPORT_PREFS_SELECT },
+    });
 
-      const users = await prisma.user.findMany({
-        where: { id: { in: userIds }, organizationId, status: "ACTIVE" },
-        select: { id: true, timezone: true, email: true },
-      });
-
-      for (const u of users) {
-        const prefs = getUserPrefs(config as ReportsConfig, u.id);
-        if (!isDue(prefs.emailFrequency, prefs.lastSentAt, u.timezone)) continue;
-        try {
-          const result = await sendReportEmailToUser(u.id, prefs.emailFrequency);
-          if (result.sent) {
-            await setUserPrefs(organizationId, u.id, { lastSentAt: new Date().toISOString() });
-            console.log(`📧 [ReportWorker] Rapport ${prefs.emailFrequency} envoyé à ${u.email}`);
-          }
-        } catch (err: any) {
-          console.error(`❌ [ReportWorker] Échec d'envoi à ${u.email}:`, err?.message || err);
+    for (const u of users) {
+      const prefs = toReportPrefs(u);
+      if (!isDue(prefs, u.timezone)) continue;
+      try {
+        const result = await sendReportEmailToUser(u.id, prefs.emailFrequency);
+        if (result.sent) {
+          await prisma.user.update({ where: { id: u.id }, data: { reportLastSentAt: new Date() } });
+          console.log(`📧 [ReportWorker] Rapport ${prefs.emailFrequency} envoyé à ${(result.recipients || []).join(", ")}`);
         }
+      } catch (err: any) {
+        console.error(`❌ [ReportWorker] Échec d'envoi pour ${u.email}:`, err?.message || err);
       }
     }
   } catch (err: any) {
@@ -170,6 +179,9 @@ async function processScheduledReports() {
 
 export function startReportScheduler() {
   console.log("📧 [ReportWorker] Planificateur de rapports e-mail démarré (toutes les 15 min)");
+  migrateLegacyReportPrefs().catch((err: any) =>
+    console.error("❌ [ReportWorker] Migration des anciennes préférences échouée:", err?.message || err)
+  );
   setTimeout(processScheduledReports, 2 * 60 * 1000);
   setInterval(processScheduledReports, CHECK_INTERVAL_MS);
 }
