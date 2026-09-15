@@ -14,6 +14,7 @@ import {
   persistLinkedInAccount,
   pendingCheckpointFor,
   resumePausedCampaigns,
+  isWithinCreationGrace,
 } from "../services/linkedinConnection.service.js";
 
 const INTERNAL_PROVIDERS = [REPORTS_PROVIDER, WORKSPACE_PROVIDER];
@@ -277,6 +278,9 @@ export async function getLinkedInSettings(req: AuthenticatedRequest, res: Respon
         details = await UnipileService.getAccountStatus(account.unipileAccountId);
         if (details?.errorStatus === 502 || details?.errorStatus === 503 || details?.errorStatus === 504) {
           liveStatus = "GATEWAY_UNAVAILABLE";
+        } else if (details?.errorStatus === 404 && isWithinCreationGrace(account)) {
+          // Compte en cours de création chez Unipile : on garde CONNECTED, le prochain check tranchera
+          liveStatus = "CONNECTED";
         } else if (details?.errorStatus === 401 || details?.errorStatus === 404) {
           liveStatus = "DISCONNECTED";
         } else {
@@ -293,8 +297,9 @@ export async function getLinkedInSettings(req: AuthenticatedRequest, res: Respon
         liveStatus = "DISCONNECTED";
       }
 
-      // Synchroniser le statut en base si déconnecté ou checkpoint
-      if ((liveStatus === "DISCONNECTED" || liveStatus === "CHECKPOINT") && account.status !== liveStatus) {
+      // Synchroniser le statut en base (dans les deux sens : une ligne rétrogradée à tort pendant la
+      // création du compte redevient CONNECTED dès qu'Unipile répond OK)
+      if (liveStatus !== "GATEWAY_UNAVAILABLE" && account.status !== liveStatus) {
         await prisma.linkedInAccount.update({
           where: { id: account.id },
           data: { status: liveStatus },

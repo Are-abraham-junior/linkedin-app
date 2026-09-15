@@ -14,6 +14,19 @@ import { UnipileService } from "./unipile.service.js";
 /** Durée de vie d'un intent d'authentification Unipile (checkpoint à résoudre dans ce délai). */
 export const CHECKPOINT_TTL_MS = 5 * 60 * 1000;
 
+/**
+ * Délai de propagation d'un compte fraîchement créé chez Unipile. `POST /accounts` renvoie
+ * l'account_id immédiatement mais `GET /accounts/{id}` répond 404 pendant ~1 min (le
+ * `created_at` Unipile observé en prod était 53 s après notre réponse 200). Une vérification
+ * de statut dans cette fenêtre ne doit pas rétrograder la ligne en DISCONNECTED.
+ */
+export const CREATION_GRACE_MS = 3 * 60 * 1000;
+
+/** Vrai si un 404 Unipile sur ce compte peut encore être un compte en cours de création. */
+export function isWithinCreationGrace(account: { status: string; updatedAt: Date }): boolean {
+  return account.status === "CONNECTED" && Date.now() - account.updatedAt.getTime() < CREATION_GRACE_MS;
+}
+
 export type ConnectOutcome =
   | { kind: "CONNECTED"; accountId: string; profile: any; reused: boolean; removedDuplicates: string[] }
   | { kind: "CHECKPOINT"; accountId: string; checkpoint: any; reused: boolean }
@@ -99,10 +112,14 @@ export async function persistLinkedInAccount(
   for (const old of others) {
     if (old.unipileAccountId) {
       const del = await UnipileService.deleteAccount(old.unipileAccountId);
-      if (!del.success) {
+      if (!del.success && !del.notFound) {
         // On garde la ligne : un compte encore facturé ne doit pas devenir invisible (le worker de réconciliation réessaiera)
         console.warn(`[LinkedInConnection] Ancien compte ${old.unipileAccountId} non supprimé chez Unipile, ligne conservée`);
         continue;
+      }
+      if (del.notFound) {
+        // Compte inconnu chez Unipile (ex. id d'une ancienne instance après changement de DSN) : plus rien à facturer
+        console.warn(`[LinkedInConnection] Ancien compte ${old.unipileAccountId} inconnu chez Unipile → ligne fantôme supprimée`);
       }
     }
     await prisma.linkedInAccount.delete({ where: { id: old.id } }).catch(() => {});

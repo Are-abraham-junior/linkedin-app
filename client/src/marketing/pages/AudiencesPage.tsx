@@ -62,28 +62,19 @@ export const AudiencesPage: React.FC = () => {
 
               <div className={clsx("min-w-0 lg:col-span-6", reversed && "lg:order-1")}>
                 <div className={clsx("rounded-card p-4 sm:p-6", WASHES[i % WASHES.length])}>
-                  <div className="overflow-hidden rounded-shot border border-[#e0e0db] bg-white">
+                  <div className="overflow-hidden rounded-shot bg-white">
                     <img
-                      src={`/campagnes_images/${a.sequence.file}`}
-                      alt={`Séquence recommandée : ${a.sequence.name}`}
+                      src={`/audiences/${a.photo.file}`}
+                      alt={a.photo.alt}
                       loading="lazy"
-                      className="aspect-[4/3] w-full object-cover object-top"
+                      width={1400}
+                      height={1050}
+                      className="aspect-[4/3] w-full object-cover"
+                      style={{ objectPosition: a.photo.position }}
                     />
                   </div>
                 </div>
-                <dl className="mt-6 grid gap-6 sm:grid-cols-2">
-                  <div>
-                    <dt className="text-[13px] text-[#5f5f69]">Séquence recommandée</dt>
-                    <dd className="mt-1">
-                      <Link
-                        to="/fonctionnalites#campagnes"
-                        className="inline-flex items-center gap-1.5 text-[16px] font-semibold text-[#21164c] hover:text-[#592eff]"
-                      >
-                        {a.sequence.name}
-                        <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden />
-                      </Link>
-                    </dd>
-                  </div>
+                <dl className="mt-6">
                   <div>
                     <dt className="text-[13px] text-[#5f5f69]">Offre conseillée</dt>
                     <dd className="mt-1">
@@ -106,8 +97,8 @@ export const AudiencesPage: React.FC = () => {
             Vous ne vous reconnaissez dans aucun de ces quatre ? Écrivez-nous.
           </h2>
           <div className="flex flex-wrap gap-4">
-            <Button href="mailto:contact@bleadin.com" variant="inverse" size="lg">
-              contact@bleadin.com
+            <Button href="mailto:info@bleadin.com" variant="inverse" size="lg">
+              info@bleadin.com
             </Button>
             <Button to="/connexion" variant="link" className="!text-white/80 hover:!text-white" arrow>
               Commencer

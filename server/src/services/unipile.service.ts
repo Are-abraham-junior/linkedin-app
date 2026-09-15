@@ -73,6 +73,35 @@ export interface LinkedInProfileResult {
   networkDistance?: string;
   connectionStatus?: "NOT_CONNECTED" | "PENDING" | "CONNECTED";
   industry?: string;
+  /** Renseigné par getPostEngagers : comment ce profil a interagi avec le post. */
+  engagement?: LinkedInPostEngagement;
+}
+
+export interface LinkedInPostEngagement {
+  reacted: boolean;
+  reactionType?: string; // LIKE | PRAISE | APPRECIATION | EMPATHY | INTEREST | ENTERTAINMENT
+  commented: boolean;
+  commentText?: string;
+}
+
+/** Post introuvable / inaccessible avec ce compte (à ne pas confondre avec une session expirée). */
+export class UnipilePostNotFoundError extends Error {
+  constructor() {
+    super("Post LinkedIn introuvable ou non accessible avec ce compte.");
+    this.name = "UnipilePostNotFoundError";
+  }
+}
+
+export interface LinkedInPostSummary {
+  postId: string;
+  socialId: string;
+  text: string;
+  authorName: string;
+  authorPublicIdentifier?: string;
+  reactionCount: number;
+  commentCount: number;
+  shareUrl?: string;
+  date?: string;
 }
 
 export class UnipileService {
@@ -195,7 +224,8 @@ export class UnipileService {
    * Supprime/déconnecte un compte LinkedIn sur Unipile (libère le slot de facturation)
    * Doc Unipile : DELETE /api/v1/accounts/{id}
    */
-  static async deleteAccount(accountId: string): Promise<{ success: boolean; error?: string }> {
+  /** `notFound: true` si le compte n'existe pas (déjà supprimé, ou id d'une ancienne instance Unipile). */
+  static async deleteAccount(accountId: string): Promise<{ success: boolean; error?: string; notFound?: boolean }> {
     if (!accountId) {
       return { success: false, error: "accountId manquant" };
     }
@@ -216,7 +246,7 @@ export class UnipileService {
       if (!ok) {
         const errorText = this.parseErrorResponse(status, rawText);
         console.warn(`[LinkedIn Gateway] Échec suppression compte ${accountId} (${status}):`, errorText);
-        return { success: false, error: errorText };
+        return { success: false, error: errorText, notFound: status === 404 };
       }
       console.log(`[LinkedIn Gateway] ✅ Compte ${accountId} supprimé avec succès.`);
       return { success: true };
@@ -707,6 +737,12 @@ export class UnipileService {
    * Supporte les modes Classic et Sales Navigator (avec secteur d'activité et tranches d'effectif).
    * Boucle sur les curseurs Unipile pour accumuler exactement le nombre de profils demandés
    * (ex: 25, 50, 100 profils) au lieu de bloquer à 10 profils.
+   *
+   * Pagination (doc : https://developer.unipile.com/reference/linkedincontroller_search) :
+   * chaque réponse contient un `cursor` qui encode le compte, les filtres, le `limit` et le
+   * `start`. Passer `params.cursor` reprend la recherche là où la précédente s'est arrêtée ;
+   * `nextCursor` en retour permet au client de demander la page suivante (classic : 10 profils
+   * par page, Sales Navigator : jusqu'à 100).
    */
   static async searchProfiles(params: {
     keywords?: string;
@@ -719,7 +755,8 @@ export class UnipileService {
     api?: "classic" | "sales_navigator";
     industry?: string[];
     companyHeadcount?: Array<{ min?: number; max?: number }>;
-  }): Promise<{ items: LinkedInProfileResult[]; totalCount: number }> {
+    cursor?: string;
+  }): Promise<{ items: LinkedInProfileResult[]; totalCount: number; nextCursor: string | null }> {
     const accountId = params.accountId;
     if (!accountId) {
       throw new Error("Compte LinkedIn non spécifié.");
@@ -727,7 +764,8 @@ export class UnipileService {
     const targetLimit = Math.min(Math.max(params.limit || 25, 1), 100);
 
     const accumulatedItems: LinkedInProfileResult[] = [];
-    let currentCursor: string | null = null;
+    let currentCursor: string | null = params.cursor || null;
+    let nextCursor: string | null = null;
     let totalCount = 0;
     let iterations = 0;
     const maxIterations = Math.ceil(targetLimit / 10) + 1; // Sécurité anti-boucle infinie
@@ -803,12 +841,13 @@ export class UnipileService {
         }
 
         if (rawItems.length === 0) {
+          nextCursor = null;
           break;
         }
 
+        // On consomme la page entière (même au-delà de targetLimit) : le curseur suivant
+        // repart après cette page, tronquer ici ferait sauter des profils définitivement.
         for (const item of rawItems) {
-          if (accumulatedItems.length >= targetLimit) break;
-
           const rawName = (item.name || "").trim();
           let firstName = item.first_name || "";
           let lastName = item.last_name || "";
@@ -862,9 +901,12 @@ export class UnipileService {
         }
 
         // Vérifier s'il y a un curseur suivant
-        if (data.cursor && data.cursor !== currentCursor) {
-          currentCursor = data.cursor;
+        const receivedCursor = data.cursor || data.paging?.cursor || null;
+        if (receivedCursor && receivedCursor !== currentCursor) {
+          currentCursor = receivedCursor;
+          nextCursor = receivedCursor;
         } else {
+          nextCursor = null;
           break;
         }
       }
@@ -872,10 +914,11 @@ export class UnipileService {
       return {
         items: accumulatedItems,
         totalCount: Math.max(totalCount, accumulatedItems.length),
+        nextCursor,
       };
     } catch (err: any) {
       console.error("Error in Unipile multi-page search:", err.message);
-      return { items: accumulatedItems, totalCount: accumulatedItems.length };
+      return { items: accumulatedItems, totalCount: accumulatedItems.length, nextCursor: null };
     }
   }
 
@@ -1036,6 +1079,176 @@ export class UnipileService {
     } catch (err: any) {
       return { success: false, items: [], error: err.message };
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Posts LinkedIn : résolution d'un post et récupération des personnes ayant
+  // liké / commenté (source de prospects).
+  // Doc : https://developer.unipile.com/docs/posts-and-comments
+  //       https://developer.unipile.com/reference/postscontroller_getpost
+  //       https://developer.unipile.com/reference/postscontroller_listallreactions
+  //       https://developer.unipile.com/reference/postscontroller_listallcomments
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Extrait l'identifiant de post attendu par GET /posts/{id} depuis une URL LinkedIn :
+   * - URL contenant `activity-<id>` (ou `urn:li:activity:<id>`) → id numérique
+   * - URL contenant `ugcPost` → `urn:li:ugcPost:<id>`
+   * - URL contenant `share`   → `urn:li:share:<id>`
+   * Un id numérique ou un URN déjà formé est renvoyé tel quel. Sinon null.
+   */
+  static parseLinkedInPostId(input: string): string | null {
+    const raw = (input || "").trim();
+    if (!raw) return null;
+    let m = raw.match(/activity[-:](\d{6,})/i);
+    if (m) return m[1];
+    m = raw.match(/ugcPost[-:](\d{6,})/i);
+    if (m) return `urn:li:ugcPost:${m[1]}`;
+    m = raw.match(/share[-:](\d{6,})/i);
+    if (m) return `urn:li:share:${m[1]}`;
+    if (/^\d{6,}$/.test(raw)) return raw;
+    if (/^urn:li:[a-zA-Z]+:\d+$/.test(raw)) return raw;
+    return null;
+  }
+
+  /**
+   * Résout un post LinkedIn. Renvoie notamment `social_id`, l'identifiant à
+   * utiliser pour toutes les interactions suivantes (réactions, commentaires).
+   * Lève une erreur sur échec HTTP (pour la détection « session expirée » du contrôleur).
+   */
+  static async getPost(params: { accountId: string; postId: string }): Promise<LinkedInPostSummary | null> {
+    const searchParams = new URLSearchParams({ account_id: params.accountId });
+    const res = await unipileFetch(`${BASE_URL}/api/v1/posts/${encodeURIComponent(params.postId)}?${searchParams}`, {
+      method: "GET",
+      headers: this.getHeaders(),
+    });
+    if (res.status === 404) return null;
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Erreur Unipile post (${res.status}): ${this.parseErrorResponse(res.status, errText)}`);
+    }
+    const data: any = await res.json();
+    return {
+      postId: params.postId,
+      socialId: String(data.social_id || data.id || params.postId),
+      text: String(data.text || ""),
+      authorName: data.author?.name || "Auteur LinkedIn",
+      authorPublicIdentifier: data.author?.public_identifier || undefined,
+      reactionCount: Number(data.reaction_counter ?? 0),
+      commentCount: Number(data.comment_counter ?? 0),
+      shareUrl: data.share_url || undefined,
+      date: data.date || undefined,
+    };
+  }
+
+  /**
+   * Liste les personnes ayant réagi et/ou commenté un post, dédupliquées par
+   * profil (un même profil qui like ET commente = une seule ligne). Les pages
+   * entreprise (`author.type === "COMPANY"`) sont ignorées.
+   */
+  static async getPostEngagers(params: {
+    accountId: string;
+    socialId: string;
+    includeReactions: boolean;
+    includeComments: boolean;
+    limit: number;
+  }): Promise<{ items: LinkedInProfileResult[]; truncated: boolean }> {
+    const limit = Math.min(Math.max(params.limit || 50, 1), 100);
+    const byId = new Map<string, LinkedInProfileResult>();
+    let truncated = false;
+
+    const upsert = (author: any, patch: LinkedInPostEngagement): boolean => {
+      const id = author?.id ? String(author.id) : "";
+      if (!id || String(author.type || "").toUpperCase() === "COMPANY") return true;
+      const existing = byId.get(id);
+      if (existing) {
+        existing.engagement = {
+          reacted: existing.engagement?.reacted || patch.reacted,
+          reactionType: existing.engagement?.reactionType || patch.reactionType,
+          commented: existing.engagement?.commented || patch.commented,
+          commentText: existing.engagement?.commentText || patch.commentText,
+        };
+        return true;
+      }
+      if (byId.size >= limit) {
+        truncated = true;
+        return false;
+      }
+      byId.set(id, { ...this.toProfileResult(author, id), engagement: patch });
+      return true;
+    };
+
+    const paginate = async (path: string, extract: (item: any) => { author: any; patch: LinkedInPostEngagement }) => {
+      let cursor: string | null = null;
+      const maxIterations = Math.ceil(limit / 100) + 1;
+      for (let i = 0; i < maxIterations; i++) {
+        const searchParams = new URLSearchParams({ account_id: params.accountId, limit: String(Math.min(limit, 100)) });
+        if (cursor) searchParams.set("cursor", cursor);
+        const res = await unipileFetch(`${BASE_URL}/api/v1/posts/${encodeURIComponent(params.socialId)}/${path}?${searchParams}`, {
+          method: "GET",
+          headers: this.getHeaders(),
+        });
+        if (res.status === 404) throw new UnipilePostNotFoundError();
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`Erreur Unipile ${path} (${res.status}): ${this.parseErrorResponse(res.status, errText)}`);
+        }
+        const data: any = await res.json();
+        for (const item of data.items || []) {
+          const { author, patch } = extract(item);
+          if (!upsert(author, patch)) return;
+        }
+        cursor = data.cursor || data.paging?.cursor || null;
+        if (!cursor) return;
+      }
+      truncated = true;
+    };
+
+    // Commentaires d'abord : moins nombreux et plus qualifiés que les réactions,
+    // ils ne doivent pas être sacrifiés quand la limite est atteinte.
+    if (params.includeComments) {
+      await paginate("comments", (item) => ({
+        // Les commentaires exposent le nom dans `author` et l'identité dans `author_details`
+        author: { ...(item.author_details || {}), name: item.author_details?.name || item.author },
+        patch: { reacted: false, commented: true, commentText: String(item.text || "").slice(0, 200) || undefined },
+      }));
+    }
+    if (params.includeReactions && !truncated) {
+      await paginate("reactions", (item) => ({
+        author: item.author,
+        patch: { reacted: true, reactionType: item.value || "LIKE", commented: false },
+      }));
+    }
+
+    return { items: Array.from(byId.values()), truncated };
+  }
+
+  /** Mappe un auteur de réaction/commentaire Unipile vers la forme consommée par la recherche de profils. */
+  private static toProfileResult(author: any, id: string): LinkedInProfileResult {
+    const rawName = String(author.name || "").trim();
+    const parts = rawName.split(/\s+/).filter(Boolean);
+    const firstName = parts[0] || "Contact";
+    const lastName = parts.slice(1).join(" ") || "LinkedIn";
+    let linkedinUrl = String(author.profile_url || author.public_identifier || "");
+    if (linkedinUrl && !linkedinUrl.startsWith("http")) linkedinUrl = `https://www.linkedin.com/in/${linkedinUrl}`;
+    const headline = String(author.headline || "Professionnel LinkedIn");
+    const connectionStatus = UnipileService.parseLinkedInConnectionStatus(author);
+    return {
+      providerProfileId: id,
+      firstName,
+      lastName,
+      fullName: rawName || `${firstName} ${lastName}`,
+      headline,
+      company: extractCompanyFromHeadline(headline) || undefined,
+      location: undefined,
+      linkedinUrl: linkedinUrl || `https://www.linkedin.com/in/${id}`,
+      avatarUrl:
+        author.profile_picture_url_large ||
+        author.profile_picture_url ||
+        `https://ui-avatars.com/api/?name=${encodeURIComponent(rawName || "LinkedIn")}&background=592eff&color=fff`,
+      networkDistance: author.network_distance || undefined,
+      connectionStatus,
+    };
   }
 
   /**

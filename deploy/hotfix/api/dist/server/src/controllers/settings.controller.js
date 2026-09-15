@@ -783,16 +783,25 @@ export async function testIntegrationConnection(req, res) {
         res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
     }
 }
-// ==========================================
-// 5. FACTURATION & ABONNEMENT
-// ==========================================
+const BILLING_PLANS = {
+    STARTER: { name: "Starter", monthly: 19, annual: 15, maxProspects: 1_000, maxTeamSeats: 1, maxCampaigns: 3 },
+    PRO: { name: "Pro", monthly: 40, annual: 32, maxProspects: 10_000, maxTeamSeats: 3, maxCampaigns: -1 },
+    BUSINESS: { name: "Business", monthly: 70, annual: 56, maxProspects: 50_000, maxTeamSeats: 10, maxCampaigns: -1 },
+};
+const BILLING_CURRENCY = "USD";
+function normalizePlanId(raw) {
+    if (raw === "STARTER" || raw === "PRO")
+        return raw;
+    return "BUSINESS";
+}
 export async function getBillingInfo(req, res) {
     try {
         const organizationId = req.user.organizationId;
         const org = organizationId
             ? await prisma.organization.findUnique({ where: { id: organizationId } })
             : null;
-        const plan = org?.plan || "ENTERPRISE";
+        const plan = normalizePlanId(org?.plan);
+        const pricing = BILLING_PLANS[plan];
         // Statistiques de consommation réelle
         const prospectsCount = await prisma.prospect.count({
             where: organizationId
@@ -821,8 +830,8 @@ export async function getBillingInfo(req, res) {
                 {
                     organizationId,
                     number: `INV-${now.getFullYear()}-003`,
-                    amount: plan === "ENTERPRISE" ? 149.0 : plan === "PRO" ? 79.0 : 39.0,
-                    currency: "EUR",
+                    amount: pricing.monthly,
+                    currency: BILLING_CURRENCY,
                     plan,
                     status: "PAID",
                     periodStart: new Date(now.getFullYear(), now.getMonth(), 1),
@@ -831,8 +840,8 @@ export async function getBillingInfo(req, res) {
                 {
                     organizationId,
                     number: `INV-${now.getFullYear()}-002`,
-                    amount: plan === "ENTERPRISE" ? 149.0 : plan === "PRO" ? 79.0 : 39.0,
-                    currency: "EUR",
+                    amount: pricing.monthly,
+                    currency: BILLING_CURRENCY,
                     plan,
                     status: "PAID",
                     periodStart: new Date(now.getFullYear(), now.getMonth() - 1, 1),
@@ -841,8 +850,8 @@ export async function getBillingInfo(req, res) {
                 {
                     organizationId,
                     number: `INV-${now.getFullYear()}-001`,
-                    amount: plan === "ENTERPRISE" ? 149.0 : plan === "PRO" ? 79.0 : 39.0,
-                    currency: "EUR",
+                    amount: pricing.monthly,
+                    currency: BILLING_CURRENCY,
                     plan,
                     status: "PAID",
                     periodStart: new Date(now.getFullYear(), now.getMonth() - 2, 1),
@@ -865,8 +874,10 @@ export async function getBillingInfo(req, res) {
             success: true,
             billing: {
                 plan,
-                pricePerMonth: plan === "ENTERPRISE" ? 149 : plan === "PRO" ? 79 : 39,
-                currency: "EUR",
+                planName: pricing.name,
+                pricePerMonth: pricing.monthly,
+                annualPricePerMonth: pricing.annual,
+                currency: BILLING_CURRENCY,
                 billingCycle: "Mensuel",
                 renewalDate: new Date(Date.now() + 25 * 24 * 60 * 60 * 1000).toISOString(),
                 paymentMethod: {
@@ -875,9 +886,9 @@ export async function getBillingInfo(req, res) {
                     expiry: "12/28",
                 },
                 limits: {
-                    maxProspects: plan === "ENTERPRISE" ? 50000 : plan === "PRO" ? 15000 : 3000,
-                    maxCampaigns: -1, // Campagnes illimitées
-                    maxTeamSeats: plan === "ENTERPRISE" ? 20 : plan === "PRO" ? 5 : 1,
+                    maxProspects: pricing.maxProspects,
+                    maxCampaigns: pricing.maxCampaigns, // -1 = illimitées
+                    maxTeamSeats: pricing.maxTeamSeats,
                 },
                 usage: {
                     prospectsCount,
@@ -912,6 +923,7 @@ export async function downloadInvoicePdf(req, res) {
         const periodStartStr = new Date(invoice.periodStart).toLocaleDateString("fr-FR");
         const periodEndStr = new Date(invoice.periodEnd).toLocaleDateString("fr-FR");
         const tva = (invoice.amount * 0.2).toFixed(2);
+        const currencySymbol = invoice.currency === "USD" ? "$" : "€";
         const amountHT = (invoice.amount - Number(tva)).toFixed(2);
         const htmlInvoice = `<!DOCTYPE html>
 <html lang="fr">
@@ -986,18 +998,18 @@ export async function downloadInvoicePdf(req, res) {
           <span style="font-size: 11px; color: #666;">Accès illimité aux campagnes séquentielles, Inbox synchronisée et enrichissement automatique.</span>
         </td>
         <td style="text-align: center;">${periodStartStr} - ${periodEndStr}</td>
-        <td style="text-align: right;">${amountHT} €</td>
-        <td style="text-align: right;">${tva} €</td>
-        <td style="text-align: right;"><strong>${invoice.amount.toFixed(2)} €</strong></td>
+        <td style="text-align: right;">${amountHT} ${currencySymbol}</td>
+        <td style="text-align: right;">${tva} ${currencySymbol}</td>
+        <td style="text-align: right;"><strong>${invoice.amount.toFixed(2)} ${currencySymbol}</strong></td>
       </tr>
     </tbody>
   </table>
 
   <div class="total-section">
     <div class="total-box">
-      <div class="total-row"><span>Sous-total HT :</span> <span>${amountHT} €</span></div>
-      <div class="total-row"><span>TVA (20%) :</span> <span>${tva} €</span></div>
-      <div class="total-row grand"><span>Total TTC Payé :</span> <span>${invoice.amount.toFixed(2)} €</span></div>
+      <div class="total-row"><span>Sous-total HT :</span> <span>${amountHT} ${currencySymbol}</span></div>
+      <div class="total-row"><span>TVA (20%) :</span> <span>${tva} ${currencySymbol}</span></div>
+      <div class="total-row grand"><span>Total TTC Payé :</span> <span>${invoice.amount.toFixed(2)} ${currencySymbol}</span></div>
     </div>
   </div>
 

@@ -1,6 +1,7 @@
 import { prisma } from "../../../lib/prisma.js";
 import { buildCampaignsReport } from "../services/report.service.js";
 import { sendCampaignReportEmail } from "../services/mail.service.js";
+import { buildReportExcel, buildReportPdf, fileStamp } from "../services/reportExport.service.js";
 import {
   REPORT_PREFS_SELECT,
   toReportPrefs,
@@ -13,7 +14,8 @@ import {
 /**
  * Planificateur des rapports périodiques par e-mail.
  * Tourne toutes les 15 minutes ; pour chaque utilisateur ayant activé un
- * rapport quotidien ou hebdomadaire, envoie le résumé HTML dès que l'heure
+ * rapport quotidien ou hebdomadaire, envoie le résumé HTML (+ PDF et Excel
+ * complets en pièces jointes) dès que l'heure
  * locale (fuseau de l'utilisateur) atteint `reportHour` (et, en hebdo, que
  * le jour local est `reportDay`), au plus une fois par jour local.
  */
@@ -86,17 +88,39 @@ export async function sendReportEmailToUser(
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, email: true, name: true, status: true, reportEmails: true },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      status: true,
+      reportEmails: true,
+      organization: { select: { name: true } },
+    },
   });
   if (!user || user.status !== "ACTIVE") return { sent: false, reason: "Utilisateur introuvable ou inactif." };
   const recipients = resolveRecipients(user);
 
   const { from, to } = reportWindow(frequency);
-  const report = await buildCampaignsReport({ scope: { userId }, from, to, compare: true });
+  const report = await buildCampaignsReport({ scope: { userId }, from, to, compare: true, includeDetails: true });
   const s = report.summary;
   const d = report.comparison?.deltas;
 
   const frontendBase = (process.env.FRONTEND_URL || "https://bleadin.com").replace(/\/$/, "");
+
+  // Mêmes fichiers que les boutons « Exporter » de la page Rapports (prospects inclus).
+  const exportable = {
+    ...report,
+    owner: { name: user.name || user.email, email: user.email, organizationName: user.organization?.name ?? null },
+  };
+  const stamp = fileStamp();
+  const attachments = [
+    { filename: `bleadin-rapport-${stamp}.pdf`, content: buildReportPdf(exportable, true), contentType: "application/pdf" },
+    {
+      filename: `bleadin-rapport-${stamp}.xlsx`,
+      content: buildReportExcel(exportable, true),
+      contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    },
+  ];
 
   await sendCampaignReportEmail({
     to: recipients,
@@ -127,6 +151,7 @@ export async function sendReportEmailToUser(
         replyRate: c.stats.replyRate,
       })),
     reportsUrl: `${frontendBase}/reports`,
+    attachments,
   });
 
   return { sent: true, recipients };

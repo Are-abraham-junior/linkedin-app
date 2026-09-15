@@ -23,6 +23,8 @@ import {
   Info,
   Check,
   Lock,
+  MessageCircle,
+  ThumbsUp,
 } from "lucide-react";
 
 interface LinkedInSearchModalProps {
@@ -44,6 +46,28 @@ interface HeadcountTier {
   sub: string;
   min: number;
   max?: number;
+}
+
+/** Récapitulatif du post renvoyé par POST /linkedin/post-engagers */
+/** Réponse de POST /api/linkedin/search (pagination par curseur Unipile). */
+interface SearchResponse {
+  count: number;
+  totalCount: number;
+  profiles: any[];
+  nextCursor?: string | null;
+  excludedCount?: number;
+}
+
+interface PostSummary {
+  postId: string;
+  socialId: string;
+  text: string;
+  authorName: string;
+  authorPublicIdentifier?: string;
+  reactionCount: number;
+  commentCount: number;
+  shareUrl?: string;
+  date?: string;
 }
 
 const COMMON_SECTORS: SectorOption[] = [
@@ -132,8 +156,15 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
     }
   }, [defaultListId, lists]);
 
-  // Mode principal : CRITERIA vs URL
-  const [searchMode, setSearchMode] = useState<"CRITERIA" | "URL">("CRITERIA");
+  // Mode principal : CRITERIA vs URL vs POST (personnes ayant liké / commenté un post)
+  const [searchMode, setSearchMode] = useState<"CRITERIA" | "URL" | "POST">("CRITERIA");
+
+  // Mode POST
+  const [postUrl, setPostUrl] = useState("");
+  const [includeReactions, setIncludeReactions] = useState(true);
+  const [includeComments, setIncludeComments] = useState(true);
+  const [postSummary, setPostSummary] = useState<PostSummary | null>(null);
+  const [postTruncated, setPostTruncated] = useState(false);
 
   // Mode d'API LinkedIn : Classic vs Sales Navigator (verrouillé si pas Sales Nav)
   const [apiMode, setApiMode] = useState<"classic" | "sales_navigator">("classic");
@@ -166,6 +197,12 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Pagination Unipile : curseur de la page suivante + payload de la dernière recherche (rejoué tel quel)
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [lastPayload, setLastPayload] = useState<any | null>(null);
+  const [excludedCount, setExcludedCount] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   // Fermer le dropdown de secteur au clic extérieur
   useEffect(() => {
@@ -246,53 +283,62 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
       return;
     }
 
+    if (searchMode === "POST") {
+      if (!postUrl.trim()) {
+        setError("Veuillez coller l'URL du post LinkedIn.");
+        return;
+      }
+      if (!includeReactions && !includeComments) {
+        setError("Sélectionnez au moins les likes ou les commentaires.");
+        return;
+      }
+    }
+
     setSearching(true);
     setResults([]);
     setResultFilterQuery("");
     setSelectedProfileIds(new Set<string>());
+    setPostSummary(null);
+    setPostTruncated(false);
+    setNextCursor(null);
+    setLastPayload(null);
+    setExcludedCount(0);
 
     try {
-      const effectiveApiMode = hasSalesNavigator ? apiMode : "classic";
-      const payload: any = {
-        limit: importLimit,
-        api: effectiveApiMode,
-      };
-
-      if (searchMode === "URL") {
-        payload.url = searchUrl.trim();
-      } else {
-        if (title.trim()) payload.title = title.trim();
-        if (company.trim()) payload.company = company.trim();
-        if (location.trim()) payload.location = location.trim();
-
-        if (selectedSector) {
-          payload.industry = [selectedSector.id];
+      if (searchMode === "POST") {
+        const res = await apiRequest<{ post: PostSummary; count: number; truncated: boolean; profiles: any[] }>(
+          "/linkedin/post-engagers",
+          {
+            method: "POST",
+            body: JSON.stringify({ url: postUrl.trim(), includeReactions, includeComments, limit: importLimit }),
+          }
+        );
+        if (res.success && res.profiles) {
+          setResults(res.profiles);
+          setPostSummary(res.post || null);
+          setPostTruncated(Boolean(res.truncated));
+          setSelectedProfileIds(new Set<string>(res.profiles.map((p: any) => String(p.providerProfileId))));
+          if (res.profiles.length === 0) {
+            setError("Aucune personne trouvée sur ce post (pas de like/commentaire, ou uniquement des pages entreprise).");
+          }
+        } else {
+          setError(res.error || "Erreur lors de la récupération des interactions du post.");
         }
-
-        if (effectiveApiMode === "sales_navigator" && selectedHeadcounts.length > 0) {
-          payload.companyHeadcount = selectedHeadcounts
-            .map((id) => {
-              const tier = HEADCOUNT_TIERS.find((t) => t.id === id);
-              if (!tier) return null;
-              const res: { min: number; max?: number } = { min: tier.min };
-              if (tier.max !== undefined) res.max = tier.max;
-              return res;
-            })
-            .filter(Boolean);
-        }
+        return;
       }
 
-      const res = await apiRequest<{
-        count: number;
-        totalCount: number;
-        profiles: any[];
-      }>("/linkedin/search", {
+      const payload = buildSearchPayload();
+      setLastPayload(payload);
+
+      const res = await apiRequest<SearchResponse>("/linkedin/search", {
         method: "POST",
         body: JSON.stringify(payload),
       });
 
       if (res.success && res.profiles) {
         setResults(res.profiles);
+        setNextCursor(res.nextCursor || null);
+        setExcludedCount(res.excludedCount || 0);
 
         // Sélectionner par défaut tous les profils retournés
         const allIds = new Set<string>(res.profiles.map((p: any) => String(p.providerProfileId)));
@@ -300,7 +346,9 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
 
         if (res.profiles.length === 0) {
           setError(
-            "Aucun profil trouvé avec ces critères. Essayez d'élargir votre recherche (ex: enlever l'entreprise ou le filtre d'effectif)."
+            res.excludedCount
+              ? "Tous les profils de cette page sont déjà dans vos listes — cliquez sur « Profils suivants » pour continuer."
+              : "Aucun profil trouvé avec ces critères. Essayez d'élargir votre recherche (ex: enlever l'entreprise ou le filtre d'effectif)."
           );
         }
       } else {
@@ -313,6 +361,78 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
     }
   };
 
+  /** Payload de recherche par critères / URL, rejoué à l'identique pour les pages suivantes. */
+  const buildSearchPayload = () => {
+    const effectiveApiMode = hasSalesNavigator ? apiMode : "classic";
+    const payload: any = {
+      limit: importLimit,
+      api: effectiveApiMode,
+    };
+
+    if (searchMode === "URL") {
+      payload.url = searchUrl.trim();
+    } else {
+      if (title.trim()) payload.title = title.trim();
+      if (company.trim()) payload.company = company.trim();
+      if (location.trim()) payload.location = location.trim();
+
+      if (selectedSector) {
+        payload.industry = [selectedSector.id];
+      }
+
+      if (effectiveApiMode === "sales_navigator" && selectedHeadcounts.length > 0) {
+        payload.companyHeadcount = selectedHeadcounts
+          .map((id) => {
+            const tier = HEADCOUNT_TIERS.find((t) => t.id === id);
+            if (!tier) return null;
+            const res: { min: number; max?: number } = { min: tier.min };
+            if (tier.max !== undefined) res.max = tier.max;
+            return res;
+          })
+          .filter(Boolean);
+      }
+    }
+    return payload;
+  };
+
+  /** Page suivante de la dernière recherche : les profils s'ajoutent à la liste (cochés par défaut). */
+  const handleLoadMore = async () => {
+    if (!nextCursor || !lastPayload || loadingMore) return;
+    setLoadingMore(true);
+    setError(null);
+
+    try {
+      const res = await apiRequest<SearchResponse>("/linkedin/search", {
+        method: "POST",
+        body: JSON.stringify({ ...lastPayload, cursor: nextCursor }),
+      });
+
+      if (res.success && res.profiles) {
+        const knownIds = new Set(results.map((p) => String(p.providerProfileId)));
+        const fresh = res.profiles.filter((p: any) => !knownIds.has(String(p.providerProfileId)));
+
+        setResults((prev) => [...prev, ...fresh]);
+        setSelectedProfileIds((prev) => {
+          const next = new Set(prev);
+          fresh.forEach((p: any) => next.add(String(p.providerProfileId)));
+          return next;
+        });
+        setNextCursor(res.nextCursor || null);
+        setExcludedCount((prev) => prev + (res.excludedCount || 0));
+
+        if (fresh.length === 0 && !res.nextCursor) {
+          setError("Plus aucun nouveau profil pour cette recherche.");
+        }
+      } else {
+        setError(res.error || "Erreur lors du chargement des profils suivants.");
+      }
+    } catch (err: any) {
+      setError(err.message || "Erreur de connexion au service de recherche LinkedIn.");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
   // Filtrage local dynamique parmi les profils déjà extraits
   const filteredResults = results.filter((p) => {
     if (!resultFilterQuery.trim()) return true;
@@ -322,12 +442,14 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
     const company = (p.company || "").toLowerCase();
     const location = (p.location || "").toLowerCase();
     const industry = (p.industry || "").toLowerCase();
+    const commentText = (p.engagement?.commentText || "").toLowerCase();
     return (
       fullName.includes(q) ||
       headline.includes(q) ||
       company.includes(q) ||
       location.includes(q) ||
-      industry.includes(q)
+      industry.includes(q) ||
+      commentText.includes(q)
     );
   });
 
@@ -384,16 +506,24 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
     setImporting(true);
     setError(null);
 
-    // Tags d'importation enrichis (Secteur & Taille d'entreprise)
-    const customTags = ["Recherche LinkedIn"];
-    if (selectedSector) {
+    // Tags d'importation enrichis (Secteur & Taille d'entreprise, ou interaction avec le post)
+    const isPostMode = searchMode === "POST";
+    const customTags = [isPostMode ? "Post LinkedIn" : "Recherche LinkedIn"];
+    if (!isPostMode && selectedSector) {
       customTags.push(`Secteur: ${selectedSector.title}`);
     }
-    if (apiMode === "sales_navigator" && selectedHeadcounts.length > 0) {
+    if (!isPostMode && apiMode === "sales_navigator" && selectedHeadcounts.length > 0) {
       selectedHeadcounts.forEach((hId) => {
         customTags.push(`Taille: ${hId} sal.`);
       });
     }
+    const tagsFor = (p: any): string[] => {
+      if (!isPostMode) return customTags;
+      const t = [...customTags];
+      if (p.engagement?.reacted) t.push("A liké");
+      if (p.engagement?.commented) t.push("A commenté");
+      return t;
+    };
 
     try {
       const res = await apiRequest<{
@@ -405,15 +535,24 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
         body: JSON.stringify({
           listId: targetList,
           importLimit,
+          ...(isPostMode && {
+            source: "LINKEDIN_POST",
+            filename: `Post de ${postSummary?.authorName || "LinkedIn"}`,
+          }),
           prospects: selectedProfiles.map((p) => ({
             firstName: p.firstName || "Contact",
             lastName: p.lastName || "LinkedIn",
             linkedinUrl: p.linkedinUrl,
+            // Identifiant LinkedIn interne (ACo…) : évite la résolution différée par le worker
+            providerProfileId:
+              typeof p.providerProfileId === "string" && p.providerProfileId.startsWith("ACo")
+                ? p.providerProfileId
+                : undefined,
             headline: p.headline,
             company: p.company,
             location: p.location,
             avatarUrl: p.avatarUrl,
-            tags: customTags,
+            tags: tagsFor(p),
           })),
         }),
       });
@@ -497,6 +636,17 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
               }`}
             >
               <Link className="w-3 h-3" /> Coller URL LinkedIn
+            </button>
+            <button
+              type="button"
+              onClick={() => setSearchMode("POST")}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer ${
+                searchMode === "POST"
+                  ? "bg-white text-[#592eff] shadow-xs"
+                  : "text-[#5f5f69] hover:text-[#21164c]"
+              }`}
+            >
+              <MessageCircle className="w-3 h-3" /> Engagements d'un post
             </button>
           </div>
         </div>
@@ -673,9 +823,6 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                         <span className="font-bold text-[#21164c] flex items-center gap-1.5 truncate">
                           <Check className="w-3.5 h-3.5 text-[#592eff] shrink-0" />
                           <span className="truncate">{selectedSector.title}</span>
-                          <span className="text-[10px] font-semibold text-[#592eff] bg-white px-1.5 py-0.2 rounded border border-[#592eff]/20 shrink-0">
-                            #{selectedSector.id}
-                          </span>
                         </span>
                         <button
                           type="button"
@@ -731,10 +878,9 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                                       setIsSectorDropdownOpen(false);
                                       setSectorSearchQuery("");
                                     }}
-                                    className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold text-[#21164c] hover:bg-[#592eff]/10 hover:text-[#592eff] flex items-center justify-between transition-colors cursor-pointer"
+                                    className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold text-[#21164c] hover:bg-[#592eff]/10 hover:text-[#592eff] flex items-center transition-colors cursor-pointer"
                                   >
-                                    <span className="truncate pr-2">{s.title}</span>
-                                    <span className="text-[10px] text-[#5f5f69] font-normal shrink-0">#{s.id}</span>
+                                    <span className="truncate">{s.title}</span>
                                   </button>
                                 ))}
                               </div>
@@ -841,6 +987,48 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                     )}
                   </div>
                 </>
+              ) : searchMode === "POST" ? (
+                /* Mode Post LinkedIn : personnes ayant liké / commenté */
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <label className="block text-[10px] font-bold text-[#21164c] uppercase">URL du post LinkedIn</label>
+                    <textarea
+                      rows={3}
+                      placeholder="https://www.linkedin.com/posts/…-activity-7332661864792528-…"
+                      value={postUrl}
+                      onChange={(e) => setPostUrl(e.target.value)}
+                      className="w-full p-2.5 rounded-xl border border-[#e0e0db] text-xs bg-white focus:outline-none focus:border-[#592eff] resize-none"
+                    />
+                    <p className="text-[10px] text-[#5f5f69] italic">
+                      Ouvrez le post sur linkedin.com, puis « … » › Copier le lien du post.
+                    </p>
+                  </div>
+
+                  <div className="p-2 bg-white rounded-xl border border-[#e0e0db]/80 space-y-1.5">
+                    <span className="block text-[10px] font-bold text-[#21164c] uppercase">Récupérer</span>
+                    {[
+                      { key: "reactions", label: "Personnes ayant liké / réagi", icon: ThumbsUp, checked: includeReactions, set: setIncludeReactions },
+                      { key: "comments", label: "Personnes ayant commenté", icon: MessageCircle, checked: includeComments, set: setIncludeComments },
+                    ].map(({ key, label, icon: Icon, checked, set }) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => set(!checked)}
+                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                          checked ? "bg-[#592eff]/10 text-[#21164c]" : "text-[#5f5f69] hover:bg-[#f5f5f7]"
+                        }`}
+                      >
+                        {checked ? <CheckSquare className="w-4 h-4 text-[#592eff]" /> : <Square className="w-4 h-4 text-[#9a9aa5]" />}
+                        <Icon className="w-3.5 h-3.5 text-[#592eff]" />
+                        {label}
+                      </button>
+                    ))}
+                    <p className="text-[10px] text-[#5f5f69] flex items-start gap-1 pt-0.5">
+                      <Info className="w-3 h-3 text-[#592eff] shrink-0 mt-0.5" />
+                      <span>Les pages entreprise sont ignorées. Un profil qui a liké et commenté n'apparaît qu'une fois.</span>
+                    </p>
+                  </div>
+                </div>
               ) : (
                 /* Mode URL LinkedIn */
                 <div className="space-y-2">
@@ -890,7 +1078,8 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                     </>
                   ) : (
                     <>
-                      <Search className="w-3.5 h-3.5" /> Lancer la recherche
+                      <Search className="w-3.5 h-3.5" />{" "}
+                      {searchMode === "POST" ? "Récupérer les interactions" : "Lancer la recherche"}
                     </>
                   )}
                 </button>
@@ -980,6 +1169,44 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
               </div>
             )}
 
+            {/* Récapitulatif du post analysé (mode POST) */}
+            {searchMode === "POST" && postSummary && !searching && (
+              <div className="mx-3 mt-3 p-3 rounded-xl bg-[#f8f9fc] border border-[#e0e0db] text-xs shrink-0 space-y-1">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-bold text-[#21164c] flex items-center gap-1.5">
+                    <MessageCircle className="w-3.5 h-3.5 text-[#592eff]" />
+                    Post de {postSummary.authorName}
+                    {postSummary.shareUrl && (
+                      <a
+                        href={postSummary.shareUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-[#592eff] hover:underline"
+                        title="Ouvrir le post"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                  </span>
+                  <span className="text-[11px] text-[#5f5f69] flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1"><ThumbsUp className="w-3 h-3" /> {postSummary.reactionCount}</span>
+                    <span className="inline-flex items-center gap-1"><MessageCircle className="w-3 h-3" /> {postSummary.commentCount}</span>
+                  </span>
+                </div>
+                {postSummary.text && (
+                  <p className="text-[11px] text-[#5f5f69] line-clamp-2" title={postSummary.text}>
+                    {postSummary.text}
+                  </p>
+                )}
+                {postTruncated && (
+                  <p className="text-[10px] text-amber-700">
+                    Résultats limités à {importLimit} personnes — augmentez « Extraire » pour en récupérer davantage.
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Zone de défilement des profils (Pleine Hauteur) */}
             <div className="flex-1 overflow-y-auto p-3 space-y-2.5 bg-[#fbfbfe] custom-scrollbar">
               {searching ? (
@@ -992,7 +1219,9 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                       Extraction en cours depuis LinkedIn...
                     </p>
                     <p className="text-xs text-[#5f5f69] mt-0.5">
-                      Récupération de {importLimit} profils avec détails et photo.
+                      {searchMode === "POST"
+                        ? `Lecture des likes et commentaires du post (jusqu'à ${importLimit} personnes).`
+                        : `Récupération de ${importLimit} profils avec détails et photo.`}
                     </p>
                   </div>
                 </div>
@@ -1079,6 +1308,22 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                                 {p.industry}
                               </span>
                             )}
+                            {p.engagement?.reacted && (
+                              <span
+                                className="text-[10px] bg-[#dfff9d] text-[#21164c] px-2 py-0.5 rounded-full font-semibold inline-flex items-center gap-1"
+                                title={`Réaction : ${p.engagement.reactionType || "LIKE"}`}
+                              >
+                                <ThumbsUp className="w-3 h-3" /> A liké
+                              </span>
+                            )}
+                            {p.engagement?.commented && (
+                              <span
+                                className="text-[10px] bg-[#bcf2ff] text-[#21164c] px-2 py-0.5 rounded-full font-semibold inline-flex items-center gap-1"
+                                title={p.engagement.commentText || "A commenté"}
+                              >
+                                <MessageCircle className="w-3 h-3" /> A commenté
+                              </span>
+                            )}
                             {p.linkedinUrl && (
                               <a
                                 href={p.linkedinUrl}
@@ -1109,11 +1354,42 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                               </span>
                             )}
                           </div>
+                          {p.engagement?.commentText && (
+                            <p className="text-[11px] text-[#5f5f69] italic line-clamp-2 mt-1 pl-2 border-l-2 border-[#bcf2ff]">
+                              « {p.engagement.commentText} »
+                            </p>
+                          )}
                         </div>
                       </div>
                     </div>
                   );
                 })
+              )}
+
+              {/* Pagination Unipile : page suivante de la même recherche + profils déjà connus ignorés */}
+              {!searching && searchMode !== "POST" && (nextCursor || excludedCount > 0) && (
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-2 pb-1">
+                  <p className="text-[11px] text-[#5f5f69]">
+                    {excludedCount > 0
+                      ? `${excludedCount} profil${excludedCount > 1 ? "s" : ""} déjà présent${excludedCount > 1 ? "s" : ""} dans vos listes ${excludedCount > 1 ? "ont" : "a"} été ignoré${excludedCount > 1 ? "s" : ""}.`
+                      : `${results.length} profil${results.length > 1 ? "s" : ""} chargé${results.length > 1 ? "s" : ""}.`}
+                  </p>
+                  {nextCursor && (
+                    <button
+                      type="button"
+                      onClick={handleLoadMore}
+                      disabled={loadingMore}
+                      className="px-4 py-2 rounded-xl border border-[#e0e0db] bg-white text-xs font-semibold text-[#21164c] hover:bg-[#f5f5f7] disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                    >
+                      {loadingMore ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      )}
+                      Profils suivants ({importLimit})
+                    </button>
+                  )}
+                </div>
               )}
             </div>
 

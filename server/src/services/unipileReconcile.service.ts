@@ -110,10 +110,55 @@ export async function reconcileUnipileAccounts(opts: { autoDeleteOrphans?: boole
     }
   }
 
-  if (deleted.length === 0 && orphans.length === 0) {
+  // 3. Lignes en base désynchronisées d'Unipile
+  const healed = await healLinkedInAccountRows(accounts);
+
+  if (deleted.length === 0 && orphans.length === 0 && healed === 0) {
     console.log(`[UnipileReconcile] OK — ${accounts.length} compte(s) Unipile, aucun doublon ni orphelin`);
   }
   return { deleted, orphans, duplicates };
+}
+
+/**
+ * Remet la base en phase avec Unipile (`accounts` = liste complète des comptes Unipile) :
+ *  - ligne DISCONNECTED/CHECKPOINT dont le compte Unipile est OK → CONNECTED (ligne rétrogradée à tort,
+ *    typiquement par un check de statut tombé dans la fenêtre de création du compte) ;
+ *  - ligne « fantôme » (account_id inconnu chez Unipile, ex. ancienne instance après changement de DSN)
+ *    → supprimée si l'utilisateur possède une autre ligne, sinon conservée pour la reconnexion.
+ * Retourne le nombre de lignes modifiées.
+ */
+async function healLinkedInAccountRows(accounts: ReconciledAccount[]): Promise<number> {
+  const byId = new Map(accounts.map((a) => [a.id, a]));
+  const rows = await prisma.linkedInAccount.findMany({
+    where: { unipileAccountId: { not: "" } },
+    select: { id: true, userId: true, unipileAccountId: true, status: true, updatedAt: true },
+  });
+  const rowsByUser = new Map<string, number>();
+  for (const r of rows) rowsByUser.set(r.userId, (rowsByUser.get(r.userId) || 0) + 1);
+
+  let changed = 0;
+  for (const row of rows) {
+    if (Date.now() - row.updatedAt.getTime() < GRACE_MS) continue;
+    const live = byId.get(row.unipileAccountId);
+
+    if (live && live.status === "OK" && row.status !== "CONNECTED") {
+      console.warn(`[UnipileReconcile] Ligne ${row.id} en ${row.status} alors que le compte ${row.unipileAccountId} est OK chez Unipile → CONNECTED`);
+      await prisma.linkedInAccount.update({ where: { id: row.id }, data: { status: "CONNECTED" } }).catch(() => {});
+      changed++;
+      continue;
+    }
+
+    if (!live && row.status !== "CONNECTED" && (rowsByUser.get(row.userId) || 0) > 1) {
+      // Confirmation unitaire avant suppression : la liste peut être incomplète
+      const probe = await UnipileService.getAccountStatus(row.unipileAccountId);
+      if (probe?.errorStatus !== 404) continue;
+      console.warn(`[UnipileReconcile] Ligne fantôme ${row.id} (compte ${row.unipileAccountId} inconnu chez Unipile) → suppression`);
+      await prisma.linkedInAccount.delete({ where: { id: row.id } }).catch(() => {});
+      rowsByUser.set(row.userId, (rowsByUser.get(row.userId) || 1) - 1);
+      changed++;
+    }
+  }
+  return changed;
 }
 
 /** Suppression manuelle (admin) : refusée si le compte est référencé en base. */

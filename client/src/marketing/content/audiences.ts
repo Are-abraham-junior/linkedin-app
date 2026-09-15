@@ -7,6 +7,8 @@ export interface Audience {
   pain: string;
   change: string[];
   sequence: { name: string; file: string };
+  /** Photo de personne illustrant le métier, servie depuis client/public/audiences/. */
+  photo: { file: string; alt: string; position: string };
   plan: PlanId;
 }
 
@@ -23,6 +25,7 @@ export const AUDIENCES: Audience[] = [
       "Les rapports montrent le taux d'acceptation et de réponse par campagne : vous ajustez le message, pas la cadence.",
     ],
     sequence: { name: "Visite, invitation, message", file: "03_visite_invitation_1_message.png" },
+    photo: { file: "commerciaux.jpg", alt: "Commerciale debout devant une fenêtre de bureau, ordinateur portable en main", position: "center 28%" },
     plan: "PRO",
   },
   {
@@ -37,6 +40,7 @@ export const AUDIENCES: Audience[] = [
       "Les quotas conservateurs par défaut protègent le compte que vous utilisez aussi pour votre marque personnelle.",
     ],
     sequence: { name: "Invitation et deux messages", file: "06_invitation_2_messages.png" },
+    photo: { file: "fondateurs.jpg", alt: "Fondateur attablé dans un café, téléphone et carnet posés devant lui", position: "center 40%" },
     plan: "STARTER",
   },
   {
@@ -51,6 +55,7 @@ export const AUDIENCES: Audience[] = [
       "Les rapports s'exportent en PDF pour être joints au bilan mensuel.",
     ],
     sequence: { name: "Invitation et trois messages", file: "01_invitation_3_messages.png" },
+    photo: { file: "agences.jpg", alt: "Équipe d'agence au travail autour d'une table, chacun sur son ordinateur", position: "center 45%" },
     plan: "BUSINESS",
   },
   {
@@ -65,6 +70,7 @@ export const AUDIENCES: Audience[] = [
       "Les comptes Recruiter et Sales Navigator sont pris en charge, avec leurs quotas propres.",
     ],
     sequence: { name: "Visite, suivi, invitation", file: "02_visite_follow_invitation.png" },
+    photo: { file: "recruteurs.jpg", alt: "Recruteuse souriante devant les parois vitrées d'une salle de réunion", position: "center 30%" },
     plan: "PRO",
   },
 ];

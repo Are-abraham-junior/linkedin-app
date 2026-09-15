@@ -1,3 +1,4 @@
+import type { LinkedInAccount } from "@prisma/client";
 import { prisma } from "../../../lib/prisma.js";
 import { UnipileService } from "../services/unipile.service.js";
 
@@ -12,6 +13,41 @@ function personalizeMessage(template: string, prospect: any): string {
     .replace(/\{\{company\}\}/gi, prospect.company || "votre entreprise")
     .replace(/\{\{headline\}\}/gi, prospect.headline || "")
     .trim();
+}
+
+/**
+ * Bascule une campagne (et ses actions encore en file) vers le compte LinkedIn
+ * CONNECTED de son propriétaire lorsque son compte actuel n'est plus utilisable.
+ *
+ * Une reconnexion LinkedIn via Unipile crée souvent un nouvel `account_id`, donc
+ * une nouvelle ligne `LinkedInAccount` : la campagne et sa file restaient alors
+ * accrochées à l'ancienne ligne DISCONNECTED (actions différées indéfiniment,
+ * acceptations d'invitation jamais détectées). Renvoie le compte utilisable,
+ * ou null si l'utilisateur n'a aucun compte connecté.
+ */
+async function ensureCampaignAccount<T extends { id: string; status: string; unipileAccountId: string }>(
+  campaign: { id: string; userId: string; accountId: string | null },
+  current: T | null
+): Promise<T | LinkedInAccount | null> {
+  if (current && current.status === "CONNECTED") return current;
+
+  const replacement = await prisma.linkedInAccount.findFirst({
+    where: { userId: campaign.userId, status: "CONNECTED", unipileAccountId: { not: "" } },
+    orderBy: { updatedAt: "desc" },
+  });
+  if (!replacement) return null;
+
+  const [, requeued] = await prisma.$transaction([
+    prisma.campaign.update({ where: { id: campaign.id }, data: { accountId: replacement.id } }),
+    prisma.actionQueue.updateMany({
+      where: { campaignId: campaign.id, status: "QUEUED", accountId: { not: replacement.id } },
+      data: { accountId: replacement.id },
+    }),
+  ]);
+  console.warn(
+    `[CampaignWorker] Campagne ${campaign.id} basculée du compte ${current?.id ?? "(aucun)"} (${current?.status ?? "-"}) vers ${replacement.id} (CONNECTED) — ${requeued.count} action(s) en file réaffectée(s).`
+  );
+  return replacement;
 }
 
 /**
@@ -316,18 +352,26 @@ export async function processActionQueue(): Promise<void> {
 
     for (const action of pendingActions) {
       try {
-        const account = action.linkedInAccount;
+        let account = action.linkedInAccount;
         const user = account.user;
 
-        // Si le compte est déconnecté, différer l'action et ne pas exécuter
+        // Si le compte est déconnecté : basculer sur le compte reconnecté de l'utilisateur
+        // (nouvelle ligne créée par Unipile à la reconnexion), sinon différer l'action.
         if (account.status === "DISCONNECTED") {
-          console.warn(`[CampaignWorker] Compte LinkedIn ${account.id} déconnecté. Action différée.`);
-          const nextCheck = new Date(now.getTime() + 60 * 60 * 1000);
-          await prisma.actionQueue.update({
-            where: { id: action.id },
-            data: { scheduledFor: nextCheck, status: "QUEUED" },
-          });
-          continue;
+          const replacement = await ensureCampaignAccount(
+            { id: action.campaignId, userId: user.id, accountId: account.id },
+            account
+          );
+          if (!replacement) {
+            console.warn(`[CampaignWorker] Compte LinkedIn ${account.id} déconnecté. Action différée.`);
+            const nextCheck = new Date(now.getTime() + 60 * 60 * 1000);
+            await prisma.actionQueue.update({
+              where: { id: action.id },
+              data: { scheduledFor: nextCheck, status: "QUEUED" },
+            });
+            continue;
+          }
+          account = { ...replacement, user };
         }
 
         // Vérifier si nous sommes dans les horaires d'activité autorisés par l'utilisateur
@@ -877,12 +921,16 @@ export async function checkAcceptedInvitations(): Promise<void> {
 
     if (activeStates.length === 0) return;
 
+    // Compte résolu par campagne (le lot chargé ci-dessus ne reflète pas une bascule faite en cours de boucle)
+    const accountByCampaign = new Map<string, Awaited<ReturnType<typeof ensureCampaignAccount>>>();
+
     for (const state of activeStates) {
-      let account = state.campaign.linkedInAccount;
-      if (!account) {
-        account = await prisma.linkedInAccount.findFirst({
-          where: { userId: state.campaign.userId, status: "CONNECTED" },
-        });
+      // Compte de la campagne s'il est connecté, sinon bascule sur le compte reconnecté
+      // de l'utilisateur (une reconnexion Unipile crée une nouvelle ligne LinkedInAccount).
+      let account = accountByCampaign.get(state.campaignId);
+      if (account === undefined) {
+        account = await ensureCampaignAccount(state.campaign, state.campaign.linkedInAccount);
+        accountByCampaign.set(state.campaignId, account);
       }
 
       if (!account) {

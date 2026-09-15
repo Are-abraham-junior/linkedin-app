@@ -21,7 +21,7 @@ const columns = [
   {
     title: "Contact",
     links: [
-      { href: "mailto:contact@bleadin.com", label: "contact@bleadin.com" },
+      { href: "mailto:info@bleadin.com", label: "info@bleadin.com" },
       { href: "mailto:billing@bleadin.com", label: "Facturation" },
     ],
   },

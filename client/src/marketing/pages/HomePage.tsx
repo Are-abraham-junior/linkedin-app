@@ -6,7 +6,6 @@ import { Container } from "../ui/Container";
 import { Button } from "../ui/Button";
 import { SectionHeading } from "../ui/SectionHeading";
 import { ProductFrame } from "../ui/ProductFrame";
-import { PricingCards } from "../ui/PricingCards";
 import { FaqList } from "../ui/FaqList";
 import { CampaignSequenceMock } from "../mockups/CampaignSequenceMock";
 import { ImportMock } from "../mockups/ImportMock";
@@ -164,22 +163,6 @@ export const HomePage: React.FC = () => {
           ))}
         </ul>
       </Container>
-
-      {/* Tarifs */}
-      <section className="bg-[var(--site-surface)] py-20 lg:py-28">
-        <Container>
-          <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
-            <SectionHeading eyebrow="Tarifs" title="Un prix par taille d'équipe. Rien de caché." />
-            <Button to="/tarifs" variant="link" arrow className="text-[15px]">
-              Comparer les offres
-            </Button>
-          </div>
-          <div className="mt-12">
-            <PricingCards cycle="monthly" compact />
-          </div>
-          <p className="mt-5 text-[14px] text-[#5f5f69]">Prix mensuels. 20 % de remise avec un engagement annuel.</p>
-        </Container>
-      </section>
 
       {/* FAQ */}
       <Container as="section" className="grid gap-10 py-20 lg:grid-cols-12 lg:py-28">
