@@ -433,7 +433,6 @@ export const QueueView: React.FC = () => {
                 className="px-2.5 py-0.5 rounded-full text-xs font-bold flex items-center gap-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200"
                 title="Les actions sont différées pour respecter vos horaires d'activité configurés et protéger votre compte."
               >
-                <span>🌙</span>
                 <span>{slotStatus.message}</span>
               </span>
             )}

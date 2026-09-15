@@ -1,0 +1,49 @@
+HOTFIX BLEADIN — site vitrine + refonte auth + grille tarifaire
+Généré le 14/09/2026 à partir de la branche "messagerie".
+
+Aucun .env, aucun changement de schéma Prisma, aucune nouvelle dépendance :
+pas de db-push ni de npm install à faire sur le serveur.
+
+────────────────────────────────────────────────────────────────────
+1) client/  →  ~/public_html/            (docroot de bleadin.com)
+────────────────────────────────────────────────────────────────────
+   Uploader TOUT le contenu de client/ en écrasant :
+     .htaccess          ← fichier caché, vérifier qu'il part bien
+     index.html
+     assets/            ← les anciens fichiers assets/index-*.js/css peuvent être supprimés
+     campagnes_images/
+     favicon.svg
+     og-image.png       (nouveau)
+     robots.txt         (nouveau)
+     sitemap.xml        (nouveau)
+   NE PAS toucher au dossier ~/public_html/api-bleadin/ qui se trouve dedans.
+
+────────────────────────────────────────────────────────────────────
+2) api/  →  ~/public_html/api-bleadin/   (docroot de api.bleadin.com)
+────────────────────────────────────────────────────────────────────
+   Uploader en écrasant :
+     dist/              (tout le dossier)
+     package.json
+     app.js
+     env.js
+   NE PAS écraser ~/public_html/api-bleadin/.htaccess  (bloc CloudLinux
+   "DO NOT REMOVE" + garde BLEADIN-API-GUARD).
+   NE PAS toucher au .env du serveur.
+
+────────────────────────────────────────────────────────────────────
+3) Redémarrer Passenger
+────────────────────────────────────────────────────────────────────
+   Uploader api/tmp/restart.txt (fichier vide) dans
+   ~/public_html/api-bleadin/tmp/restart.txt  — l'écraser suffit,
+   Passenger redémarre sur changement de date du fichier.
+
+────────────────────────────────────────────────────────────────────
+4) Vérifier
+────────────────────────────────────────────────────────────────────
+   https://api.bleadin.com/api/health?v=2   → JSON (pas 500, pas de HTML)
+   https://bleadin.com/?v=2                 → page d'accueil du site
+   https://bleadin.com/fonctionnalites
+   https://bleadin.com/fait-pour
+   https://bleadin.com/tarifs
+   https://bleadin.com/login                → nouvel écran de connexion
+   Le paramètre ?v=2 contourne le cache Varnish de LWS.

@@ -1,0 +1,193 @@
+import { prisma } from "../../../lib/prisma.js";
+import { handleProspectReply } from "./inbox.controller.js";
+import { onInvitationAccepted } from "../workers/campaign.worker.js";
+import { UnipileService } from "../services/unipile.service.js";
+/**
+ * Webhook Unipile pour la réception d'événements asynchrones
+ * Événements supportés :
+ * - message_received / chat_message_received : nouveau message LinkedIn reçu
+ * - message_sent : message envoyé
+ * - new_relation (source "users") : invitation acceptée -> avance la séquence de campagne
+ * - account_status : déconnexion / checkpoint du compte LinkedIn
+ */
+export async function handleUnipileWebhook(req, res) {
+    try {
+        const event = req.body;
+        console.log("[Webhook Unipile] Événement reçu :", event?.event || event?.type);
+        const eventType = event?.event || event?.type;
+        const data = event?.data || event;
+        // Gestion des événements de déconnexion ou changement d'état du compte LinkedIn
+        if (eventType === "account_disconnected" ||
+            eventType === "account.status.disconnected" ||
+            eventType === "account_status" ||
+            eventType === "account.status") {
+            const accountId = data.account_id || data.accountId || data.id;
+            const rawStatus = String(data.status || data.source_status || "DISCONNECTED").toUpperCase();
+            console.warn(`[Webhook] Statut de compte modifié pour accountId=${accountId} -> ${rawStatus}`);
+            if (accountId) {
+                const isDisconnected = rawStatus.includes("DISCONNECT") || rawStatus.includes("CREDENTIAL") || rawStatus.includes("EXPIRE");
+                const isCheckpoint = rawStatus.includes("CHECKPOINT");
+                const updatedStatus = isCheckpoint ? "CHECKPOINT" : (isDisconnected ? "DISCONNECTED" : "CONNECTED");
+                const acc = await prisma.linkedInAccount.findUnique({
+                    where: { unipileAccountId: accountId },
+                });
+                if (acc) {
+                    await prisma.linkedInAccount.update({
+                        where: { id: acc.id },
+                        data: { status: updatedStatus },
+                    });
+                    if (isDisconnected || isCheckpoint) {
+                        await prisma.campaign.updateMany({
+                            where: { userId: acc.userId, status: "ACTIVE" },
+                            data: { status: "PAUSED" },
+                        });
+                        console.warn(`[Webhook] Campagnes de l'utilisateur ${acc.userId} mises en pause suite à l'expiration/déconnexion de la session LinkedIn.`);
+                    }
+                }
+            }
+            res.status(200).json({ success: true, handled: "account_status" });
+            return;
+        }
+        // Invitation acceptée (webhook Unipile source "users", event "new_relation")
+        if (eventType === "new_relation" || eventType === "users.new_relation") {
+            const accountId = data.account_id || data.accountId;
+            const providerId = data.user_provider_id || data.provider_id;
+            const publicIdentifier = data.user_public_identifier || data.public_identifier;
+            const acc = accountId
+                ? await prisma.linkedInAccount.findUnique({ where: { unipileAccountId: accountId } })
+                : null;
+            if (!acc || (!providerId && !publicIdentifier)) {
+                console.warn(`[Webhook Unipile] new_relation ignoré (accountId=${accountId}, providerId=${providerId}, publicIdentifier=${publicIdentifier}).`);
+                res.status(200).json({ success: true, ignored: true });
+                return;
+            }
+            const prospectOr = [];
+            if (providerId)
+                prospectOr.push({ providerProfileId: providerId });
+            if (publicIdentifier)
+                prospectOr.push({ linkedinUrl: { contains: `/in/${publicIdentifier}`, mode: "insensitive" } });
+            const prospects = await prisma.prospect.findMany({
+                where: { userId: acc.userId, OR: prospectOr },
+            });
+            for (const prospect of prospects) {
+                await prisma.prospect.update({
+                    where: { id: prospect.id },
+                    data: {
+                        connectionStatus: "CONNECTED",
+                        ...(providerId && !prospect.providerProfileId?.startsWith("ACo") ? { providerProfileId: providerId } : {}),
+                    },
+                });
+                const waitingStates = await prisma.prospectCampaignState.findMany({
+                    where: { prospectId: prospect.id, status: "WAITING_CONDITION", campaign: { status: "ACTIVE" } },
+                    include: { prospect: true, campaign: { include: { steps: { orderBy: { stepOrder: "asc" } } } } },
+                });
+                for (const state of waitingStates) {
+                    await onInvitationAccepted(state, acc, {
+                        provider_id: providerId,
+                        profile_picture_url: data.user_picture_url,
+                    });
+                }
+            }
+            console.log(`[Webhook Unipile] new_relation traité : ${prospects.length} prospect(s) marqué(s) CONNECTED pour le compte ${acc.id}.`);
+            res.status(200).json({ success: true, handled: "new_relation", prospects: prospects.length });
+            return;
+        }
+        if (eventType === "message_received" ||
+            eventType === "chat_message_received" ||
+            eventType === "new_message") {
+            const chatId = data.chat_id || data.chatId;
+            const text = data.text || data.message || "";
+            const senderId = data.sender_id || data.senderId;
+            const accountId = data.account_id || data.accountId;
+            const isOwn = UnipileService.isOwnMessage(data);
+            if (chatId) {
+                // 1. Trouver la conversation
+                let conv = await prisma.conversation.findUnique({
+                    where: { unipileChatId: chatId },
+                    include: { prospect: true },
+                });
+                // 2. Si la conversation n'existe pas encore, la créer avec un prospect associé
+                if (!conv) {
+                    // Trouver l'utilisateur associé au compte LinkedIn
+                    let user = null;
+                    if (accountId) {
+                        const acc = await prisma.linkedInAccount.findUnique({
+                            where: { unipileAccountId: accountId },
+                            include: { user: true },
+                        });
+                        user = acc?.user;
+                    }
+                    if (!user) {
+                        console.warn(`[Webhook Unipile] Compte LinkedIn introuvable pour accountId=${accountId}. Message ignoré pour protéger l'étanchéité des données.`);
+                        res.status(200).json({ success: true, ignored: true });
+                        return;
+                    }
+                    if (user) {
+                        const senderName = data.sender_name || data.name || "Contact LinkedIn";
+                        const nameParts = senderName.split(" ");
+                        const firstName = nameParts[0] || "Contact";
+                        const lastName = nameParts.slice(1).join(" ") || "";
+                        const prospect = await prisma.prospect.create({
+                            data: {
+                                userId: user.id,
+                                listId: null,
+                                providerProfileId: senderId || `user_${Date.now()}`,
+                                firstName,
+                                lastName,
+                                linkedinUrl: `https://www.linkedin.com/search/results/all/?keywords=${encodeURIComponent(senderName)}`,
+                                avatarUrl: data.sender_picture_url || data.picture_url || null,
+                                headline: data.sender_headline || "Contact LinkedIn",
+                                connectionStatus: "CONNECTED",
+                            },
+                        });
+                        conv = await prisma.conversation.create({
+                            data: {
+                                userId: user.id,
+                                prospectId: prospect.id,
+                                unipileChatId: chatId,
+                                lastMessageText: text,
+                                lastMessageAt: new Date(),
+                                unreadCount: 1,
+                            },
+                            include: { prospect: true },
+                        });
+                    }
+                }
+                if (conv) {
+                    const now = new Date();
+                    const messageId = data.id || data.message_id || `msg_${Date.now()}`;
+                    // Enregistrer ou màj le message
+                    await prisma.message.upsert({
+                        where: { unipileMessageId: messageId },
+                        update: { text, sentAt: now },
+                        create: {
+                            conversationId: conv.id,
+                            unipileMessageId: messageId,
+                            senderType: isOwn ? "USER" : "PROSPECT",
+                            text,
+                            sentAt: now,
+                        },
+                    });
+                    // Mettre à jour la conversation
+                    await prisma.conversation.update({
+                        where: { id: conv.id },
+                        data: {
+                            lastMessageText: text,
+                            lastMessageAt: now,
+                            unreadCount: isOwn ? conv.unreadCount : { increment: 1 },
+                        },
+                    });
+                    // Arrêter la séquence de campagne pour ce prospect si c'est un message reçu
+                    if (!isOwn) {
+                        await handleProspectReply(conv.prospectId, text, conv.userId || undefined);
+                    }
+                }
+            }
+        }
+        res.status(200).json({ success: true });
+    }
+    catch (error) {
+        console.error("[Webhook Unipile] Erreur de traitement :", error);
+        res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
+    }
+}

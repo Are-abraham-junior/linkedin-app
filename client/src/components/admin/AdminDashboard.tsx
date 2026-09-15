@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { planLabel } from "../../marketing/content/plans";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { apiRequest } from "../../services/api";
@@ -99,9 +100,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateToUser
             <span className="badge-tag bg-[#592eff]/10 text-[#592eff] border border-[#592eff]/20">
               <ShieldCheck className="w-3.5 h-3.5" /> Centre de Contrôle SaaS
             </span>
-            <span className="badge-tag bg-[#a2ea13]/20 text-[#3c6b00] border border-[#a2ea13]/30">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#528f03] animate-pulse"></span> Passerelle LinkedIn Active
-            </span>
+           
           </div>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-[#21164c] tracking-tight">
             Tableau de Bord Super Admin
@@ -246,7 +245,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateToUser
                       </div>
                     </div>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#592eff]/10 text-[#592eff]">
-                      {org.plan || "PRO"}
+                      {planLabel(org.plan)}
                     </span>
                   </div>
                   <div className="flex items-center gap-3 text-xs text-[#5f5f69] mt-3">

@@ -177,7 +177,8 @@ export async function getUserDashboardStats(req: AuthenticatedRequest, res: Resp
       prisma.actionQueue.count({ where: { campaign: { userId }, status: { in: ["EXECUTED", "SUCCESS"] } } }),
       prisma.prospect.count({ where: { list: { userId }, email: { not: null } } }),
       prisma.prospect.count({ where: { list: { userId }, phone: { not: null } } }),
-      prisma.linkedInAccount.findFirst({ where: { userId } }),
+      // Uniquement un compte réellement connecté : le dashboard affiche « Connecté » dès que l'objet est non nul
+      prisma.linkedInAccount.findFirst({ where: { userId, status: "CONNECTED" }, orderBy: { updatedAt: "desc" } }),
     ]);
 
     // Taux réels (0 si aucune donnée)

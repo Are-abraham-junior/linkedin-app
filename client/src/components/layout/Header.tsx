@@ -153,7 +153,7 @@ export const Header: React.FC<HeaderProps> = ({
                 >
                   <div className="flex items-center gap-2">
                     <div className="w-6 h-6 rounded-full bg-[#592eff] text-white flex items-center justify-center text-[10px] font-bold">
-                      🌟
+                      T
                     </div>
                     <span className="truncate">Toute l'équipe (Vue consolidée)</span>
                   </div>

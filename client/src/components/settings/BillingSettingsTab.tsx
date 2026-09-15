@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { apiRequest } from "../../services/api";
+import { PLANS, normalizePlanId, planLabel } from "../../marketing/content/plans";
 import {
   CreditCard,
   Download,
@@ -49,6 +50,8 @@ interface BillingData {
   };
   invoices: InvoiceRecord[];
 }
+
+const currencySymbol = (code: string) => (code === "USD" ? "$" : "€");
 
 export const BillingSettingsTab: React.FC = () => {
   const [loading, setLoading] = useState(true);
@@ -138,7 +141,7 @@ export const BillingSettingsTab: React.FC = () => {
               <div className="flex items-center gap-2">
                 <h3 className="text-base font-bold text-[#21164c]">Formule Actuelle</h3>
                 <span className="px-2.5 py-0.5 rounded-full bg-[#592eff] text-white font-extrabold text-[10px] tracking-wide uppercase">
-                  {billing.plan}
+                  {planLabel(billing.plan)}
                 </span>
               </div>
               <p className="text-xs text-[#5f5f69]">Accès complet aux campagnes séquentielles et à l'Inbox</p>
@@ -147,7 +150,7 @@ export const BillingSettingsTab: React.FC = () => {
 
           <div className="text-right">
             <p className="text-2xl font-black text-[#21164c]">
-              {billing.pricePerMonth} € <span className="text-xs font-semibold text-[#7c7c88]">/ mois</span>
+              {billing.pricePerMonth} {currencySymbol(billing.currency)} <span className="text-xs font-semibold text-[#7c7c88]">/ mois</span>
             </p>
             <p className="text-[11px] text-[#7c7c88] mt-0.5">
               Prochain prélèvement le {new Date(billing.renewalDate).toLocaleDateString("fr-FR")}
@@ -246,80 +249,45 @@ export const BillingSettingsTab: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-          {/* STARTER */}
-          <div className={`p-5 rounded-3xl border bg-white space-y-4 ${billing.plan === "STARTER" ? "border-[#592eff] ring-2 ring-[#592eff]/20" : "border-[#e0e0db]"}`}>
-            <div className="flex justify-between items-start">
-              <div>
-                <h4 className="font-bold text-sm text-[#21164c]">Starter</h4>
-                <p className="text-xs text-[#7c7c88]">Indépendants</p>
+          {PLANS.map((plan) => {
+            const isCurrent = normalizePlanId(billing.plan) === plan.id;
+            return (
+              <div
+                key={plan.id}
+                className={`p-5 rounded-3xl border bg-white space-y-4 ${isCurrent ? "border-[#592eff] ring-2 ring-[#592eff]/20" : "border-[#e0e0db]"}`}
+              >
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h4 className="font-bold text-sm text-[#21164c]">{plan.name}</h4>
+                    <p className="text-xs text-[#7c7c88]">{plan.audience}</p>
+                  </div>
+                  <p className="text-lg font-black text-[#21164c]">
+                    {plan.monthly} $<span className="text-[10px] font-normal text-[#7c7c88]">/m</span>
+                  </p>
+                </div>
+                <ul className="space-y-2 text-xs text-[#5f5f69]">
+                  {plan.pitch.slice(0, 3).map((line) => (
+                    <li key={line} className="flex items-center gap-2">
+                      <Check className="w-3.5 h-3.5 text-[#21164c]" /> {line}
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-[11px] text-[#7c7c88]">{plan.annual} $/m en engagement annuel</p>
+                <button
+                  disabled={isCurrent}
+                  className={`w-full py-2 rounded-xl text-xs font-bold transition-all ${
+                    isCurrent
+                      ? "bg-[#f0edf9] text-[#592eff] cursor-default"
+                      : plan.highlighted
+                      ? "bg-[#592eff] hover:bg-[#4922db] text-white cursor-pointer"
+                      : "bg-[#f0f0f4] hover:bg-[#e4e4e9] text-[#21164c] cursor-pointer"
+                  }`}
+                >
+                  {isCurrent ? "Formule active" : `Choisir ${plan.name}`}
+                </button>
               </div>
-              <p className="text-lg font-black text-[#21164c]">39 €<span className="text-[10px] font-normal text-[#7c7c88]">/m</span></p>
-            </div>
-            <ul className="space-y-2 text-xs text-[#5f5f69]">
-              <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600" /> Jusqu'à 3 000 leads</li>
-              <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600" /> Campagnes illimitées</li>
-              <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600" /> 1 compte LinkedIn</li>
-            </ul>
-            <button
-              disabled={billing.plan === "STARTER"}
-              className={`w-full py-2 rounded-xl text-xs font-bold transition-all ${
-                billing.plan === "STARTER" ? "bg-[#f0edf9] text-[#592eff] cursor-default" : "bg-[#f0f0f4] hover:bg-[#e4e4e9] text-[#21164c] cursor-pointer"
-              }`}
-            >
-              {billing.plan === "STARTER" ? "Formule Active" : "Choisir Starter"}
-            </button>
-          </div>
-
-          {/* PRO */}
-          <div className={`p-5 rounded-3xl border bg-white space-y-4 ${billing.plan === "PRO" ? "border-[#592eff] ring-2 ring-[#592eff]/20" : "border-[#e0e0db]"}`}>
-            <div className="flex justify-between items-start">
-              <div>
-                <h4 className="font-bold text-sm text-[#21164c]">Professionnel</h4>
-                <p className="text-xs text-[#7c7c88]">PME & Agences</p>
-              </div>
-              <p className="text-lg font-black text-[#21164c]">79 €<span className="text-[10px] font-normal text-[#7c7c88]">/m</span></p>
-            </div>
-            <ul className="space-y-2 text-xs text-[#5f5f69]">
-              <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600" /> Jusqu'à 15 000 leads</li>
-              <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600" /> Campagnes illimitées</li>
-              <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600" /> 5 sièges d'équipe</li>
-            </ul>
-            <button
-              disabled={billing.plan === "PRO"}
-              className={`w-full py-2 rounded-xl text-xs font-bold transition-all ${
-                billing.plan === "PRO" ? "bg-[#f0edf9] text-[#592eff] cursor-default" : "bg-[#f0f0f4] hover:bg-[#e4e4e9] text-[#21164c] cursor-pointer"
-              }`}
-            >
-              {billing.plan === "PRO" ? "Formule Active" : "Choisir Professionnel"}
-            </button>
-          </div>
-
-          {/* ENTERPRISE */}
-          <div className={`p-5 rounded-3xl border bg-white space-y-4 relative overflow-hidden ${billing.plan === "ENTERPRISE" ? "border-[#592eff] ring-2 ring-[#592eff]/20 shadow-md" : "border-[#e0e0db]"}`}>
-            <div className="absolute -right-6 top-3 rotate-45 bg-[#592eff] text-white text-[9px] font-extrabold px-6 py-0.5 uppercase tracking-wider">
-              Optimal
-            </div>
-            <div className="flex justify-between items-start">
-              <div>
-                <h4 className="font-bold text-sm text-[#21164c]">Enterprise</h4>
-                <p className="text-xs text-[#7c7c88]">Grand Volume</p>
-              </div>
-              <p className="text-lg font-black text-[#592eff]">149 €<span className="text-[10px] font-normal text-[#7c7c88]">/m</span></p>
-            </div>
-            <ul className="space-y-2 text-xs text-[#5f5f69]">
-              <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600" /> 50 000 prospects qualifiés</li>
-              <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600" /> Campagnes illimitées</li>
-              <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600" /> 20 collaborateurs & Campagnes partagées</li>
-            </ul>
-            <button
-              disabled={billing.plan === "ENTERPRISE"}
-              className={`w-full py-2 rounded-xl text-xs font-bold transition-all ${
-                billing.plan === "ENTERPRISE" ? "bg-[#592eff] text-white cursor-default" : "bg-[#592eff] hover:bg-[#4922db] text-white cursor-pointer shadow-md"
-              }`}
-            >
-              {billing.plan === "ENTERPRISE" ? "Formule Active" : "Passer à Enterprise"}
-            </button>
-          </div>
+            );
+          })}
         </div>
       </div>
 
@@ -363,10 +331,10 @@ export const BillingSettingsTab: React.FC = () => {
                       {inv.number}
                     </td>
                     <td className="py-3.5 px-4 font-medium text-[#5f5f69]">
-                      Abonnement {inv.plan}
+                      Abonnement {planLabel(inv.plan)}
                     </td>
                     <td className="py-3.5 px-4 text-right font-black text-[#21164c]">
-                      {inv.amount.toFixed(2)} €
+                      {inv.amount.toFixed(2)} {currencySymbol(inv.currency)}
                     </td>
                     <td className="py-3.5 px-4 text-center">
                       <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[10px]">

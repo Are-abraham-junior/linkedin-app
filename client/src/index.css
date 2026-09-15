@@ -77,6 +77,70 @@ body {
   scrollbar-width: none !important;
 }
 
+/* ---------- Site vitrine (client/src/marketing) ---------- */
+:root {
+  /* Surfaces teintées vers le violet de marque (chroma très faible) */
+  --site-bg: oklch(98.4% 0.004 285);
+  --site-surface: oklch(97% 0.006 285);
+  --site-surface-deep: oklch(94.5% 0.009 285);
+  --site-ink: #21164c;
+  --site-ink-dark: oklch(22% 0.06 285);
+}
+
+.site {
+  background-color: var(--site-bg);
+  color: var(--color-obsidian-charcoal);
+}
+
+.site .display {
+  font-family: 'General Sans', 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  color: var(--site-ink);
+}
+
+/* Apparition orchestrée du hero : opacité + translation uniquement */
+@keyframes site-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.site-rise {
+  animation: site-rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--rise-index, 0) * 70ms);
+}
+
+/* Accordéon FAQ : animation de hauteur via grid-template-rows */
+.site-faq-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.site-faq-body > div {
+  overflow: hidden;
+}
+details[open] > .site-faq-body {
+  grid-template-rows: 1fr;
+}
+details > summary::-webkit-details-marker {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-rise {
+    animation: none;
+  }
+  .site-faq-body {
+    transition: none;
+  }
+}
+
 /* Adora Pill & Glass Elements */
 .adora-nav-pill {
   background: rgba(255, 255, 255, 0.95);

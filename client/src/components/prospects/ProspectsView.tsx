@@ -655,7 +655,7 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
     switch (key) {
       case "prospect":
         return (
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
             <img
               src={
                 p.avatarUrl ||
@@ -664,16 +664,16 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                 )}&background=592eff&color=fff`
               }
               alt={p.firstName}
-              className="w-7 h-7 rounded-full object-cover border border-[#e0e0db] shrink-0 shadow-2xs"
+              className="w-6 h-6 rounded-full object-cover border border-[#e0e0db] shrink-0 shadow-2xs"
             />
             <div className="min-w-0">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <p className="font-bold text-[#21164c] text-xs hover:underline truncate">
+              <div className="flex items-center gap-1.5 flex-wrap leading-tight">
+                <p className="font-bold text-[#21164c] text-xs hover:underline truncate leading-none">
                   {p.firstName} {p.lastName}
                 </p>
                 {p.list?.user?.id && p.list.user.id !== user?.id && (
-                  <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-[#592eff]/10 text-[#592eff] font-bold border border-[#592eff]/20 shrink-0">
-                    👤 {p.list.user.firstName || p.list.user.name || "Collègue"}
+                  <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-[#592eff]/10 text-[#592eff] font-bold border border-[#592eff]/20 shrink-0 leading-none">
+                    {p.list.user.firstName || p.list.user.name || "Collègue"}
                   </span>
                 )}
                 {p.linkedinUrl && (
@@ -682,18 +682,18 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
-                    className="text-[#0a66c2] hover:text-[#004182] transition-colors p-0.5 shrink-0"
+                    className="text-[#0a66c2] hover:text-[#004182] transition-colors p-0.5 shrink-0 leading-none"
                     title="Ouvrir le profil LinkedIn"
                   >
                     <ExternalLink className="w-2.5 h-2.5" />
                   </a>
                 )}
               </div>
-              <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                <p className="text-[10px] text-[#5f5f69] truncate">{p.location || "Non renseigné"}</p>
+              <div className="flex items-center gap-1.5 flex-wrap mt-0.5 leading-none">
+                <p className="text-[10px] text-[#5f5f69] truncate leading-none">{p.location || "Non renseigné"}</p>
                 {p.email && (
                   <span
-                    className="inline-flex items-center gap-1 text-[9px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-full border border-emerald-200 font-medium shrink-0"
+                    className="inline-flex items-center gap-1 text-[9px] text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded-full border border-emerald-200 font-medium shrink-0 leading-none"
                     title={`Email : ${p.email}`}
                   >
                     <Mail className="w-2.5 h-2.5" />
@@ -702,7 +702,7 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                 )}
                 {p.phone && (
                   <span
-                    className="inline-flex items-center gap-1 text-[9px] text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded-full border border-blue-200 font-medium shrink-0"
+                    className="inline-flex items-center gap-1 text-[9px] text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded-full border border-blue-200 font-medium shrink-0 leading-none"
                     title={`Téléphone : ${p.phone}`}
                   >
                     <Phone className="w-2.5 h-2.5" />
@@ -716,7 +716,7 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
 
       case "headline":
         return (
-          <p className="font-medium text-[#21164c] line-clamp-1 text-[11px]" title={p.headline || ""}>
+          <p className="font-medium text-[#21164c] line-clamp-1 text-[11px] leading-tight" title={p.headline || ""}>
             {p.headline || "Professionnel"}
           </p>
         );
@@ -726,12 +726,12 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
         return (
           <div className="flex items-center gap-1" title={comp || "Non renseigné"}>
             {comp ? (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-[#592eff]/10 text-[#21164c] border border-[#592eff]/20 max-w-[180px] shadow-2xs group-hover:border-[#592eff]/40 transition-colors">
-                <Building className="w-3 h-3 text-[#592eff] shrink-0" />
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-[#592eff]/10 text-[#21164c] border border-[#592eff]/20 max-w-[180px] shadow-2xs group-hover:border-[#592eff]/40 transition-colors leading-tight">
+                <Building className="w-2.5 h-2.5 text-[#592eff] shrink-0" />
                 <span className="truncate">{comp}</span>
               </span>
             ) : (
-              <span className="text-[10px] text-[#8a8a93] italic flex items-center gap-1">
+              <span className="text-[10px] text-[#8a8a93] italic flex items-center gap-1 leading-tight">
                 <Building className="w-2.5 h-2.5 text-[#c4c4cc]" /> Indépendant
               </span>
             )}
@@ -742,21 +742,21 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
       case "list":
         return (
           <span
-            className="badge-tag text-[9px] font-bold py-0.5 px-1.5"
+            className="inline-flex items-center text-[10px] font-bold py-0.5 px-2 rounded-full border leading-none"
             style={{
               backgroundColor: `${p.list?.color || "#592eff"}15`,
               color: p.list?.color || "#592eff",
               borderColor: `${p.list?.color || "#592eff"}30`,
             }}
           >
-            📁 {p.list?.name || "Sans liste"}
+            {p.list?.name || "Sans liste"}
           </span>
         );
 
       case "status":
         return (
           <span
-            className={`badge-tag text-[9px] py-0.5 px-1.5 ${
+            className={`inline-flex items-center text-[10px] font-medium py-0.5 px-2 rounded-full border leading-none ${
               p.connectionStatus === "CONNECTED"
                 ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                 : p.connectionStatus === "PENDING"
@@ -934,7 +934,7 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
 
                   {/* Prospect Count Badge */}
                   <span className="badge-tag bg-[#592eff]/10 text-[#592eff] border border-[#592eff]/20 text-[11px] font-bold px-2 py-0.5">
-                    👥 {total}
+                    {total}
                   </span>
                 </div>
 
@@ -1116,10 +1116,10 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                         : "bg-white border-[#e0e0db] text-[#5f5f69] hover:bg-[#f8f9fc]"
                     }`}
                   >
-                    <option value="ALL">🌟 Collaborateur : Toute l'équipe (360°)</option>
+                    <option value="ALL">Collaborateur : toute l'équipe</option>
                     {teamMembers.map((m) => (
                       <option key={m.id} value={m.id}>
-                        👤 {m.name || m.email} {m.orgRole === "OWNER" ? "(Propriétaire)" : ""}
+                        {m.name || m.email} {m.orgRole === "OWNER" ? "(Propriétaire)" : ""}
                       </option>
                     ))}
                   </select>
@@ -1203,7 +1203,7 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
               <table className="w-full text-left text-xs border-collapse">
                 <thead className="sticky top-0 bg-[#fbfbfe] z-10 shadow-2xs border-b border-[#e0e0db]">
                   <tr className="text-[#5f5f69] uppercase font-bold tracking-wider select-none text-[11px]">
-                    <th className="py-2 px-3 w-10">
+                    <th className="py-1.5 px-3 w-10">
                       <button onClick={toggleSelectAll}>
                         {selectedIds.size > 0 && selectedIds.size === prospects.length ? (
                           <CheckSquare className="w-3.5 h-3.5 text-[#592eff]" />
@@ -1235,7 +1235,7 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                           onDrop={(e) => handleDrop(e, index)}
                           onDragEnd={handleDragEnd}
                           title="Maintenez le clic pour déplacer cette colonne partout dans le tableau"
-                          className={`relative py-2 px-2.5 transition-all duration-150 select-none group cursor-grab active:cursor-grabbing hover:bg-[#f3f0ff] rounded-lg ${
+                          className={`relative py-1.5 px-2.5 transition-all duration-150 select-none group cursor-grab active:cursor-grabbing hover:bg-[#f3f0ff] rounded-lg ${
                             isDragging
                               ? "opacity-30 bg-[#592eff]/10 border-2 border-dashed border-[#592eff] cursor-grabbing"
                               : ""
@@ -1289,7 +1289,7 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                       );
                     })}
 
-                    <th className="py-2 text-right pr-3 text-[11px]">Action</th>
+                    <th className="py-1.5 text-right pr-3 text-[11px]">Action</th>
                   </tr>
                 </thead>
                 <tbody ref={tbodyRef} className="divide-y divide-[#e0e0db]/50">
@@ -1324,7 +1324,7 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                         >
                           {/* Checkbox */}
                           <td
-                            className="py-2 px-3"
+                            className="py-1.5 px-3"
                             onClick={(e) => {
                               e.stopPropagation();
                               toggleSelectOne(p.id);
@@ -1339,13 +1339,13 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
 
                           {/* Cellules dynamiques ordonnées */}
                           {columnsOrder.map((colKey) => (
-                            <td key={colKey} className="py-2 px-2.5">
+                            <td key={colKey} className="py-1.5 px-2.5">
                               {renderCellContent(p, colKey)}
                             </td>
                           ))}
 
                           {/* Action détail CRM & suppression rapide */}
-                          <td className="py-2 text-right pr-3">
+                          <td className="py-1.5 text-right pr-3">
                             <div className="flex items-center justify-end gap-1">
                               <button
                                 onClick={(e) => {

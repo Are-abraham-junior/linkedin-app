@@ -20,12 +20,17 @@ export default {
       },
       fontFamily: {
         sans: ["'Plus Jakarta Sans'", "system-ui", "sans-serif"],
-        display: ["'Plus Jakarta Sans'", "system-ui", "sans-serif"],
+        display: ["'General Sans'", "'Plus Jakarta Sans'", "system-ui", "sans-serif"],
       },
       borderRadius: {
         card: "32px",
         pill: "200px",
         frame: "48px",
+        shot: "24px",
+      },
+      maxWidth: {
+        site: "1200px",
+        prose: "65ch",
       },
       boxShadow: {
         subtle: "0 2px 8px rgba(33, 22, 76, 0.04)",

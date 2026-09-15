@@ -1,14 +1,181 @@
 import { Response } from "express";
+import { isWithinCreationGrace } from "../services/linkedinConnection.service.js";
+import { z } from "zod";
 import { AuthenticatedRequest } from "../middlewares/auth.middleware.js";
-import { UnipileService } from "../services/unipile.service.js";
+import { UnipileService, UnipilePostNotFoundError } from "../services/unipile.service.js";
 import { prisma } from "../../../lib/prisma.js";
+
+/** Compte LinkedIn connecté de l'utilisateur (le plus récent), ou null. */
+async function findConnectedAccount(userId: string) {
+  return prisma.linkedInAccount.findFirst({
+    where: { userId, status: "CONNECTED", unipileAccountId: { not: "" } },
+    orderBy: { updatedAt: "desc" },
+  });
+}
+
+/** URL LinkedIn comparable : minuscules, sans query string ni `/` final. */
+function normalizeLinkedInUrl(url: string): string {
+  return url.trim().toLowerCase().split("?")[0].replace(/\/+$/, "");
+}
+
+/**
+ * Retire des résultats de recherche les profils déjà présents dans les listes de
+ * l'utilisateur (même scope `list: { userId }` que le CRM), pour que relancer une
+ * recherche ne remonte pas sans cesse les mêmes prospects.
+ */
+async function excludeKnownProspects<T extends { providerProfileId: string; linkedinUrl: string }>(
+  userId: string,
+  profiles: T[]
+): Promise<{ profiles: T[]; excludedCount: number }> {
+  if (profiles.length === 0) return { profiles, excludedCount: 0 };
+
+  const providerIds = profiles.map((p) => p.providerProfileId).filter(Boolean);
+  const urls = profiles.map((p) => normalizeLinkedInUrl(p.linkedinUrl)).filter(Boolean);
+
+  const known = await prisma.prospect.findMany({
+    where: {
+      list: { userId },
+      OR: [
+        { providerProfileId: { in: providerIds } },
+        { linkedinUrl: { in: urls, mode: "insensitive" } },
+        { linkedinUrl: { in: urls.map((u) => `${u}/`), mode: "insensitive" } },
+      ],
+    },
+    select: { providerProfileId: true, linkedinUrl: true },
+  });
+  if (known.length === 0) return { profiles, excludedCount: 0 };
+
+  const knownIds = new Set(known.map((k) => k.providerProfileId).filter(Boolean));
+  const knownUrls = new Set(known.map((k) => normalizeLinkedInUrl(k.linkedinUrl)));
+
+  const kept = profiles.filter(
+    (p) => !knownIds.has(p.providerProfileId) && !knownUrls.has(normalizeLinkedInUrl(p.linkedinUrl))
+  );
+  return { profiles: kept, excludedCount: profiles.length - kept.length };
+}
+
+/**
+ * Gestion commune des erreurs Unipile des recherches : une 401/404/checkpoint
+ * signifie une session LinkedIn expirée → compte marqué DISCONNECTED et
+ * `needsReconnect` renvoyé au client ; sinon erreur générique.
+ */
+async function handleUnipileControllerError(req: AuthenticatedRequest, res: Response, err: any, label: string) {
+  const errorMsg = String(err?.message || "");
+  const status = err?.status || err?.response?.status;
+  const isExpiredOrNotFound =
+    status === 404 ||
+    status === 401 ||
+    errorMsg.includes("404") ||
+    errorMsg.includes("401") ||
+    errorMsg.toLowerCase().includes("not found") ||
+    errorMsg.toLowerCase().includes("not_found") ||
+    errorMsg.toLowerCase().includes("unauthorized") ||
+    errorMsg.toLowerCase().includes("checkpoint");
+
+  if (isExpiredOrNotFound && req.user?.id) {
+    console.warn(`[${label}] Auto-marking account DISCONNECTED for user ${req.user.id} due to: ${errorMsg}`);
+    await prisma.linkedInAccount.updateMany({
+      where: { userId: req.user.id, status: "CONNECTED" },
+      data: { status: "DISCONNECTED" },
+    });
+
+    res.status(400).json({
+      success: false,
+      error: "Votre session LinkedIn a expiré ou n'est plus active. Veuillez reconnecter votre compte LinkedIn.",
+      needsReconnect: true,
+    });
+    return;
+  }
+
+  console.error(`[linkedin.controller:${label}]`, err);
+  res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
+}
+
+const PostEngagersSchema = z.object({
+  url: z.string().trim().min(1, "L'URL du post LinkedIn est requise."),
+  includeReactions: z.boolean().optional().default(true),
+  includeComments: z.boolean().optional().default(true),
+  limit: z.number().int().optional().default(50),
+});
+
+/**
+ * POST /api/linkedin/post-engagers
+ * Liste les personnes ayant liké / commenté un post LinkedIn (source de prospects).
+ */
+export async function getPostEngagers(req: AuthenticatedRequest, res: Response) {
+  try {
+    const parsed = PostEngagersSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ success: false, error: parsed.error.issues[0]?.message || "Données invalides." });
+      return;
+    }
+    const { url, includeReactions, includeComments } = parsed.data;
+    if (!includeReactions && !includeComments) {
+      res.status(400).json({ success: false, error: "Sélectionnez au moins les likes ou les commentaires." });
+      return;
+    }
+
+    const postId = UnipileService.parseLinkedInPostId(url);
+    if (!postId) {
+      res.status(400).json({
+        success: false,
+        error: "URL de post LinkedIn non reconnue. Collez l'URL d'un post (…/posts/…-activity-1234567890-…) ou son identifiant.",
+      });
+      return;
+    }
+
+    const linkedAcc = await findConnectedAccount(req.user!.id);
+    if (!linkedAcc?.unipileAccountId) {
+      res.status(400).json({
+        success: false,
+        error: "Veuillez connecter votre compte LinkedIn avant de récupérer les interactions d'un post.",
+      });
+      return;
+    }
+
+    const safeLimit = Math.min(Math.max(parsed.data.limit || 50, 1), 100);
+    const accountId = linkedAcc.unipileAccountId;
+
+    let post;
+    let result;
+    try {
+      post = await UnipileService.getPost({ accountId, postId });
+      if (!post) throw new UnipilePostNotFoundError();
+      result = await UnipileService.getPostEngagers({
+        accountId,
+        socialId: post.socialId,
+        includeReactions,
+        includeComments,
+        limit: safeLimit,
+      });
+    } catch (err: any) {
+      if (err instanceof UnipilePostNotFoundError) {
+        res.status(404).json({ success: false, error: err.message });
+        return;
+      }
+      throw err;
+    }
+
+    res.json({
+      success: true,
+      post,
+      count: result.items.length,
+      truncated: result.truncated,
+      profiles: result.items,
+    });
+  } catch (err: any) {
+    await handleUnipileControllerError(req, res, err, "getPostEngagers");
+  }
+}
 
 export async function searchProfiles(req: AuthenticatedRequest, res: Response) {
   try {
     const userId = req.user!.id;
     const { keywords, location, company, title, url, limit = 25, api, industry, companyHeadcount } = req.body;
+    // Curseur Unipile renvoyé par une recherche précédente → page suivante de la même recherche
+    const cursor = typeof req.body.cursor === "string" && req.body.cursor.trim() ? req.body.cursor.trim() : undefined;
 
-    if (!keywords && !title && !company && !location && !url && (!industry || industry.length === 0)) {
+    if (!cursor && !keywords && !title && !company && !location && !url && (!industry || industry.length === 0)) {
       res.status(400).json({
         success: false,
         error: "Veuillez spécifier au moins un critère de recherche (poste, lieu, entreprise, secteur ou URL LinkedIn).",
@@ -16,10 +183,7 @@ export async function searchProfiles(req: AuthenticatedRequest, res: Response) {
       return;
     }
 
-    const linkedAcc = await prisma.linkedInAccount.findFirst({
-      where: { userId, status: "CONNECTED", unipileAccountId: { not: "" } },
-      orderBy: { updatedAt: "desc" },
-    });
+    const linkedAcc = await findConnectedAccount(userId);
 
     if (!linkedAcc?.unipileAccountId) {
       res.status(400).json({
@@ -56,44 +220,21 @@ export async function searchProfiles(req: AuthenticatedRequest, res: Response) {
       api,
       industry,
       companyHeadcount,
+      cursor,
     });
+
+    const { profiles, excludedCount } = await excludeKnownProspects(userId, result.items);
 
     res.json({
       success: true,
-      count: result.items.length,
+      count: profiles.length,
       totalCount: result.totalCount,
-      profiles: result.items,
+      profiles,
+      nextCursor: result.nextCursor,
+      excludedCount,
     });
   } catch (err: any) {
-    const errorMsg = String(err?.message || "");
-    const status = err?.status || err?.response?.status;
-    const isExpiredOrNotFound =
-      status === 404 ||
-      status === 401 ||
-      errorMsg.includes("404") ||
-      errorMsg.includes("401") ||
-      errorMsg.toLowerCase().includes("not found") ||
-      errorMsg.toLowerCase().includes("not_found") ||
-      errorMsg.toLowerCase().includes("unauthorized") ||
-      errorMsg.toLowerCase().includes("checkpoint");
-
-    if (isExpiredOrNotFound && req.user?.id) {
-      console.warn(`[searchProfiles] Auto-marking account DISCONNECTED for user ${req.user.id} due to: ${errorMsg}`);
-      await prisma.linkedInAccount.updateMany({
-        where: { userId: req.user.id, status: "CONNECTED" },
-        data: { status: "DISCONNECTED" },
-      });
-
-      res.status(400).json({
-        success: false,
-        error: "Votre session LinkedIn a expiré ou n'est plus active. Veuillez reconnecter votre compte LinkedIn.",
-        needsReconnect: true,
-      });
-      return;
-    }
-
-    console.error("[linkedin.controller:searchProfiles]", err);
-    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
+    await handleUnipileControllerError(req, res, err, "searchProfiles");
   }
 }
 
@@ -186,6 +327,12 @@ export async function getAccountHealth(req: AuthenticatedRequest, res: Response)
         errorMsg.toLowerCase().includes("not found") ||
         errorMsg.toLowerCase().includes("not_found") ||
         errorMsg.toLowerCase().includes("unauthorized");
+
+      if (isNotFoundOrExpired && isWithinCreationGrace(linkedAcc)) {
+        // Compte fraîchement créé, pas encore visible chez Unipile : ne pas le rétrograder
+        res.json({ success: true, connected: true, status: null, pending: true });
+        return;
+      }
 
       if (isNotFoundOrExpired) {
         console.warn(`[getAccountHealth] Auto-disconnecting invalid Unipile account ${linkedAcc.unipileAccountId}`);

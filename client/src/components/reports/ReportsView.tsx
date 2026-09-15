@@ -28,6 +28,8 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
+  X,
+  Plus,
 } from "lucide-react";
 import { apiRequest } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
@@ -35,8 +37,10 @@ import type {
   CampaignReport,
   ReportCampaign,
   ReportSettings,
+  ReportSettingsPatch,
   ReportHistoryEntry,
   ReportEmailFrequency,
+  ReportDay,
 } from "../../types";
 import {
   exportReportToExcel,
@@ -58,6 +62,18 @@ const STATUS_BADGE: Record<string, string> = {
   ARCHIVED: "bg-slate-100 text-slate-600 border-slate-200",
   DRAFT: "bg-slate-50 text-slate-500 border-slate-200",
 };
+
+const REPORT_DAYS: { id: ReportDay; label: string; long: string }[] = [
+  { id: "MON", label: "Lun", long: "lundi" },
+  { id: "TUE", label: "Mar", long: "mardi" },
+  { id: "WED", label: "Mer", long: "mercredi" },
+  { id: "THU", label: "Jeu", long: "jeudi" },
+  { id: "FRI", label: "Ven", long: "vendredi" },
+  { id: "SAT", label: "Sam", long: "samedi" },
+  { id: "SUN", label: "Dim", long: "dimanche" },
+];
+const MAX_REPORT_EMAILS = 10;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const HISTORY_KIND_LABELS: Record<ReportHistoryEntry["kind"], string> = {
   PDF: "Rapport PDF",
@@ -140,6 +156,12 @@ export const ReportsView: React.FC = () => {
   const [settings, setSettings] = useState<ReportSettings | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
   const [sendingNow, setSendingNow] = useState(false);
+  // Brouillon local des réglages d'envoi (destinataires / heure / jour), enregistré explicitement
+  const [draftEmails, setDraftEmails] = useState<string[]>([]);
+  const [draftHour, setDraftHour] = useState(8);
+  const [draftDay, setDraftDay] = useState<ReportDay>("MON");
+  const [emailInput, setEmailInput] = useState("");
+  const [emailInputError, setEmailInputError] = useState<string | null>(null);
   const [history, setHistory] = useState<ReportHistoryEntry[]>([]);
 
   const canPickMember = user?.role === "SUPER_ADMIN" || user?.orgRole === "OWNER";
@@ -173,9 +195,16 @@ export const ReportsView: React.FC = () => {
     setLoading(false);
   };
 
+  const applySettings = (s: ReportSettings) => {
+    setSettings(s);
+    setDraftEmails(s.emails || []);
+    setDraftHour(s.hour ?? 8);
+    setDraftDay(s.day || "MON");
+  };
+
   const fetchSettings = async () => {
     const res = await apiRequest<{ settings: ReportSettings }>("/reports/settings");
-    if (res.success && res.settings) setSettings(res.settings);
+    if (res.success && res.settings) applySettings(res.settings);
   };
 
   const fetchHistory = async () => {
@@ -329,26 +358,75 @@ export const ReportsView: React.FC = () => {
     }
   };
 
-  const updateSettings = async (patch: { emailFrequency: ReportEmailFrequency }) => {
+  const updateSettings = async (patch: ReportSettingsPatch, successNotice?: string) => {
     setSavingSettings(true);
     setError(null);
     const res = await apiRequest<{ settings: ReportSettings }>("/reports/settings", { method: "PUT", body: JSON.stringify(patch) });
     if (res.success && res.settings) {
-      setSettings(res.settings);
-      setNotice(patch.emailFrequency === "NONE" ? "Rapport par e-mail désactivé." : "Rapport par e-mail activé.");
+      applySettings(res.settings);
+      setNotice(
+        successNotice ??
+          (patch.emailFrequency === "NONE" ? "Rapport par e-mail désactivé." : "Rapport par e-mail activé.")
+      );
     } else {
       setError(res.error || "Enregistrement impossible.");
     }
     setSavingSettings(false);
   };
 
+  const addDraftEmail = (): boolean => {
+    const value = emailInput.trim().toLowerCase();
+    if (!value) return true;
+    if (!EMAIL_RE.test(value)) {
+      setEmailInputError("Adresse e-mail invalide.");
+      return false;
+    }
+    if (draftEmails.includes(value)) {
+      setEmailInput("");
+      setEmailInputError(null);
+      return true;
+    }
+    if (draftEmails.length >= MAX_REPORT_EMAILS) {
+      setEmailInputError(`${MAX_REPORT_EMAILS} destinataires maximum.`);
+      return false;
+    }
+    setDraftEmails([...draftEmails, value]);
+    setEmailInput("");
+    setEmailInputError(null);
+    return true;
+  };
+
+  const handleSaveDelivery = async () => {
+    // Une adresse encore dans le champ mais non validée est ajoutée avant l'enregistrement
+    if (!addDraftEmail()) return;
+    const pendingValue = emailInput.trim().toLowerCase();
+    const emails = pendingValue && !draftEmails.includes(pendingValue) ? [...draftEmails, pendingValue] : draftEmails;
+    await updateSettings({ emails, hour: draftHour, day: draftDay }, "Réglages d'envoi enregistrés.");
+  };
+
+  const deliveryDirty =
+    !!settings &&
+    (draftHour !== settings.hour ||
+      draftDay !== settings.day ||
+      draftEmails.length !== (settings.emails || []).length ||
+      draftEmails.some((e, i) => e !== settings.emails?.[i]));
+
+  const effectiveRecipients = settings ? (settings.emails?.length ? settings.emails : [settings.accountEmail]) : [];
+
+  const scheduleSummary = (() => {
+    if (!settings || settings.emailFrequency === "NONE") return null;
+    const at = `${String(settings.hour).padStart(2, "0")}h`;
+    const dayLabel = REPORT_DAYS.find((d) => d.id === settings.day)?.long || "lundi";
+    return settings.emailFrequency === "DAILY" ? `chaque jour à ${at}` : `chaque ${dayLabel} à ${at}`;
+  })();
+
   const handleSendNow = async () => {
     setSendingNow(true);
     setError(null);
     setNotice(null);
     const frequency = settings?.emailFrequency && settings.emailFrequency !== "NONE" ? settings.emailFrequency : "WEEKLY";
-    const res = await apiRequest("/reports/email/send-now", { method: "POST", body: JSON.stringify({ frequency }) });
-    if (res.success) setNotice(`Rapport envoyé à ${user?.email}.`);
+    const res = await apiRequest<{ recipients?: string[] }>("/reports/email/send-now", { method: "POST", body: JSON.stringify({ frequency }) });
+    if (res.success) setNotice(`Rapport envoyé à ${(res.recipients?.length ? res.recipients : effectiveRecipients).join(", ")}.`);
     else setError(res.error || "L'envoi a échoué.");
     setSendingNow(false);
   };
@@ -686,7 +764,14 @@ export const ReportsView: React.FC = () => {
             <h3 className="text-lg font-extrabold text-[#21164c]">Rapport automatique par e-mail</h3>
           </div>
           <p className="text-xs text-[#5f5f69]">
-            Recevez un résumé de vos campagnes (KPIs, variation vs période précédente, tableau) à <strong>{user?.email}</strong>, chaque jour ou chaque lundi vers 8h (heure locale).
+            Recevez un résumé de vos campagnes (KPIs, variation vs période précédente, tableau) par e-mail.{" "}
+            {scheduleSummary ? (
+              <>
+                Envoyé à <strong>{effectiveRecipients.join(", ")}</strong>, {scheduleSummary} (heure locale).
+              </>
+            ) : (
+              "Choisissez la fréquence, puis les destinataires, l'heure et le jour d'envoi."
+            )}
           </p>
           {settings && !settings.available ? (
             <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">Aucun espace de travail associé à ce compte : option indisponible.</p>
@@ -707,6 +792,138 @@ export const ReportsView: React.FC = () => {
                   </button>
                 ))}
               </div>
+
+              {settings && settings.emailFrequency !== "NONE" && (
+                <div className="space-y-4 border-t border-[#ececf1] pt-4">
+                  {/* Destinataires */}
+                  <div className="space-y-2">
+                    <label className="block text-[11px] font-bold uppercase tracking-wide text-[#7c7c88]">Destinataires</label>
+                    {draftEmails.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {draftEmails.map((e) => (
+                          <span
+                            key={e}
+                            className="inline-flex items-center gap-1 max-w-full pl-2.5 pr-1 py-1 rounded-full bg-[#f0f0f4] text-[11px] font-semibold text-[#21164c]"
+                          >
+                            <span className="truncate">{e}</span>
+                            <button
+                              type="button"
+                              aria-label={`Retirer ${e}`}
+                              onClick={() => setDraftEmails(draftEmails.filter((x) => x !== e))}
+                              className="w-4 h-4 rounded-full flex items-center justify-center text-[#7c7c88] hover:bg-[#e0e0db] hover:text-[#21164c] cursor-pointer"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-[#5f5f69]">
+                        Aucune adresse : le rapport sera envoyé à <strong>{settings.accountEmail}</strong>.
+                      </p>
+                    )}
+                    <div className="flex gap-2">
+                      <input
+                        type="email"
+                        value={emailInput}
+                        onChange={(e) => {
+                          setEmailInput(e.target.value);
+                          if (emailInputError) setEmailInputError(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === ",") {
+                            e.preventDefault();
+                            addDraftEmail();
+                          }
+                        }}
+                        onBlur={() => emailInput.trim() && addDraftEmail()}
+                        placeholder={draftEmails.length ? "Ajouter une adresse…" : settings.accountEmail}
+                        className="flex-1 min-w-0 bg-[#f8f9fc] border border-[#e0e0db] rounded-xl px-3 py-2 text-xs font-semibold text-[#21164c] placeholder:font-normal placeholder:text-[#9a9aa5] focus:outline-none focus:border-[#592eff]"
+                      />
+                      <button
+                        type="button"
+                        onClick={addDraftEmail}
+                        disabled={!emailInput.trim()}
+                        aria-label="Ajouter l'adresse"
+                        className="px-3 rounded-xl bg-white hover:bg-[#f5f5f7] border border-[#e0e0db] text-[#592eff] flex items-center cursor-pointer disabled:opacity-40"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
+                    {emailInputError && <p className="text-[11px] text-red-600">{emailInputError}</p>}
+                    {draftEmails.length === 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setDraftEmails([settings.accountEmail])}
+                        className="text-[11px] font-semibold text-[#592eff] hover:underline cursor-pointer"
+                      >
+                        Utiliser mon e-mail ({settings.accountEmail})
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Heure + jour */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="block text-[11px] font-bold uppercase tracking-wide text-[#7c7c88]">Heure d'envoi</label>
+                      <select
+                        value={draftHour}
+                        onChange={(e) => setDraftHour(Number(e.target.value))}
+                        className="w-full bg-[#f8f9fc] border border-[#e0e0db] rounded-xl px-3 py-2 text-xs font-semibold text-[#21164c] focus:outline-none focus:border-[#592eff] cursor-pointer"
+                      >
+                        {Array.from({ length: 24 }, (_, h) => (
+                          <option key={h} value={h}>
+                            {String(h).padStart(2, "0")}:00
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-[10px] text-[#9a9aa5]">Heure locale · {settings.timezone}</p>
+                    </div>
+                    {settings.emailFrequency === "WEEKLY" && (
+                      <div className="space-y-1.5">
+                        <label className="block text-[11px] font-bold uppercase tracking-wide text-[#7c7c88]">Jour d'envoi</label>
+                        <div className="flex flex-wrap gap-1">
+                          {REPORT_DAYS.map((d) => (
+                            <button
+                              key={d.id}
+                              type="button"
+                              onClick={() => setDraftDay(d.id)}
+                              className={`px-2 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                                draftDay === d.id ? "bg-[#592eff] text-white" : "bg-[#f0f0f4] text-[#7c7c88] hover:text-[#21164c]"
+                              }`}
+                            >
+                              {d.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2">
+                    {deliveryDirty && (
+                      <button
+                        type="button"
+                        onClick={() => applySettings(settings)}
+                        disabled={savingSettings}
+                        className="py-2 px-3 rounded-xl text-xs font-bold text-[#5f5f69] hover:text-[#21164c] cursor-pointer disabled:opacity-50"
+                      >
+                        Annuler
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleSaveDelivery}
+                      disabled={savingSettings || (!deliveryDirty && !emailInput.trim())}
+                      className="py-2 px-4 rounded-xl bg-[#592eff] hover:bg-[#4a22e0] text-white text-xs font-bold shadow-xs flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      {savingSettings ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                      Enregistrer
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <span className="text-[11px] text-[#5f5f69]">
                   {settings?.lastSentAt ? `Dernier envoi : ${fmtDateTime(settings.lastSentAt)}` : "Aucun envoi pour le moment."}

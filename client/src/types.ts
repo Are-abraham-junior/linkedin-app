@@ -275,12 +275,24 @@ export interface ReportComparison {
 }
 
 export type ReportEmailFrequency = "NONE" | "DAILY" | "WEEKLY";
+export type ReportDay = "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN";
 
 export interface ReportSettings {
   emailFrequency: ReportEmailFrequency;
+  /** Destinataires configurés ; vide => e-mail du compte (`accountEmail`). */
+  emails: string[];
+  /** Heure locale d'envoi (0-23), dans le fuseau du compte. */
+  hour: number;
+  /** Jour d'envoi pour le rapport hebdomadaire. */
+  day: ReportDay;
   lastSentAt: string | null;
+  /** Fuseau du compte (Paramètres › Compte) dans lequel `hour`/`day` sont interprétés. */
+  timezone: string;
+  accountEmail: string;
   available: boolean;
 }
+
+export type ReportSettingsPatch = Partial<Pick<ReportSettings, "emailFrequency" | "emails" | "hour" | "day">>;
 
 export interface ReportHistoryEntry {
   id: string;

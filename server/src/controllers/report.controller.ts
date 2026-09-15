@@ -6,9 +6,11 @@ import { resolveCampaignScope } from "./campaign.controller.js";
 import { buildCampaignsReport } from "../services/report.service.js";
 import {
   getReportsConfig,
-  getUserPrefs,
-  setUserPrefs,
+  getUserReportPrefs,
+  updateUserReportPrefs,
   appendHistory,
+  REPORT_DAYS,
+  MAX_REPORT_EMAILS,
 } from "../services/reportSettings.service.js";
 import { sendReportEmailToUser } from "../workers/report.worker.js";
 import { resolveOrganization } from "../utils/organization.js";
@@ -74,15 +76,10 @@ export async function getCampaignsReport(req: AuthenticatedRequest, res: Respons
 export async function getReportSettings(req: AuthenticatedRequest, res: Response) {
   try {
     const { organizationId } = await resolveOrganization(req);
-    if (!organizationId) {
-      res.json({ success: true, settings: { emailFrequency: "NONE", lastSentAt: null, available: false } });
-      return;
-    }
-    const config = await getReportsConfig(organizationId);
-    const prefs = getUserPrefs(config, req.user!.id);
+    const prefs = await getUserReportPrefs(req.user!.id);
     res.json({
       success: true,
-      settings: { ...prefs, available: true },
+      settings: { ...prefs, accountEmail: req.user!.email, available: !!organizationId },
     });
   } catch (error: any) {
     console.error("Error getReportSettings:", error);
@@ -90,11 +87,19 @@ export async function getReportSettings(req: AuthenticatedRequest, res: Response
   }
 }
 
-const UpdateSettingsSchema = z.object({
-  emailFrequency: z.enum(["NONE", "DAILY", "WEEKLY"]),
-});
+const UpdateSettingsSchema = z
+  .object({
+    emailFrequency: z.enum(["NONE", "DAILY", "WEEKLY"]).optional(),
+    emails: z
+      .array(z.string().trim().toLowerCase().email("Adresse e-mail invalide."))
+      .max(MAX_REPORT_EMAILS, `${MAX_REPORT_EMAILS} destinataires maximum.`)
+      .optional(),
+    hour: z.number().int().min(0).max(23).optional(),
+    day: z.enum(REPORT_DAYS).optional(),
+  })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), { message: "Aucun réglage fourni." });
 
-/** PUT /api/reports/settings */
+/** PUT /api/reports/settings  { emailFrequency?, emails?, hour?, day? } */
 export async function updateReportSettings(req: AuthenticatedRequest, res: Response) {
   try {
     const parsed = UpdateSettingsSchema.safeParse(req.body);
@@ -108,12 +113,13 @@ export async function updateReportSettings(req: AuthenticatedRequest, res: Respo
       return;
     }
 
-    await setUserPrefs(organizationId, req.user!.id, { emailFrequency: parsed.data.emailFrequency });
+    const patch = { ...parsed.data };
+    if (patch.emails) patch.emails = Array.from(new Set(patch.emails));
 
-    const config = await getReportsConfig(organizationId);
+    const prefs = await updateUserReportPrefs(req.user!.id, patch);
     res.json({
       success: true,
-      settings: { ...getUserPrefs(config, req.user!.id), available: true },
+      settings: { ...prefs, accountEmail: req.user!.email, available: true },
     });
   } catch (error: any) {
     console.error("Error updateReportSettings:", error);
@@ -124,9 +130,7 @@ export async function updateReportSettings(req: AuthenticatedRequest, res: Respo
 /** POST /api/reports/email/send-now  { frequency?: "DAILY"|"WEEKLY" } */
 export async function sendReportNow(req: AuthenticatedRequest, res: Response) {
   try {
-    const { organizationId } = await resolveOrganization(req);
-    const config = organizationId ? await getReportsConfig(organizationId) : null;
-    const prefs = config ? getUserPrefs(config, req.user!.id) : { emailFrequency: "NONE" as const };
+    const prefs = await getUserReportPrefs(req.user!.id);
     const requested = req.body?.frequency;
     const frequency =
       requested === "DAILY" || requested === "WEEKLY"
@@ -140,7 +144,7 @@ export async function sendReportNow(req: AuthenticatedRequest, res: Response) {
       res.status(400).json({ success: false, error: result.reason || "Envoi impossible." });
       return;
     }
-    res.json({ success: true, message: "Rapport envoyé par e-mail." });
+    res.json({ success: true, message: "Rapport envoyé par e-mail.", recipients: result.recipients || [] });
   } catch (error: any) {
     console.error("Error sendReportNow:", error);
     res.status(500).json({ success: false, error: "L'envoi de l'e-mail a échoué. Vérifiez la configuration SMTP." });

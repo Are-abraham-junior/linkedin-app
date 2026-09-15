@@ -94,6 +94,13 @@ model User {
   workingHoursEnd    String          @default("19:00")
   timezone           String          @default("Africa/Abidjan")
 
+  // Rapport automatique par e-mail (heure/jour interprétés dans `timezone`)
+  reportEmailFrequency String        @default("NONE") // NONE | DAILY | WEEKLY
+  reportEmails         String[]      @default([])     // vide => e-mail du compte
+  reportHour           Int           @default(8)      // 0..23
+  reportDay            String        @default("MON")  // MON..SUN (WEEKLY)
+  reportLastSentAt     DateTime?
+
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 

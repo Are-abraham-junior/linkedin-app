@@ -117,7 +117,7 @@ export const LinkedInOnboardingWall: React.FC<LinkedInOnboardingWallProps> = ({ 
                 <CheckCircle2 className="w-9 h-9 text-emerald-600" />
               </div>
               <h2 className="text-xl font-extrabold text-[#21164c] mb-1.5">
-                Félicitations, votre compte LinkedIn est connecté ! 🎉
+                Votre compte LinkedIn est connecté.
               </h2>
               <p className="text-[#5f5f69] text-xs sm:text-sm">
                 Redirection vers votre tableau de bord...
@@ -127,7 +127,6 @@ export const LinkedInOnboardingWall: React.FC<LinkedInOnboardingWallProps> = ({ 
           <>
           {error && (
             <div className="mb-5 p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold flex items-start gap-2.5">
-              <span className="text-sm font-bold">⚠️</span>
               <p className="flex-1">{error}</p>
             </div>
           )}

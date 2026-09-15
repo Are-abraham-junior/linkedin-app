@@ -1270,14 +1270,12 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                   {/* Conditions de la séquence */}
                   <div className="space-y-2.5 pt-3 border-t border-amber-500/15 text-xs">
                     <div className="flex items-start gap-2 text-[#21164c]">
-                      <span className="shrink-0 text-amber-600 font-bold">✈️</span>
+                      <span className="shrink-0 text-amber-600 font-bold" aria-hidden>—</span>
                       <span className="leading-snug">Ne pas être déjà engagé dans une autre campagne active</span>
                     </div>
 
                     <div className="flex items-start gap-2 text-[#21164c]">
-                      <span className="shrink-0 text-amber-600 font-bold">
-                        {firstActionType === "MESSAGE" ? "💬" : "❌"}
-                      </span>
+                      <span className="shrink-0 text-amber-600 font-bold" aria-hidden>—</span>
                       <span className="leading-snug">
                         {firstActionType === "MESSAGE"
                           ? "Être déjà connecté avec vous sur LinkedIn"
@@ -1286,7 +1284,7 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                     </div>
 
                     <div className="flex items-start gap-2 text-[#21164c]">
-                      <span className="shrink-0 text-amber-600 font-bold">🚫</span>
+                      <span className="shrink-0 text-amber-600 font-bold" aria-hidden>—</span>
                       <span className="leading-snug">Ne pas figurer dans la liste "Ne pas contacter"</span>
                     </div>
                   </div>
@@ -1299,7 +1297,7 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                     </div>
 
                     <div className="flex justify-between items-center text-emerald-700 font-extrabold">
-                      <span>🟢 Éligibles pour cette campagne :</span>
+                      <span>Éligibles pour cette campagne :</span>
                       <span className="px-2 py-0.5 rounded-md bg-emerald-100 font-black">{eligibleCount}</span>
                     </div>
 

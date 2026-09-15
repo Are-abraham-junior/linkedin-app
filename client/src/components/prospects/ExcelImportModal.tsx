@@ -309,7 +309,7 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
               >
                 {lists.map((l) => (
                   <option key={l.id} value={l.id}>
-                    📁 {l.name}
+                    {l.name}
                   </option>
                 ))}
               </select>
@@ -361,7 +361,7 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
                     >
                       {lists.map((l) => (
                         <option key={l.id} value={l.id}>
-                          📁 {l.name}
+                          {l.name}
                         </option>
                       ))}
                     </select>

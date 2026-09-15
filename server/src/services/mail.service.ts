@@ -171,7 +171,7 @@ interface ReportEmailKpi {
 }
 
 interface SendCampaignReportEmailParams {
-  to: string;
+  to: string | string[];
   recipientName: string;
   frequencyLabel: string;
   periodLabel: string;
@@ -179,6 +179,8 @@ interface SendCampaignReportEmailParams {
   kpis: ReportEmailKpi[];
   campaigns: ReportEmailCampaignRow[];
   reportsUrl: string;
+  /** Fichiers PDF / Excel du rapport complet, joints à l'e-mail. */
+  attachments: Array<{ filename: string; content: Buffer; contentType: string }>;
 }
 
 function escapeHtml(s: string): string {
@@ -193,9 +195,9 @@ function deltaBadge(delta: number | null): string {
 }
 
 /**
- * Envoie le rapport périodique (quotidien / hebdomadaire) des campagnes.
- * Résumé HTML uniquement : pas de pièce jointe pour ne dépendre d'aucune
- * librairie serveur ; le bouton renvoie vers la page Rapports.
+ * Envoie le rapport périodique (quotidien / hebdomadaire) des campagnes :
+ * résumé HTML dans le corps + rapport complet en pièces jointes (PDF et Excel,
+ * générés par `reportExport.service.ts`).
  */
 export async function sendCampaignReportEmail(params: SendCampaignReportEmailParams): Promise<void> {
   const from = process.env.SMTP_FROM || "Bleadin <no-reply@bleadin.com>";
@@ -278,16 +280,16 @@ export async function sendCampaignReportEmail(params: SendCampaignReportEmailPar
         </table>
       </div>
       <div style="padding:20px 32px 32px;text-align:center;">
-        <a href="${params.reportsUrl}"
-          style="display:inline-block;padding:14px 28px;border-radius:12px;background:linear-gradient(135deg,#592eff,#7c3aed);color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;">
-          Télécharger le rapport complet (PDF / Excel)
-        </a>
+        <div style="display:inline-block;padding:12px 20px;border-radius:12px;background:#f8f9fc;border:1px solid #e0e0db;font-size:12px;color:#21164c;text-align:left;">
+          <div style="font-weight:700;margin-bottom:4px;">📎 Rapport complet en pièces jointes</div>
+          ${params.attachments.map((a) => `<div style="color:#5f5f69;">• ${escapeHtml(a.filename)}</div>`).join("")}
+        </div>
         <p style="font-size:11px;color:#b5b5bd;margin:16px 0 0;">
-          Vous recevez cet e-mail car vous avez activé le rapport ${escapeHtml(params.frequencyLabel)} dans Bleadin › Rapports. Vous pouvez le désactiver à tout moment depuis cette page.
+          Vous recevez cet e-mail car cette adresse a été configurée comme destinataire du rapport ${escapeHtml(params.frequencyLabel)} dans Bleadin › Rapports. Les destinataires, l'heure et le jour d'envoi se modifient à tout moment depuis <a href="${params.reportsUrl}" style="color:#592eff;">cette page</a>.
         </p>
       </div>
     </div>
   </div>`;
 
-  await getTransporter().sendMail({ from, to: params.to, subject, text, html });
+  await getTransporter().sendMail({ from, to: params.to, subject, text, html, attachments: params.attachments });
 }
