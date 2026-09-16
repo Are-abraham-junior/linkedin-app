@@ -15,6 +15,7 @@ import {
   removeOrganizationMember,
   impersonateWorkspace,
   deleteOrganization,
+  grantEnrichmentTokens,
 } from "../controllers/admin.controller.js";
 import { requireSuperAdmin } from "../middlewares/auth.middleware.js";
 
@@ -31,6 +32,7 @@ router.put("/users/:id", updateUser);
 router.delete("/users/:id", deleteUser);
 router.get("/organizations", getOrganizations);
 router.delete("/organizations/:id", deleteOrganization);
+router.post("/organizations/:id/enrichment-grant", grantEnrichmentTokens);
 router.get("/organizations/:id/members", getOrganizationMembers);
 router.post("/organizations/:id/members", addOrganizationMember);
 router.delete("/organizations/:orgId/members/:userId", removeOrganizationMember);

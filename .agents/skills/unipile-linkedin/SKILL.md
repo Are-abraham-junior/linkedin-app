@@ -56,9 +56,20 @@ Pour toute modification d'endpoint, mise à jour des payloads ou résolution de 
 ## 3. LinkedIn Anti-Detection & Quota Protection
 
 To guarantee zero LinkedIn account restrictions or bans:
-1. **Daily Quotas**:
-   - Max 30-50 connection requests per day per account (default configurable up to 100).
-   - Max 70-100 direct messages per day per account.
+1. **Quotas hebdo/mensuels par offre** (source : `server/src/config/plans.ts`, miroir de `client/src/marketing/content/plans.ts`, appliqués par `server/src/services/quota.service.ts`). Référence Unipile : [Provider limits and restrictions](https://developer.unipile.com/docs/provider-limits-and-restrictions) — invitations 80–100/j max et ~200/semaine (plafond LinkedIn), messages 100–150/j, profils ~100/j (150 Sales Navigator/Recruiter), autres actions ~100/j, montée progressive pour les comptes neufs.
+
+   | Par compte LinkedIn | Starter | Pro | Business |
+   |---|---|---|---|
+   | Invitations | 100 / sem · 400 / mois | 150 / sem · 600 / mois | 200 / sem · 800 / mois |
+   | Messages | 250 / sem · 1 000 / mois | 400 / sem · 1 600 / mois | 600 / sem · 2 400 / mois |
+   | Visites de profil | 250 / sem · 1 000 / mois | 400 / sem · 1 600 / mois | 600 / sem · 2 400 / mois (400 / 1 600 compte STANDARD) |
+   | Suivis de profil | 150 / sem · 600 / mois | 300 / sem · 1 200 / mois | 400 / sem · 1 600 / mois |
+
+   - **Le journalier n'est jamais un chiffre fixe** : chaque jour ouvré, `computeQuotaSnapshot()` calcule `cible = round(restantSemaine / joursOuvrésRestants × U(0,75 ; 1,15))`, avec un aléa déterministe par (compte, action, date), borné par le restant mensuel et par les **plafonds de sécurité Unipile** (`DAILY_SAFETY_CAPS` : invitations 90, messages 150, visites 100 / 150 Sales Nav, suivis 100). Ne jamais réintroduire un quota journalier constant.
+   - **Warm-up** : 14 premiers jours après `LinkedInAccount.createdAt`, invitations plafonnées à `10 + 5 × jour`, autres actions à 50 %.
+   - Réglage utilisateur `User.maxWeekly*` (null = plan) : `min(plan, réglage)`, jamais au-dessus de l'offre (validé dans `settings.controller.ts`).
+   - Les lookups d'enrichissement e-mail/téléphone (`enrichment.service.ts`, `EnrichmentLedger`) sont des lectures de profil : comptés dans `visits`, refusés quand la cible du jour est atteinte, espacés de 1,5–4 s. E-mail/téléphone ne sont jamais copiés par les chemins gratuits (visite de campagne, « Synchroniser »).
+   - Semaine = lundi → dimanche et mois civil **dans le fuseau de l'utilisateur** ; usage compté depuis `ActionQueue` (SUCCESS/EXECUTED). Report : demain 9h / lundi 9h / 1er du mois 9h.
 2. **Jitter & Delays**:
    - Inject a randomized delay between 30 and 120 seconds between consecutive actions.
 3. **Working Hours & Timezones**:

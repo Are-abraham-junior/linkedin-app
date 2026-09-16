@@ -2,14 +2,16 @@ import { Response } from "express";
 import { prisma } from "../../../lib/prisma.js";
 import { AuthenticatedRequest } from "../middlewares/auth.middleware.js";
 import { z } from "zod";
+import { getQuotaSnapshot } from "../services/quota.service.js";
+import type { ActionKind } from "../config/plans.js";
 
+// Les quotas d'actions se règlent dans Réglages > Compte (plafonds hebdo bornés par l'offre) ;
+// ce planning ne porte que les horaires et le fuseau.
 const UpdateScheduleSchema = z.object({
   workingDays: z.array(z.string()).min(1, "Sélectionnez au moins un jour de travail"),
   workingHoursStart: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Format HH:mm invalide (ex: 08:00)"),
   workingHoursEnd: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Format HH:mm invalide (ex: 19:00)"),
   timezone: z.string().default("Africa/Abidjan"),
-  maxDailyInvites: z.number().int().min(1).max(100).optional(),
-  maxDailyMsg: z.number().int().min(1).max(150).optional(),
 });
 
 const BatchRescheduleSchema = z.object({
@@ -45,6 +47,7 @@ export async function getQueue(req: AuthenticatedRequest, res: Response): Promis
       where: { id: userId },
       include: {
         accounts: true,
+        organization: { select: { plan: true } },
       },
     });
 
@@ -132,33 +135,30 @@ export async function getQueue(req: AuthenticatedRequest, res: Response): Promis
       }),
     ]);
 
-    // 4. Calculer les quotas réels
-    const dailyInvitesSent = primaryAccount?.dailyInvitesSent || 0;
-    const dailyMsgSent = primaryAccount?.dailyMsgSent || 0;
-    const maxDailyInvites = user.maxDailyInvites || 30;
-    const maxDailyMsg = user.maxDailyMsg || 70;
+    // 4. Quotas réels du jour (cible journalière aléatoire dérivée de l'offre, usage ActionQueue)
+    const quotaAccount = user.accounts.find((a) => a.status === "CONNECTED") ?? primaryAccount;
+    const snapshot = quotaAccount
+      ? await getQuotaSnapshot({ user, account: quotaAccount, planRaw: user.organization?.plan })
+      : null;
+    const quotaOf = (kind: ActionKind) => {
+      const s = snapshot?.actions[kind];
+      const max = s?.target ?? 0;
+      const sent = s?.usedToday ?? 0;
+      return {
+        sent,
+        max,
+        remaining: Math.max(0, max - sent),
+        week: { sent: s?.usedWeek ?? 0, max: s?.limitWeek ?? 0 },
+        month: { sent: s?.usedMonth ?? 0, max: s?.limitMonth ?? 0 },
+      };
+    };
 
     const quotas = {
-      invitations: {
-        sent: dailyInvitesSent,
-        max: maxDailyInvites,
-        remaining: Math.max(0, maxDailyInvites - dailyInvitesSent),
-      },
-      messages: {
-        sent: dailyMsgSent,
-        max: maxDailyMsg,
-        remaining: Math.max(0, maxDailyMsg - dailyMsgSent),
-      },
-      profileVisits: {
-        sent: 0,
-        max: 120,
-        remaining: 120,
-      },
-      profileFollows: {
-        sent: 0,
-        max: 80,
-        remaining: 80,
-      },
+      invitations: quotaOf("invites"),
+      messages: quotaOf("messages"),
+      profileVisits: quotaOf("visits"),
+      profileFollows: quotaOf("follows"),
+      warmup: snapshot?.warmup ?? null,
     };
 
     // 5. Total des actions en attente par plateforme
@@ -417,8 +417,6 @@ export async function getScheduleSettings(req: AuthenticatedRequest, res: Respon
         workingHoursStart: true,
         workingHoursEnd: true,
         timezone: true,
-        maxDailyInvites: true,
-        maxDailyMsg: true,
       },
     });
 
@@ -434,8 +432,6 @@ export async function getScheduleSettings(req: AuthenticatedRequest, res: Respon
         workingHoursStart: user.workingHoursStart || "08:00",
         workingHoursEnd: user.workingHoursEnd || "19:00",
         timezone: user.timezone || "Africa/Abidjan",
-        maxDailyInvites: user.maxDailyInvites || 30,
-        maxDailyMsg: user.maxDailyMsg || 70,
       },
     });
   } catch (error: any) {
@@ -460,30 +456,21 @@ export async function updateScheduleSettings(req: AuthenticatedRequest, res: Res
       return;
     }
 
-    const { workingDays, workingHoursStart, workingHoursEnd, timezone, maxDailyInvites, maxDailyMsg } = parsed.data;
+    const { workingDays, workingHoursStart, workingHoursEnd, timezone } = parsed.data;
 
     const updatedUser = await prisma.user.update({
       where: { id: req.user.id },
-      data: {
-        workingDays,
-        workingHoursStart,
-        workingHoursEnd,
-        timezone,
-        ...(maxDailyInvites !== undefined ? { maxDailyInvites } : {}),
-        ...(maxDailyMsg !== undefined ? { maxDailyMsg } : {}),
-      },
+      data: { workingDays, workingHoursStart, workingHoursEnd, timezone },
     });
 
     res.json({
       success: true,
-      message: "Horaires d'activité et quotas mis à jour avec succès",
+      message: "Horaires d'activité mis à jour avec succès",
       schedule: {
         workingDays: updatedUser.workingDays,
         workingHoursStart: updatedUser.workingHoursStart,
         workingHoursEnd: updatedUser.workingHoursEnd,
         timezone: updatedUser.timezone,
-        maxDailyInvites: updatedUser.maxDailyInvites,
-        maxDailyMsg: updatedUser.maxDailyMsg,
       },
     });
   } catch (error: any) {

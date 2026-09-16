@@ -4,6 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import { WorkspaceAvatar } from "../common/WorkspaceAvatar";
 import { apiRequest } from "../../services/api";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
+import { EnrichmentTokensChip } from "./EnrichmentTokensChip";
 import {
   Menu,
   Users,
@@ -200,6 +201,9 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
         )}
+
+        {/* Solde de tokens d'enrichissement de l'espace courant */}
+        <EnrichmentTokensChip />
 
         {/* Bouton CHANGER D'ESPACE (Workspace Switcher) */}
         <WorkspaceSwitcher />

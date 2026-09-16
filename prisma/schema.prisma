@@ -65,6 +65,32 @@ model Organization {
   apiKeys         ApiKey[]
   integrations    IntegrationConfig[]
   invoices        Invoice[]
+  enrichmentLedger EnrichmentLedger[]
+}
+
+/// Journal des tokens d'enrichissement (e-mail / téléphone), par organisation.
+/// kind = LOOKUP : une ligne par profil interrogé (réservation → débit de ce qui est trouvé,
+/// le reste est restitué) ; kind = GRANT : dotation manuelle (admin). Solde du mois =
+/// dotation du plan + GRANT − tokens trouvés − tokens PENDING (enrichment.service.ts).
+model EnrichmentLedger {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String?
+  prospectId     String?
+  accountId      String?      // LinkedInAccount utilisé (compte comme une visite de profil)
+  kind           String       // LOOKUP | GRANT
+  status         String       @default("DONE") // PENDING | DONE | FAILED
+  emailCost      Int          @default(0)
+  phoneCost      Int          @default(0)
+  emailFound     Boolean      @default(false)
+  phoneFound     Boolean      @default(false)
+  grantedTokens  Int          @default(0)
+  note           String?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([accountId, createdAt])
 }
 
 model User {
@@ -85,8 +111,12 @@ model User {
   linkedinEmail    String?           @unique
   linkedinProfileId String?
 
-  maxDailyInvites  Int               @default(30)
-  maxDailyMsg      Int               @default(70)
+  // Plafonds personnels hebdomadaires (null = quota de l'offre). Le journalier
+  // est réparti automatiquement et aléatoirement par quota.service.ts.
+  maxWeeklyInvites  Int?
+  maxWeeklyMessages Int?
+  maxWeeklyVisits   Int?
+  maxWeeklyFollows  Int?
 
   // Working hours and activity schedule
   workingDays        String[]        @default(["MON", "TUE", "WED", "THU", "FRI"])

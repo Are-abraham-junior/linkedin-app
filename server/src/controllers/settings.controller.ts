@@ -16,6 +16,9 @@ import {
   resumePausedCampaigns,
   isWithinCreationGrace,
 } from "../services/linkedinConnection.service.js";
+import { BILLING_PLANS, normalizePlanId, getPlanActionLimits, ACTION_KINDS, type ActionKind } from "../config/plans.js";
+import { getQuotaSnapshot, effectiveWindow, type QuotaSnapshot } from "../services/quota.service.js";
+import { getBalance as getEnrichmentBalance } from "../services/enrichment.service.js";
 
 const INTERNAL_PROVIDERS = [REPORTS_PROVIDER, WORKSPACE_PROVIDER];
 
@@ -91,13 +94,98 @@ const UpdateAccountSchema = z.object({
   avatarUrl: z.string().optional().nullable(),
   currentPassword: z.string().optional(),
   newPassword: z.string().min(8, "Le nouveau mot de passe doit contenir au moins 8 caractères").optional(),
-  maxDailyInvites: z.number().min(1).max(100).optional(),
-  maxDailyMsg: z.number().min(1).max(200).optional(),
+  // Plafonds personnels hebdomadaires ; null = quota de l'offre. Bornés par le plan dans le handler.
+  maxWeeklyInvites: z.number().int().min(0).nullable().optional(),
+  maxWeeklyMessages: z.number().int().min(0).nullable().optional(),
+  maxWeeklyVisits: z.number().int().min(0).nullable().optional(),
+  maxWeeklyFollows: z.number().int().min(0).nullable().optional(),
   workingDays: z.array(z.string()).optional(),
   workingHoursStart: z.string().optional(),
   workingHoursEnd: z.string().optional(),
   timezone: z.string().optional(),
 });
+
+const WEEKLY_FIELD_BY_KIND: Record<ActionKind, "maxWeeklyInvites" | "maxWeeklyMessages" | "maxWeeklyVisits" | "maxWeeklyFollows"> = {
+  invites: "maxWeeklyInvites",
+  messages: "maxWeeklyMessages",
+  visits: "maxWeeklyVisits",
+  follows: "maxWeeklyFollows",
+};
+
+const ACTION_LABELS: Record<ActionKind, string> = {
+  invites: "invitations",
+  messages: "messages",
+  visits: "visites de profil",
+  follows: "suivis de profil",
+};
+
+type QuotaUser = {
+  maxWeeklyInvites: number | null;
+  maxWeeklyMessages: number | null;
+  maxWeeklyVisits: number | null;
+  maxWeeklyFollows: number | null;
+  workingDays: string[];
+  timezone: string;
+};
+
+/**
+ * État des quotas d'actions LinkedIn exposé aux écrans Réglages / Facturation :
+ * quotas de l'offre, réglage personnel, quotas effectifs, cible du jour et usage.
+ * Sans compte LinkedIn connecté, l'usage est à zéro.
+ */
+export async function buildQuotasPayload(
+  user: QuotaUser,
+  account: { id: string; accountType: string | null; createdAt: Date } | null,
+  planRaw: string | null | undefined
+) {
+  const planId = normalizePlanId(planRaw);
+  const planLimits = getPlanActionLimits(planRaw, account?.accountType);
+
+  let snapshot: QuotaSnapshot | null = null;
+  if (account) {
+    snapshot = await getQuotaSnapshot({ user, account, planRaw });
+  }
+
+  const actions = {} as Record<
+    ActionKind,
+    {
+      planWeek: number;
+      planMonth: number;
+      userWeek: number | null;
+      limitWeek: number;
+      limitMonth: number;
+      target: number | null;
+      usedToday: number;
+      usedWeek: number;
+      usedMonth: number;
+    }
+  >;
+
+  for (const kind of ACTION_KINDS) {
+    const userWeek = user[WEEKLY_FIELD_BY_KIND[kind]];
+    const eff = effectiveWindow(planLimits[kind], userWeek);
+    const s = snapshot?.actions[kind];
+    actions[kind] = {
+      planWeek: planLimits[kind].week,
+      planMonth: planLimits[kind].month,
+      userWeek: userWeek !== null && userWeek < planLimits[kind].week ? userWeek : null,
+      limitWeek: eff.week,
+      limitMonth: eff.month,
+      target: s?.target ?? null,
+      usedToday: s?.usedToday ?? 0,
+      usedWeek: s?.usedWeek ?? 0,
+      usedMonth: s?.usedMonth ?? 0,
+    };
+  }
+
+  return {
+    plan: planId,
+    planName: BILLING_PLANS[planId].name,
+    accountType: account?.accountType ?? null,
+    actions,
+    warmup: snapshot?.warmup ?? null,
+  };
+}
 
 export async function getAccountSettings(req: AuthenticatedRequest, res: Response) {
   try {
@@ -115,7 +203,10 @@ export async function getAccountSettings(req: AuthenticatedRequest, res: Respons
             headline: true,
             dailyInvitesSent: true,
             dailyMsgSent: true,
+            accountType: true,
+            createdAt: true,
           },
+          orderBy: { updatedAt: "desc" },
         },
       },
     });
@@ -124,6 +215,9 @@ export async function getAccountSettings(req: AuthenticatedRequest, res: Respons
       res.status(404).json({ success: false, error: "Utilisateur non trouvé." });
       return;
     }
+
+    const connectedAccount = user.accounts.find((a) => a.status === "CONNECTED") ?? null;
+    const quotas = await buildQuotasPayload(user, connectedAccount, user.organization?.plan);
 
     res.json({
       success: true,
@@ -136,14 +230,17 @@ export async function getAccountSettings(req: AuthenticatedRequest, res: Respons
         avatarUrl: user.avatarUrl,
         role: user.role,
         orgRole: user.orgRole,
-        maxDailyInvites: user.maxDailyInvites,
-        maxDailyMsg: user.maxDailyMsg,
+        maxWeeklyInvites: user.maxWeeklyInvites,
+        maxWeeklyMessages: user.maxWeeklyMessages,
+        maxWeeklyVisits: user.maxWeeklyVisits,
+        maxWeeklyFollows: user.maxWeeklyFollows,
         workingDays: user.workingDays,
         workingHoursStart: user.workingHoursStart,
         workingHoursEnd: user.workingHoursEnd,
         timezone: user.timezone,
         organization: user.organization,
-        hasLinkedInAccount: user.accounts.some((a) => a.status === "CONNECTED"),
+        hasLinkedInAccount: connectedAccount !== null,
+        quotas,
       },
     });
   } catch (err: any) {
@@ -159,6 +256,10 @@ export async function updateAccountSettings(req: AuthenticatedRequest, res: Resp
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
+      include: {
+        organization: { select: { plan: true } },
+        accounts: { where: { status: "CONNECTED" }, select: { accountType: true }, take: 1 },
+      },
     });
 
     if (!user) {
@@ -172,8 +273,23 @@ export async function updateAccountSettings(req: AuthenticatedRequest, res: Resp
     if (body.firstName !== undefined) updateData.firstName = body.firstName.trim();
     if (body.lastName !== undefined) updateData.lastName = body.lastName.trim();
     if (body.avatarUrl !== undefined) updateData.avatarUrl = body.avatarUrl;
-    if (body.maxDailyInvites !== undefined) updateData.maxDailyInvites = body.maxDailyInvites;
-    if (body.maxDailyMsg !== undefined) updateData.maxDailyMsg = body.maxDailyMsg;
+
+    // Plafonds hebdo personnels : jamais au-dessus de l'offre ; égal au plan => null
+    const planLimits = getPlanActionLimits(user.organization?.plan, user.accounts[0]?.accountType);
+    for (const kind of ACTION_KINDS) {
+      const field = WEEKLY_FIELD_BY_KIND[kind];
+      const value = body[field];
+      if (value === undefined) continue;
+      if (value !== null && value > planLimits[kind].week) {
+        res.status(400).json({
+          success: false,
+          error: `Votre offre ${BILLING_PLANS[normalizePlanId(user.organization?.plan)].name} autorise ${planLimits[kind].week} ${ACTION_LABELS[kind]} par semaine.`,
+        });
+        return;
+      }
+      updateData[field] = value === null || value >= planLimits[kind].week ? null : value;
+    }
+
     if (body.workingDays !== undefined) updateData.workingDays = body.workingDays;
     if (body.workingHoursStart !== undefined) updateData.workingHoursStart = body.workingHoursStart;
     if (body.workingHoursEnd !== undefined) updateData.workingHoursEnd = body.workingHoursEnd;
@@ -230,8 +346,10 @@ export async function updateAccountSettings(req: AuthenticatedRequest, res: Resp
         firstName: updatedUser.firstName,
         lastName: updatedUser.lastName,
         avatarUrl: updatedUser.avatarUrl,
-        maxDailyInvites: updatedUser.maxDailyInvites,
-        maxDailyMsg: updatedUser.maxDailyMsg,
+        maxWeeklyInvites: updatedUser.maxWeeklyInvites,
+        maxWeeklyMessages: updatedUser.maxWeeklyMessages,
+        maxWeeklyVisits: updatedUser.maxWeeklyVisits,
+        maxWeeklyFollows: updatedUser.maxWeeklyFollows,
         workingDays: updatedUser.workingDays,
         workingHoursStart: updatedUser.workingHoursStart,
         workingHoursEnd: updatedUser.workingHoursEnd,
@@ -844,27 +962,65 @@ export async function testIntegrationConnection(req: AuthenticatedRequest, res: 
 // 5. FACTURATION & ABONNEMENT
 // ==========================================
 
-/**
- * Grille tarifaire — miroir de client/src/marketing/content/plans.ts.
- * Les organisations créées avant la refonte portent `ENTERPRISE` : il est
- * traité comme un alias de `BUSINESS`.
- */
-type PlanId = "STARTER" | "PRO" | "BUSINESS";
-
-const BILLING_PLANS: Record<
-  PlanId,
-  { name: string; monthly: number; annual: number; maxProspects: number; maxTeamSeats: number; maxCampaigns: number }
-> = {
-  STARTER: { name: "Starter", monthly: 19, annual: 15, maxProspects: 1_000, maxTeamSeats: 1, maxCampaigns: 3 },
-  PRO: { name: "Pro", monthly: 40, annual: 32, maxProspects: 10_000, maxTeamSeats: 3, maxCampaigns: -1 },
-  BUSINESS: { name: "Business", monthly: 70, annual: 56, maxProspects: 50_000, maxTeamSeats: 10, maxCampaigns: -1 },
-};
+// Grille tarifaire : server/src/config/plans.ts (miroir de client/src/marketing/content/plans.ts)
 
 const BILLING_CURRENCY = "USD";
 
-function normalizePlanId(raw: string | null | undefined): PlanId {
-  if (raw === "STARTER" || raw === "PRO") return raw;
-  return "BUSINESS";
+/**
+ * Une organisation qui héberge un super administrateur n'est jamais facturée :
+ * aucune facture n'est générée, le prix affiché est nul et le moyen de paiement
+ * n'est pas demandé. Le test porte sur l'organisation (et non sur `req.user.role`)
+ * pour que la supervision d'un client (x-impersonate-org) affiche bien sa facturation.
+ */
+async function isBillingExempt(organizationId: string | null | undefined): Promise<boolean> {
+  if (!organizationId) return false;
+  const superAdmins = await prisma.user.count({ where: { organizationId, role: "SUPER_ADMIN" } });
+  return superAdmins > 0;
+}
+
+const UpdatePlanSchema = z.object({
+  plan: z.enum(["STARTER", "PRO", "BUSINESS"]),
+});
+
+/**
+ * Changement d'offre immédiat, réservé au super administrateur (compte interne,
+ * non facturé). Les quotas d'actions et la dotation de tokens suivent aussitôt.
+ */
+export async function updateBillingPlan(req: AuthenticatedRequest, res: Response) {
+  try {
+    if (req.user!.role !== "SUPER_ADMIN") {
+      res.status(403).json({ success: false, error: "Le changement d'offre se fait depuis votre espace de facturation." });
+      return;
+    }
+
+    const organizationId = req.user!.organizationId;
+    if (!organizationId) {
+      res.status(400).json({ success: false, error: "Aucune organisation rattachée à ce compte." });
+      return;
+    }
+
+    const parsed = UpdatePlanSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ success: false, error: "Offre inconnue." });
+      return;
+    }
+
+    const organization = await prisma.organization.update({
+      where: { id: organizationId },
+      data: { plan: parsed.data.plan },
+      select: { id: true, plan: true },
+    });
+
+    res.json({
+      success: true,
+      plan: organization.plan,
+      planName: BILLING_PLANS[normalizePlanId(organization.plan)].name,
+      message: `Offre ${BILLING_PLANS[normalizePlanId(organization.plan)].name} activée.`,
+    });
+  } catch (err: any) {
+    console.error("[settings.controller:updateBillingPlan]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
+  }
 }
 
 export async function getBillingInfo(req: AuthenticatedRequest, res: Response) {
@@ -876,6 +1032,24 @@ export async function getBillingInfo(req: AuthenticatedRequest, res: Response) {
 
     const plan = normalizePlanId(org?.plan);
     const pricing = BILLING_PLANS[plan];
+    const billingExempt = await isBillingExempt(organizationId);
+
+    // Quotas d'actions LinkedIn de l'utilisateur courant (usage réel de son compte connecté)
+    const quotaUser = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+      include: {
+        accounts: {
+          where: { status: "CONNECTED" },
+          select: { id: true, accountType: true, createdAt: true },
+          orderBy: { updatedAt: "desc" },
+          take: 1,
+        },
+      },
+    });
+    const quotas = quotaUser
+      ? await buildQuotasPayload(quotaUser, quotaUser.accounts[0] ?? null, org?.plan)
+      : null;
+    const enrichment = organizationId ? await getEnrichmentBalance(organizationId, quotaUser?.timezone) : null;
 
     // Statistiques de consommation réelle
     const prospectsCount = await prisma.prospect.count({
@@ -902,8 +1076,11 @@ export async function getBillingInfo(req: AuthenticatedRequest, res: Response) {
         })
       : [];
 
+    // Compte interne (super admin) : aucune facture générée ni affichée
+    if (billingExempt) invoices = [];
+
     // Si aucune facture n'existe encore, créer un jeu initial de factures pour cette entreprise
-    if (invoices.length === 0 && organizationId) {
+    if (!billingExempt && invoices.length === 0 && organizationId) {
       const now = new Date();
       const initialInvoices = [
         {
@@ -957,26 +1134,35 @@ export async function getBillingInfo(req: AuthenticatedRequest, res: Response) {
       billing: {
         plan,
         planName: pricing.name,
-        pricePerMonth: pricing.monthly,
-        annualPricePerMonth: pricing.annual,
+        pricePerMonth: billingExempt ? 0 : pricing.monthly,
+        annualPricePerMonth: billingExempt ? 0 : pricing.annual,
         currency: BILLING_CURRENCY,
-        billingCycle: "Mensuel",
-        renewalDate: new Date(Date.now() + 25 * 24 * 60 * 60 * 1000).toISOString(),
-        paymentMethod: {
-          brand: "Visa",
-          last4: "4242",
-          expiry: "12/28",
-        },
+        billingCycle: billingExempt ? "Offert" : "Mensuel",
+        renewalDate: billingExempt ? null : new Date(Date.now() + 25 * 24 * 60 * 60 * 1000).toISOString(),
+        // Compte interne : ni prélèvement, ni carte enregistrée
+        billingExempt,
+        canChangePlan: req.user!.role === "SUPER_ADMIN",
+        paymentMethod: billingExempt
+          ? null
+          : {
+              brand: "Visa",
+              last4: "4242",
+              expiry: "12/28",
+            },
         limits: {
           maxProspects: pricing.maxProspects,
           maxCampaigns: pricing.maxCampaigns, // -1 = illimitées
           maxTeamSeats: pricing.maxTeamSeats,
+          actions: pricing.actions,
+          enrichmentTokens: pricing.enrichmentTokens,
         },
         usage: {
           prospectsCount,
           campaignsCount,
           teamCount,
         },
+        quotas,
+        enrichment,
         invoices,
       },
     });

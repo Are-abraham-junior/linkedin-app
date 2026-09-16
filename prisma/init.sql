@@ -35,12 +35,33 @@ CREATE TABLE "User" (
     "role" "Role" NOT NULL DEFAULT 'USER',
     "status" "UserStatus" NOT NULL DEFAULT 'ACTIVE',
     "organizationId" TEXT,
-    "maxDailyInvites" INTEGER NOT NULL DEFAULT 30,
-    "maxDailyMsg" INTEGER NOT NULL DEFAULT 70,
+    "maxWeeklyInvites" INTEGER,
+    "maxWeeklyMessages" INTEGER,
+    "maxWeeklyVisits" INTEGER,
+    "maxWeeklyFollows" INTEGER,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+);
+
+-- Journal des tokens d'enrichissement (voir prisma/schema.prisma)
+CREATE TABLE IF NOT EXISTS "EnrichmentLedger" (
+    "id" TEXT NOT NULL,
+    "organizationId" TEXT NOT NULL,
+    "userId" TEXT,
+    "prospectId" TEXT,
+    "accountId" TEXT,
+    "kind" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'DONE',
+    "emailCost" INTEGER NOT NULL DEFAULT 0,
+    "phoneCost" INTEGER NOT NULL DEFAULT 0,
+    "emailFound" BOOLEAN NOT NULL DEFAULT false,
+    "phoneFound" BOOLEAN NOT NULL DEFAULT false,
+    "grantedTokens" INTEGER NOT NULL DEFAULT 0,
+    "note" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "EnrichmentLedger_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { apiRequest } from "../../services/api";
 import { WorkspaceSettingsSection } from "./WorkspaceSettingsSection";
+import type { ActionQuotaKind, QuotasInfo } from "../../types";
+import { ACTION_LABELS } from "../../marketing/content/plans";
 import {
   User as UserIcon,
   Mail,
@@ -49,8 +51,14 @@ export const AccountSettingsTab: React.FC = () => {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  const [maxDailyInvites, setMaxDailyInvites] = useState(30);
-  const [maxDailyMsg, setMaxDailyMsg] = useState(70);
+  // Plafonds hebdo personnels (bornés par l'offre) ; le journalier est réparti automatiquement
+  const [quotas, setQuotas] = useState<QuotasInfo | null>(null);
+  const [weeklyLimits, setWeeklyLimits] = useState<Record<ActionQuotaKind, number>>({
+    invites: 0,
+    messages: 0,
+    visits: 0,
+    follows: 0,
+  });
   const [workingDays, setWorkingDays] = useState<string[]>(["MON", "TUE", "WED", "THU", "FRI"]);
   const [workingHoursStart, setWorkingHoursStart] = useState("08:00");
   const [workingHoursEnd, setWorkingHoursEnd] = useState("19:00");
@@ -70,8 +78,16 @@ export const AccountSettingsTab: React.FC = () => {
           setLastName(acc.lastName || "");
           setEmail(acc.email || "");
           setAvatarUrl(acc.avatarUrl || "");
-          setMaxDailyInvites(acc.maxDailyInvites || 30);
-          setMaxDailyMsg(acc.maxDailyMsg || 70);
+          if (acc.quotas) {
+            const q: QuotasInfo = acc.quotas;
+            setQuotas(q);
+            setWeeklyLimits({
+              invites: q.actions.invites.limitWeek,
+              messages: q.actions.messages.limitWeek,
+              visits: q.actions.visits.limitWeek,
+              follows: q.actions.follows.limitWeek,
+            });
+          }
           if (Array.isArray(acc.workingDays) && acc.workingDays.length > 0) {
             setWorkingDays(acc.workingDays);
           }
@@ -122,8 +138,11 @@ export const AccountSettingsTab: React.FC = () => {
         lastName: lastName.trim(),
         email: email.trim(),
         avatarUrl: avatarUrl.trim() || null,
-        maxDailyInvites,
-        maxDailyMsg,
+        // Égal au plan => null (le serveur normalise aussi)
+        maxWeeklyInvites: quotas && weeklyLimits.invites < quotas.actions.invites.planWeek ? weeklyLimits.invites : null,
+        maxWeeklyMessages: quotas && weeklyLimits.messages < quotas.actions.messages.planWeek ? weeklyLimits.messages : null,
+        maxWeeklyVisits: quotas && weeklyLimits.visits < quotas.actions.visits.planWeek ? weeklyLimits.visits : null,
+        maxWeeklyFollows: quotas && weeklyLimits.follows < quotas.actions.follows.planWeek ? weeklyLimits.follows : null,
         workingDays,
         workingHoursStart,
         workingHoursEnd,
@@ -329,47 +348,53 @@ export const AccountSettingsTab: React.FC = () => {
           </div>
         </div>
 
-        {/* Quotas */}
+        {/* Quotas hebdomadaires (bornés par l'offre) */}
+        {quotas && (
+          <p className="text-xs text-[#5f5f69]">
+            Offre <span className="font-bold text-[#21164c]">{quotas.planName}</span> : vos volumes sont répartis
+            automatiquement sur vos jours de travail, avec une quantité légèrement différente chaque jour pour rester
+            naturel aux yeux de LinkedIn. Vous pouvez les abaisser ici, jamais dépasser votre offre.
+            {quotas.warmup?.active && (
+              <span className="ml-1 inline-flex items-center px-2 py-0.5 rounded-full bg-[#dfff9d] text-[#21164c] font-bold text-[11px]">
+                Montée en charge : jour {quotas.warmup.dayIndex + 1}/{quotas.warmup.totalDays}
+              </span>
+            )}
+          </p>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-          <div className="p-4 rounded-2xl bg-[#f8f9fc] border border-[#e0e0db]/60 space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-[#21164c]">Invitations max / jour</label>
-              <span className="px-2.5 py-0.5 rounded-full bg-[#592eff]/10 text-[#592eff] font-extrabold text-xs">
-                {maxDailyInvites} / j
-              </span>
-            </div>
-            <input
-              type="range"
-              min={5}
-              max={80}
-              value={maxDailyInvites}
-              onChange={(e) => setMaxDailyInvites(Number(e.target.value))}
-              className="w-full accent-[#592eff] cursor-pointer"
-            />
-            <p className="text-[11px] text-[#7c7c88]">
-              Recommandation : 25 à 40 invitations par jour pour une sécurité optimale.
-            </p>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-[#f8f9fc] border border-[#e0e0db]/60 space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-[#21164c]">Messages max / jour</label>
-              <span className="px-2.5 py-0.5 rounded-full bg-[#592eff]/10 text-[#592eff] font-extrabold text-xs">
-                {maxDailyMsg} / j
-              </span>
-            </div>
-            <input
-              type="range"
-              min={10}
-              max={150}
-              value={maxDailyMsg}
-              onChange={(e) => setMaxDailyMsg(Number(e.target.value))}
-              className="w-full accent-[#592eff] cursor-pointer"
-            />
-            <p className="text-[11px] text-[#7c7c88]">
-              Recommandation : 50 à 90 messages de relance ou de prise de contact par jour.
-            </p>
-          </div>
+          {(["invites", "messages", "visits", "follows"] as ActionQuotaKind[]).map((kind) => {
+            const info = quotas?.actions[kind];
+            const planWeek = info?.planWeek ?? 0;
+            const value = weeklyLimits[kind];
+            return (
+              <div key={kind} className="p-4 rounded-2xl bg-[#f8f9fc] border border-[#e0e0db]/60 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-[#21164c]">{ACTION_LABELS[kind]} max / semaine</label>
+                  <span className="px-2.5 py-0.5 rounded-full bg-[#592eff]/10 text-[#592eff] font-extrabold text-xs">
+                    {value} / sem
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={planWeek}
+                  step={5}
+                  value={value}
+                  disabled={!info}
+                  onChange={(e) => setWeeklyLimits({ ...weeklyLimits, [kind]: Number(e.target.value) })}
+                  className="w-full accent-[#592eff] cursor-pointer disabled:cursor-not-allowed"
+                />
+                <p className="text-[11px] text-[#7c7c88]">
+                  {info
+                    ? `Offre : ${planWeek} / sem · ${info.planMonth.toLocaleString("fr-FR")} / mois` +
+                      (info.target !== null
+                        ? ` — aujourd'hui ${info.usedToday} / ${info.target}, cette semaine ${info.usedWeek} / ${info.limitWeek}`
+                        : "")
+                    : "Chargement…"}
+                </p>
+              </div>
+            );
+          })}
         </div>
 
         {/* Plages horaires & fuseau */}

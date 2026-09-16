@@ -56,7 +56,7 @@ export default prisma;
 
 1. **Multi-Tenancy & Auth**:
    - `Organization`: Workspace grouping accounts (`name`, `slug`, `plan`).
-   - `User`: Workspace users (`email`, `passwordHash`, `role`, `orgRole`, `maxDailyInvites`, `maxDailyMsg`, working hours).
+   - `User`: Workspace users (`email`, `passwordHash`, `role`, `orgRole`, `maxWeekly{Invites,Messages,Visits,Follows}` (null = plan quota), working hours).
    - `TeamInvitation`: Invitation tokens with expiration (`token`, `expiresAt`, `status`).
 2. **LinkedIn Accounts**:
    - `LinkedInAccount`: Connected Unipile accounts (`unipileAccountId`, `dailyInvitesSent`, `dailyMsgSent`, `status`).

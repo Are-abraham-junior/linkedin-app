@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { apiRequest } from "../../services/api";
-import { PLANS, normalizePlanId, planLabel } from "../../marketing/content/plans";
+import { PLANS, ACTION_LABELS, normalizePlanId, planLabel } from "../../marketing/content/plans";
+import type { ActionQuotaKind, QuotasInfo, EnrichmentBalance, EnrichmentHistoryRow } from "../../types";
+import { fetchEnrichmentHistory } from "../../services/enrichment";
 import {
   CreditCard,
   Download,
@@ -32,12 +34,16 @@ interface BillingData {
   pricePerMonth: number;
   currency: string;
   billingCycle: string;
-  renewalDate: string;
+  renewalDate: string | null;
+  /** Compte interne (super administrateur) : aucun prélèvement, aucune facture. */
+  billingExempt?: boolean;
+  /** Le super administrateur choisit son offre à tout moment. */
+  canChangePlan?: boolean;
   paymentMethod: {
     brand: string;
     last4: string;
     expiry: string;
-  };
+  } | null;
   limits: {
     maxProspects: number;
     maxCampaigns: number | string;
@@ -48,14 +54,94 @@ interface BillingData {
     campaignsCount: number;
     teamCount: number;
   };
+  /** Quotas d'actions LinkedIn de l'utilisateur courant (null sans compte connecté / utilisateur). */
+  quotas: QuotasInfo | null;
+  /** Solde de tokens d'enrichissement du mois (null sans organisation). */
+  enrichment: EnrichmentBalance | null;
   invoices: InvoiceRecord[];
 }
+
+const QUOTA_KINDS: ActionQuotaKind[] = ["invites", "messages", "visits", "follows"];
+
+/** Historique du mois : une ligne par recherche (réservé → débité / restitué) ou dotation. Repliable, natif. */
+const EnrichmentHistoryTable: React.FC = () => {
+  const [rows, setRows] = useState<EnrichmentHistoryRow[] | null>(null);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open || rows !== null) return;
+    fetchEnrichmentHistory(100).then(setRows).catch(() => setRows([]));
+  }, [open, rows]);
+
+  const resultLabel = (r: EnrichmentHistoryRow) => {
+    if (r.kind === "GRANT") return `Dotation${r.note ? ` — ${r.note}` : ""}`;
+    if (r.status === "PENDING") return "En cours";
+    if (r.status === "FAILED") return "Profil injoignable";
+    if (r.emailFound && r.phoneFound) return "E-mail et téléphone";
+    if (r.emailFound) return "E-mail";
+    if (r.phoneFound) return "Téléphone";
+    return "Introuvable";
+  };
+
+  return (
+    <details open={open} onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)} className="group">
+      <summary className="list-none cursor-pointer select-none text-xs font-bold text-[#21164c] inline-flex items-center gap-1.5 [&::-webkit-details-marker]:hidden">
+        <span className="inline-block transition-transform group-open:rotate-90">›</span> Historique du mois
+      </summary>
+      <div className="mt-3 overflow-x-auto">
+        {rows === null ? (
+          <p className="text-[11px] text-[#7c7c88]">Chargement…</p>
+        ) : rows.length === 0 ? (
+          <p className="text-[11px] text-[#7c7c88] max-w-[65ch]">
+            Aucune recherche ce mois-ci. Depuis Prospects, survolez une ligne sans e-mail ou téléphone et cliquez sur « Enrichir »,
+            ou sélectionnez plusieurs prospects pour les enrichir d'un coup.
+          </p>
+        ) : (
+          <table className="w-full text-[11px] border-collapse">
+            <thead>
+              <tr className="text-left text-[#7c7c88] uppercase tracking-wider text-[10px]">
+                <th className="py-1.5 pr-4 font-bold">Date</th>
+                <th className="py-1.5 pr-4 font-bold">Prospect</th>
+                <th className="py-1.5 pr-4 font-bold">Par</th>
+                <th className="py-1.5 pr-4 font-bold">Résultat</th>
+                <th className="py-1.5 pr-4 font-bold text-right">Réservés</th>
+                <th className="py-1.5 pr-4 font-bold text-right">Débités</th>
+                <th className="py-1.5 font-bold text-right">Restitués</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id} className="border-t border-[#e0e0db]/70 text-[#353241]">
+                  <td className="py-1.5 pr-4 whitespace-nowrap">
+                    {new Date(r.createdAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" })}{" "}
+                    <span className="text-[#7c7c88]">{new Date(r.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</span>
+                  </td>
+                  <td className="py-1.5 pr-4 font-semibold text-[#21164c]">
+                    {r.prospect ? r.prospect.name : r.kind === "GRANT" ? "—" : "Prospect supprimé"}
+                    {r.prospect?.company && <span className="font-normal text-[#7c7c88]"> · {r.prospect.company}</span>}
+                  </td>
+                  <td className="py-1.5 pr-4 text-[#5f5f69]">{r.user?.name || "—"}</td>
+                  <td className="py-1.5 pr-4">{resultLabel(r)}</td>
+                  <td className="py-1.5 pr-4 text-right tabular-nums">{r.kind === "GRANT" ? `+${r.granted}` : r.reserved}</td>
+                  <td className="py-1.5 pr-4 text-right tabular-nums font-semibold text-[#21164c]">{r.kind === "GRANT" ? "" : r.charged}</td>
+                  <td className="py-1.5 text-right tabular-nums text-[#5f5f69]">{r.kind === "GRANT" ? "" : r.refunded}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </details>
+  );
+};
 
 const currencySymbol = (code: string) => (code === "USD" ? "$" : "€");
 
 export const BillingSettingsTab: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [billing, setBilling] = useState<BillingData | null>(null);
+  const [planBusy, setPlanBusy] = useState<string | null>(null);
+  const [planError, setPlanError] = useState<string | null>(null);
 
   const fetchBilling = async () => {
     setLoading(true);
@@ -74,6 +160,21 @@ export const BillingSettingsTab: React.FC = () => {
   useEffect(() => {
     fetchBilling();
   }, []);
+
+  /** Super administrateur : bascule d'offre immédiate, quotas et tokens recalculés dans la foulée. */
+  const handleChoosePlan = async (planId: string) => {
+    setPlanBusy(planId);
+    setPlanError(null);
+    try {
+      const res = await apiRequest<any>("/settings/billing/plan", { method: "PUT", body: { plan: planId } });
+      if (!res.success) throw new Error(res.error || "Changement d'offre impossible.");
+      await fetchBilling();
+    } catch (err: any) {
+      setPlanError(err.message || "Changement d'offre impossible.");
+    } finally {
+      setPlanBusy(null);
+    }
+  };
 
   const handleDownloadInvoice = (invoiceId: string) => {
     const token = localStorage.getItem("bleadin_token") || localStorage.getItem("bime_token");
@@ -149,12 +250,23 @@ export const BillingSettingsTab: React.FC = () => {
           </div>
 
           <div className="text-right">
-            <p className="text-2xl font-black text-[#21164c]">
-              {billing.pricePerMonth} {currencySymbol(billing.currency)} <span className="text-xs font-semibold text-[#7c7c88]">/ mois</span>
-            </p>
-            <p className="text-[11px] text-[#7c7c88] mt-0.5">
-              Prochain prélèvement le {new Date(billing.renewalDate).toLocaleDateString("fr-FR")}
-            </p>
+            {billing.billingExempt ? (
+              <>
+                <p className="text-2xl font-black text-[#21164c]">Offert</p>
+                <p className="text-[11px] text-[#7c7c88] mt-0.5">Compte interne — aucune facturation</p>
+              </>
+            ) : (
+              <>
+                <p className="text-2xl font-black text-[#21164c]">
+                  {billing.pricePerMonth} {currencySymbol(billing.currency)} <span className="text-xs font-semibold text-[#7c7c88]">/ mois</span>
+                </p>
+                {billing.renewalDate && (
+                  <p className="text-[11px] text-[#7c7c88] mt-0.5">
+                    Prochain prélèvement le {new Date(billing.renewalDate).toLocaleDateString("fr-FR")}
+                  </p>
+                )}
+              </>
+            )}
           </div>
         </div>
 
@@ -217,7 +329,47 @@ export const BillingSettingsTab: React.FC = () => {
           </div>
         </div>
 
+        {/* Actions LinkedIn du mois (par compte) */}
+        {billing.quotas && (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-bold text-[#21164c]">Actions LinkedIn ce mois-ci</p>
+              <p className="text-[11px] text-[#7c7c88]">
+                Réparties automatiquement chaque jour de travail
+                {billing.quotas.warmup?.active &&
+                  ` · montée en charge jour ${billing.quotas.warmup.dayIndex + 1}/${billing.quotas.warmup.totalDays}`}
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {QUOTA_KINDS.map((kind) => {
+                const q = billing.quotas!.actions[kind];
+                const monthPercent = q.limitMonth > 0 ? Math.min(Math.round((q.usedMonth / q.limitMonth) * 100), 100) : 0;
+                return (
+                  <div key={kind} className="p-4 rounded-2xl bg-[#f8f9fc] border border-[#e0e0db]/60 space-y-2">
+                    <div className="flex justify-between text-xs gap-2">
+                      <span className="font-semibold text-[#5f5f69]">{ACTION_LABELS[kind]}</span>
+                      <span className="font-bold text-[#21164c] whitespace-nowrap">
+                        {q.usedMonth.toLocaleString("fr-FR")} / {q.limitMonth.toLocaleString("fr-FR")}
+                      </span>
+                    </div>
+                    <div className="w-full h-2 rounded-full bg-[#e0e0db]/60 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-[#592eff] transition-all duration-500"
+                        style={{ width: `${monthPercent}%` }}
+                      ></div>
+                    </div>
+                    <p className="text-[10px] text-[#7c7c88] text-right font-medium">
+                      Cette semaine {q.usedWeek} / {q.limitWeek}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Moyen de paiement actif */}
+        {billing.paymentMethod && (
         <div className="p-4 rounded-2xl bg-[#f8f9fc] border border-[#e0e0db]/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-white border border-[#e0e0db] flex items-center justify-center text-[#21164c] font-bold">
@@ -239,14 +391,83 @@ export const BillingSettingsTab: React.FC = () => {
             Mettre à jour la carte
           </button>
         </div>
+        )}
       </div>
 
-      {/* 2. Comparatif des Plans */}
+      {/* 2. Tokens d'enrichissement — section plate, tableau natif */}
+      {billing.enrichment && (
+        <section className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+            <div className="max-w-[65ch]">
+              <h3 className="text-base font-bold text-[#21164c]">Tokens d'enrichissement</h3>
+              <p className="text-xs text-[#5f5f69]">
+                1 token par e-mail trouvé, 5 par téléphone trouvé. Les coordonnées introuvables ne coûtent rien : les tokens
+                réservés sont restitués. Dotation renouvelée le{" "}
+                {new Date(billing.enrichment.periodEnd).toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}, partagée
+                par toute l'équipe.
+              </p>
+            </div>
+            <p className="text-2xl font-black text-[#21164c] shrink-0 leading-none">
+              {billing.enrichment.remaining}
+              <span className="text-xs font-semibold text-[#7c7c88]">
+                {" "}
+                / {billing.enrichment.allowance + billing.enrichment.granted} restants
+              </span>
+            </p>
+          </div>
+
+          <div className="w-full h-2 rounded-full bg-[#e0e0db]/60 overflow-hidden flex">
+            <div
+              className="h-full bg-[#21164c] transition-all duration-500"
+              style={{
+                width: `${Math.min(100, Math.round((billing.enrichment.debited / Math.max(1, billing.enrichment.allowance + billing.enrichment.granted)) * 100))}%`,
+              }}
+              title={`${billing.enrichment.debited} débités`}
+            />
+            <div
+              className="h-full bg-[#592eff]/40 transition-all duration-500"
+              style={{
+                width: `${Math.min(100, Math.round((billing.enrichment.pending / Math.max(1, billing.enrichment.allowance + billing.enrichment.granted)) * 100))}%`,
+              }}
+              title={`${billing.enrichment.pending} en cours`}
+            />
+          </div>
+          <dl className="flex flex-wrap gap-x-6 gap-y-1 text-[11px] text-[#5f5f69]">
+            <div className="flex gap-1.5">
+              <dt>Débités</dt>
+              <dd className="font-bold text-[#21164c]">{billing.enrichment.debited}</dd>
+            </div>
+            <div className="flex gap-1.5">
+              <dt>Restitués</dt>
+              <dd className="font-bold text-[#21164c]">{billing.enrichment.refunded}</dd>
+            </div>
+            <div className="flex gap-1.5">
+              <dt>Recherches</dt>
+              <dd className="font-bold text-[#21164c]">{billing.enrichment.lookups}</dd>
+            </div>
+            {billing.enrichment.granted > 0 && (
+              <div className="flex gap-1.5">
+                <dt>Dotation supplémentaire</dt>
+                <dd className="font-bold text-[#21164c]">+{billing.enrichment.granted}</dd>
+              </div>
+            )}
+          </dl>
+
+          <EnrichmentHistoryTable />
+        </section>
+      )}
+
+      {/* 3. Comparatif des Plans */}
       <div className="space-y-4">
         <div>
           <h3 className="text-base font-bold text-[#21164c]">Formules & Évolution</h3>
-          <p className="text-xs text-[#5f5f69]">Adaptez vos volumes de prospection selon votre croissance commerciale</p>
+          <p className="text-xs text-[#5f5f69]">
+            {billing.canChangePlan
+              ? "Compte interne : basculez d'une offre à l'autre à tout moment, sans facturation."
+              : "Adaptez vos volumes de prospection selon votre croissance commerciale"}
+          </p>
         </div>
+        {planError && <p className="text-xs font-semibold text-red-600">{planError}</p>}
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
           {PLANS.map((plan) => {
@@ -274,16 +495,20 @@ export const BillingSettingsTab: React.FC = () => {
                 </ul>
                 <p className="text-[11px] text-[#7c7c88]">{plan.annual} $/m en engagement annuel</p>
                 <button
-                  disabled={isCurrent}
+                  type="button"
+                  disabled={isCurrent || planBusy !== null || !billing.canChangePlan}
+                  onClick={billing.canChangePlan ? () => handleChoosePlan(plan.id) : undefined}
                   className={`w-full py-2 rounded-xl text-xs font-bold transition-all ${
                     isCurrent
                       ? "bg-[#f0edf9] text-[#592eff] cursor-default"
+                      : !billing.canChangePlan
+                      ? "bg-[#f0f0f4] text-[#7c7c88] cursor-default"
                       : plan.highlighted
                       ? "bg-[#592eff] hover:bg-[#4922db] text-white cursor-pointer"
                       : "bg-[#f0f0f4] hover:bg-[#e4e4e9] text-[#21164c] cursor-pointer"
                   }`}
                 >
-                  {isCurrent ? "Formule active" : `Choisir ${plan.name}`}
+                  {isCurrent ? "Formule active" : planBusy === plan.id ? "Activation…" : `Choisir ${plan.name}`}
                 </button>
               </div>
             );
@@ -291,7 +516,8 @@ export const BillingSettingsTab: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. Historique & Téléchargement des Factures */}
+      {/* 4. Historique & Téléchargement des Factures — masqué pour un compte non facturé */}
+      {!billing.billingExempt && (
       <div className="adora-card bg-white rounded-3xl border border-[#e0e0db]/80 shadow-xs overflow-hidden">
         <div className="p-5 sm:p-6 border-b border-[#f0f0f4] flex items-center justify-between">
           <div>
@@ -360,6 +586,7 @@ export const BillingSettingsTab: React.FC = () => {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 };

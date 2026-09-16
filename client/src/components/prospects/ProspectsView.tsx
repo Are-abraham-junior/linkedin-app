@@ -48,6 +48,15 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { extractCompanyFromHeadline } from "../../utils/companyExtractor";
+import {
+  enrichProspects,
+  enrichmentEstimate,
+  enrichmentCostFor,
+  fetchEnrichmentBalance,
+  publishEnrichmentBalance,
+} from "../../services/enrichment";
+import type { EnrichmentBalance, EnrichmentProspectResult } from "../../types";
+import { TokenGlyph } from "../common/TokenGlyph";
 
 // Def de la structure des colonnes personnalisables
 export type ColumnKey =
@@ -182,6 +191,15 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
 
   // Selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Enrichissement (tokens) : solde, lignes en cours, retour inline par ligne, panneau de confirmation
+  const [enrichBalance, setEnrichBalance] = useState<EnrichmentBalance | null>(null);
+  const [enrichBusyIds, setEnrichBusyIds] = useState<Set<string>>(new Set());
+  const [enrichRowNotes, setEnrichRowNotes] = useState<Record<string, { tone: "ok" | "muted" | "error"; text: string }>>({});
+  const [enrichPanel, setEnrichPanel] = useState<{ thenExport: boolean } | null>(null);
+  const [enrichRunning, setEnrichRunning] = useState(false);
+  const [enrichPanelError, setEnrichPanelError] = useState<string | null>(null);
+  const [enrichSummary, setEnrichSummary] = useState<string | null>(null);
 
   // Animation ref for table rows
   const tbodyRef = useRef<HTMLTableSectionElement>(null);
@@ -552,8 +570,8 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
     }
   };
 
-  const handleExportCSV = () => {
-    const dataToExport = prospects.filter(
+  const handleExportCSV = (source: any[] = prospects) => {
+    const dataToExport = source.filter(
       (p) => selectedIds.size === 0 || selectedIds.has(p.id)
     );
 
@@ -596,6 +614,145 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
     a.href = encodedUri;
     a.download = `bleadin-prospects-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
+  };
+
+  // ---- Enrichissement (tokens) ----
+
+  /** Solde local + diffusion au chip du bandeau (Header). */
+  const updateEnrichBalance = (balance: EnrichmentBalance | null) => {
+    setEnrichBalance(balance);
+    if (balance) publishEnrichmentBalance(balance);
+  };
+
+  const loadEnrichBalance = async () => {
+    try {
+      updateEnrichBalance(await fetchEnrichmentBalance());
+    } catch {
+      /* sans solde, les boutons restent actifs et le panneau affiche « — » */
+    }
+  };
+
+  useEffect(() => {
+    loadEnrichBalance();
+  }, [impersonatedOrg?.id]);
+
+  /** Applique les coordonnées trouvées aux lignes affichées et renvoie la liste mise à jour. */
+  const applyEnrichmentResults = (results: EnrichmentProspectResult[]) => {
+    const byId = new Map(results.map((r) => [r.prospectId, r]));
+    const next = prospects.map((p) => {
+      const r = byId.get(p.id);
+      if (!r || (r.status !== "ENRICHED" && r.status !== "PARTIAL")) return p;
+      return { ...p, email: r.email ?? p.email, phone: r.phone ?? p.phone };
+    });
+    setProspects(next);
+    return next;
+  };
+
+  const noteFor = (r: EnrichmentProspectResult): { tone: "ok" | "muted" | "error"; text: string } => {
+    switch (r.status) {
+      case "ENRICHED":
+        return { tone: "ok", text: `Trouvé · ${r.charged} token${r.charged > 1 ? "s" : ""}` };
+      case "PARTIAL":
+        return { tone: "ok", text: `${r.email && r.phone ? "" : r.email ? "E-mail trouvé" : "Téléphone trouvé"} · ${r.charged} débité${r.charged > 1 ? "s" : ""}, ${r.refunded} restitué${r.refunded > 1 ? "s" : ""}` };
+      case "NOT_FOUND":
+        return { tone: "muted", text: "Introuvable · tokens restitués" };
+      case "FAILED":
+        return { tone: "error", text: "Profil injoignable · tokens restitués" };
+      default:
+        switch (r.reason) {
+          case "ALREADY_COMPLETE":
+            return { tone: "muted", text: "Déjà complet" };
+          case "INSUFFICIENT_TOKENS":
+            return { tone: "error", text: "Solde insuffisant" };
+          case "VISITS_QUOTA":
+            return { tone: "error", text: "Quota de visites du jour atteint" };
+          case "BATCH_LIMIT":
+            return { tone: "muted", text: "Au-delà du lot de 50" };
+          default:
+            return { tone: "error", text: "Pas d'URL LinkedIn" };
+        }
+    }
+  };
+
+  const flashRowNotes = (results: EnrichmentProspectResult[]) => {
+    const notes: typeof enrichRowNotes = {};
+    for (const r of results) notes[r.prospectId] = noteFor(r);
+    setEnrichRowNotes((prev) => ({ ...prev, ...notes }));
+    window.setTimeout(() => {
+      setEnrichRowNotes((prev) => {
+        const copy = { ...prev };
+        for (const r of results) delete copy[r.prospectId];
+        return copy;
+      });
+    }, 6000);
+  };
+
+  const handleEnrichOne = async (p: any) => {
+    if (enrichBusyIds.has(p.id)) return;
+    setEnrichBusyIds((prev) => new Set(prev).add(p.id));
+    try {
+      const res = await enrichProspects([p.id]);
+      if (!res.success) {
+        setEnrichRowNotes((prev) => ({ ...prev, [p.id]: { tone: "error", text: res.error || "Échec de l'enrichissement" } }));
+        window.setTimeout(() => setEnrichRowNotes((prev) => { const c = { ...prev }; delete c[p.id]; return c; }), 6000);
+        return;
+      }
+      applyEnrichmentResults(res.results);
+      flashRowNotes(res.results);
+      if (res.balance) updateEnrichBalance(res.balance);
+    } finally {
+      setEnrichBusyIds((prev) => {
+        const next = new Set(prev);
+        next.delete(p.id);
+        return next;
+      });
+    }
+  };
+
+  const selectedProspects = prospects.filter((p) => selectedIds.has(p.id));
+  const enrichEstimate = enrichmentEstimate(selectedProspects);
+  const enrichBatch = enrichEstimate.incomplete.slice(0, 50);
+  const enrichBatchCost = enrichBatch.reduce((s, p) => s + enrichmentCostFor(p), 0);
+
+  const openEnrichPanel = (thenExport: boolean) => {
+    setEnrichPanelError(null);
+    setEnrichSummary(null);
+    setEnrichPanel({ thenExport });
+  };
+
+  const confirmEnrichSelection = async () => {
+    if (!enrichPanel) return;
+    const { thenExport } = enrichPanel;
+    if (enrichBatch.length === 0) {
+      if (thenExport) handleExportCSV();
+      setEnrichPanel(null);
+      return;
+    }
+    setEnrichRunning(true);
+    setEnrichPanelError(null);
+    try {
+      const res = await enrichProspects(enrichBatch.map((p) => p.id));
+      if (!res.success) {
+        setEnrichPanelError(res.error || "Échec de l'enrichissement.");
+        return;
+      }
+      const updated = applyEnrichmentResults(res.results);
+      flashRowNotes(res.results);
+      if (res.balance) updateEnrichBalance(res.balance);
+
+      const found = res.results.filter((r) => r.status === "ENRICHED" || r.status === "PARTIAL").length;
+      const charged = res.results.reduce((s, r) => s + r.charged, 0);
+      const refunded = res.results.reduce((s, r) => s + r.refunded, 0);
+      const skippedTokens = res.results.filter((r) => r.reason === "INSUFFICIENT_TOKENS").length;
+      setEnrichSummary(
+        `${found} prospect${found > 1 ? "s" : ""} complété${found > 1 ? "s" : ""} · ${charged} token${charged > 1 ? "s" : ""} débité${charged > 1 ? "s" : ""} · ${refunded} restitué${refunded > 1 ? "s" : ""}` +
+          (skippedTokens ? ` · ${skippedTokens} non traité${skippedTokens > 1 ? "s" : ""} (solde insuffisant)` : "")
+      );
+      if (thenExport) handleExportCSV(updated);
+      setEnrichPanel(null);
+    } finally {
+      setEnrichRunning(false);
+    }
   };
 
   const handleConfirmTransfer = async () => {
@@ -709,6 +866,49 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                     <span className="max-w-[100px] truncate">{p.phone}</span>
                   </span>
                 )}
+                {(() => {
+                  const note = enrichRowNotes[p.id];
+                  const busy = enrichBusyIds.has(p.id);
+                  const cost = enrichmentCostFor(p);
+                  if (note) {
+                    return (
+                      <span
+                        className={`text-[9px] font-medium leading-none shrink-0 ${
+                          note.tone === "ok" ? "text-emerald-700" : note.tone === "error" ? "text-red-600" : "text-[#7c7c88]"
+                        }`}
+                      >
+                        {note.text}
+                      </span>
+                    );
+                  }
+                  if (busy) {
+                    return (
+                      <span className="inline-flex items-center gap-1 text-[9px] text-[#5f5f69] leading-none shrink-0">
+                        <RefreshCw className="w-2.5 h-2.5 animate-spin text-[#592eff]" /> Recherche…
+                      </span>
+                    );
+                  }
+                  if (cost === 0) return null;
+                  const noTokens = enrichBalance !== null && enrichBalance.remaining < 1;
+                  return (
+                    <button
+                      type="button"
+                      disabled={noTokens}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEnrichOne(p);
+                      }}
+                      className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 inline-flex items-center gap-1 text-[9px] font-semibold text-[#21164c] border border-[#e0e0db] rounded-md px-1.5 py-[2px] leading-none shrink-0 hover:border-[#21164c] transition-[opacity,border-color] disabled:cursor-not-allowed disabled:text-[#7c7c88]"
+                      title={
+                        noTokens
+                          ? "Plus de tokens ce mois-ci"
+                          : `Rechercher ${!p.email && !p.phone ? "l'e-mail et le téléphone" : !p.email ? "l'e-mail" : "le téléphone"} · ${cost} token${cost > 1 ? "s" : ""} maximum, restitués si introuvables`
+                      }
+                    >
+                      Enrichir · {cost} <TokenGlyph />
+                    </button>
+                  );
+                })()}
               </div>
             </div>
           </div>
@@ -1142,7 +1342,7 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
               {/* Export CSV Chip */}
               <button
                 type="button"
-                onClick={handleExportCSV}
+                onClick={() => handleExportCSV()}
                 className="p-1.5 rounded-xl border border-[#e0e0db] bg-white hover:bg-[#f5f5f7] text-[#5f5f69] shrink-0 transition-colors"
                 title="Exporter en CSV"
               >
@@ -1171,21 +1371,72 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
               </div>
 
               <div className="flex items-center gap-2">
+                {/* Seul CTA violet de la barre : révéler les coordonnées manquantes */}
+                <button
+                  onClick={() => openEnrichPanel(false)}
+                  disabled={enrichEstimate.incomplete.length === 0 || (enrichBalance !== null && enrichBalance.remaining < 1)}
+                  className="py-1 px-2.5 rounded-lg bg-[#592eff] hover:bg-[#4d25e0] disabled:bg-white/10 disabled:text-white/50 disabled:cursor-not-allowed text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  title={
+                    enrichEstimate.incomplete.length === 0
+                      ? "Tous les prospects sélectionnés ont déjà e-mail et téléphone"
+                      : enrichBalance !== null && enrichBalance.remaining < 1
+                        ? "Plus de tokens ce mois-ci"
+                        : "Rechercher l'e-mail et le téléphone des prospects sélectionnés"
+                  }
+                >
+                  <Sparkles className="w-3 h-3" />
+                  {enrichBalance !== null && enrichBalance.remaining < 1 ? (
+                    "Plus de tokens ce mois-ci"
+                  ) : (
+                    <>
+                      Enrichir ({enrichEstimate.incomplete.length}) · ≈ {enrichEstimate.maxCost} <TokenGlyph />
+                    </>
+                  )}
+                </button>
                 {teamMembers.length > 1 && (
                   <button
                     onClick={() => setIsTransferModalOpen(true)}
-                    className="py-1 px-2.5 rounded-lg bg-[#592eff] hover:bg-[#4d25e0] text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                    className="py-1 px-2.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
                     title="Transférer les prospects à un collègue"
                   >
                     <ArrowRightLeft className="w-3 h-3" /> Transférer
                   </button>
                 )}
-                <button
-                  onClick={handleExportCSV}
-                  className="py-1 px-2.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-semibold flex items-center gap-1.5 transition-colors"
-                >
-                  <Download className="w-3 h-3" /> Exporter
-                </button>
+                {/* Export : menu natif <details>, avec ou sans enrichissement préalable */}
+                <details className="relative group/export">
+                  <summary className="list-none py-1 px-2.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer select-none [&::-webkit-details-marker]:hidden">
+                    <Download className="w-3 h-3" /> Exporter <ChevronDown className="w-3 h-3 opacity-70" />
+                  </summary>
+                  <div className="absolute right-0 top-full mt-1.5 z-30 min-w-[260px] rounded-xl border border-[#e0e0db] bg-white text-[#21164c] shadow-lg shadow-[#21164c]/10 p-1">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open");
+                        handleExportCSV();
+                      }}
+                      className="w-full text-left px-3 py-2 rounded-lg hover:bg-[#f5f5f7] text-xs font-semibold"
+                    >
+                      Exporter tel quel
+                      <span className="block text-[10px] font-normal text-[#7c7c88]">CSV des {selectedIds.size} prospects sélectionnés</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={enrichEstimate.incomplete.length === 0 || (enrichBalance !== null && enrichBalance.remaining < 1)}
+                      onClick={(e) => {
+                        (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open");
+                        openEnrichPanel(true);
+                      }}
+                      className="w-full text-left px-3 py-2 rounded-lg hover:bg-[#f5f5f7] text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Enrichir puis exporter
+                      <span className="block text-[10px] font-normal text-[#7c7c88]">
+                        {enrichEstimate.incomplete.length === 0
+                          ? "Toutes les coordonnées sont déjà présentes"
+                          : `${enrichEstimate.incomplete.length} sans coordonnées · ≈ ${enrichEstimate.maxCost} tokens maximum`}
+                      </span>
+                    </button>
+                  </div>
+                </details>
                 <button
                   onClick={handleOpenDeleteModal}
                   className="py-1 px-2.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
@@ -1193,6 +1444,74 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                   <Trash2 className="w-3 h-3" /> Supprimer
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* Panneau de confirmation d'enrichissement — inline, jamais en modale */}
+          {enrichPanel && selectedIds.size > 0 && (
+            <div className="rounded-xl border border-[#e0e0db] bg-white px-4 py-3 shrink-0 animate-in fade-in slide-in-from-top-1 duration-200">
+              <div className="flex flex-col md:flex-row md:items-start gap-4">
+                <div className="flex-1 min-w-0 max-w-[65ch]">
+                  <p className="text-xs font-bold text-[#21164c]">
+                    {enrichPanel.thenExport ? "Enrichir puis exporter" : "Enrichir"} {enrichBatch.length} prospect{enrichBatch.length > 1 ? "s" : ""}
+                    {enrichEstimate.incomplete.length > enrichBatch.length && (
+                      <span className="font-medium text-[#7c7c88]"> — {enrichEstimate.incomplete.length - enrichBatch.length} au-delà du lot de 50, à relancer ensuite</span>
+                    )}
+                  </p>
+                  <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[11px] text-[#5f5f69]">
+                    <dt>Coût maximum</dt>
+                    <dd className="font-semibold text-[#21164c]">
+                      {enrichBatchCost} <TokenGlyph /> <span className="font-normal text-[#7c7c88]">— 1 par e-mail, 5 par téléphone, uniquement ce qui manque</span>
+                    </dd>
+                    <dt>Solde après</dt>
+                    <dd className="font-semibold text-[#21164c]">
+                      {enrichBalance ? Math.max(0, enrichBalance.remaining - enrichBatchCost) : "—"} <TokenGlyph />
+                      {enrichBalance && enrichBalance.remaining < enrichBatchCost && (
+                        <span className="font-normal text-amber-700"> — solde insuffisant pour tout le lot, les derniers prospects ne seront pas traités</span>
+                      )}
+                    </dd>
+                  </dl>
+                  <p className="mt-1.5 text-[11px] text-[#7c7c88]">
+                    Les tokens des coordonnées introuvables vous sont restitués. Chaque recherche compte comme une visite de profil.
+                  </p>
+                  {enrichPanelError && <p className="mt-1.5 text-[11px] font-semibold text-red-600">{enrichPanelError}</p>}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setEnrichPanel(null)}
+                    disabled={enrichRunning}
+                    className="py-1.5 px-3 rounded-lg text-xs font-semibold text-[#5f5f69] hover:text-[#21164c] hover:bg-[#f5f5f7] transition-colors disabled:opacity-50"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmEnrichSelection}
+                    disabled={enrichRunning}
+                    className="py-1.5 px-3 rounded-lg bg-[#21164c] hover:bg-[#2c1f66] text-white text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-60"
+                  >
+                    {enrichRunning ? (
+                      <>
+                        <RefreshCw className="w-3 h-3 animate-spin" /> Recherche en cours…
+                      </>
+                    ) : (
+                      "Confirmer"
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {enrichSummary && (
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-[#e0e0db] bg-[#f8f9fc] px-4 py-2 text-[11px] text-[#21164c] shrink-0">
+              <span>
+                <span className="font-bold">Enrichissement terminé.</span> {enrichSummary}
+              </span>
+              <button type="button" onClick={() => setEnrichSummary(null)} className="text-[#7c7c88] hover:text-[#21164c]" aria-label="Fermer">
+                <X className="w-3.5 h-3.5" />
+              </button>
             </div>
           )}
 
@@ -1318,7 +1637,7 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                         <tr
                           key={p.id}
                           onClick={() => setSelectedProspect(p)}
-                          className={`hover:bg-[#f8f9fc] transition-colors cursor-pointer border-b border-[#e0e0db]/40 ${
+                          className={`group/row hover:bg-[#f8f9fc] transition-colors cursor-pointer border-b border-[#e0e0db]/40 ${
                             isSelected ? "bg-[#592eff]/5" : ""
                           }`}
                         >

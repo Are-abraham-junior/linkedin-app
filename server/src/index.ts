@@ -14,6 +14,7 @@ import teamRoutes from "./routes/team.routes.js";
 import queueRoutes from "./routes/queue.routes.js";
 import settingsRoutes from "./routes/settings.routes.js";
 import reportRoutes from "./routes/report.routes.js";
+import enrichmentRoutes from "./routes/enrichment.routes.js";
 import { startReportScheduler } from "./workers/report.worker.js";
 import { startUnipileReconcileScheduler } from "./workers/unipile-reconcile.worker.js";
 import { handleUnipileWebhook } from "./controllers/webhook.controller.js";
@@ -64,6 +65,7 @@ app.use("/api/team", teamRoutes);
 app.use("/api/queue", queueRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/reports", reportRoutes);
+app.use("/api/enrichment", enrichmentRoutes);
 app.post("/api/webhooks/unipile", handleUnipileWebhook);
 
 // Serve static client assets and SPA fallback (Production / Render)

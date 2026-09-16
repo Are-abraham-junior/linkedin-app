@@ -16,7 +16,7 @@ async function testQueueBackend() {
   console.log(`User: ${user.name} (${user.email})`);
   console.log(`Working days:`, user.workingDays);
   console.log(`Working hours: ${user.workingHoursStart} - ${user.workingHoursEnd}`);
-  console.log(`Max daily: ${user.maxDailyInvites} invites / ${user.maxDailyMsg} messages`);
+  console.log(`Max weekly (null = plan): ${user.maxWeeklyInvites} invites / ${user.maxWeeklyMessages} messages`);
 
   // 2. Count queued actions
   const accountIds = user.accounts.map((a) => a.id);

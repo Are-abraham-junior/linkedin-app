@@ -1,6 +1,15 @@
 import type { LinkedInAccount } from "@prisma/client";
 import { prisma } from "../../../lib/prisma.js";
 import { UnipileService } from "../services/unipile.service.js";
+import { actionKindOf, getQuotaSnapshot, QUOTA_REASON_LABELS } from "../services/quota.service.js";
+
+/** Remet une action en file pour plus tard (quota atteint, compte indisponible…). */
+async function deferAction(actionId: string, until: Date): Promise<void> {
+  await prisma.actionQueue.update({
+    where: { id: actionId },
+    data: { scheduledFor: until, status: "QUEUED" },
+  });
+}
 
 /**
  * Remplace les variables dynamiques dans les modèles de messages
@@ -350,6 +359,9 @@ export async function processActionQueue(): Promise<void> {
 
     console.log(`[CampaignWorker] Traitement de ${pendingActions.length} action(s) planifiée(s)...`);
 
+    // Plan de chaque organisation, chargé une fois par passage
+    const organizationPlans = new Map<string, string | null>();
+
     for (const action of pendingActions) {
       try {
         let account = action.linkedInAccount;
@@ -394,64 +406,51 @@ export async function processActionQueue(): Promise<void> {
           continue;
         }
 
-        // Calcul dynamique et fiable des quotas exécutés aujourd'hui (source de vérité : ActionQueue)
-        const todayStart = new Date();
-        todayStart.setHours(0, 0, 0, 0);
-
-        const [invitesSentToday, messagesSentToday] = await Promise.all([
-          prisma.actionQueue.count({
-            where: {
-              accountId: account.id,
-              actionType: "INVITATION",
-              status: { in: ["SUCCESS", "EXECUTED"] },
-              executedAt: { gte: todayStart },
-            },
-          }),
-          prisma.actionQueue.count({
-            where: {
-              accountId: account.id,
-              actionType: "MESSAGE",
-              status: { in: ["SUCCESS", "EXECUTED"] },
-              executedAt: { gte: todayStart },
-            },
-          }),
-        ]);
-
-        // Synchroniser les compteurs sur le compte LinkedIn si décalage détecté
-        if (account.dailyInvitesSent !== invitesSentToday || account.dailyMsgSent !== messagesSentToday) {
-          await prisma.linkedInAccount.update({
-            where: { id: account.id },
-            data: { dailyInvitesSent: invitesSentToday, dailyMsgSent: messagesSentToday },
+        // Quotas hebdo/mensuels de l'offre + cible journalière aléatoire + warm-up
+        // (source de vérité : ActionQueue, calculée dans le fuseau de l'utilisateur)
+        const kind = actionKindOf(action.actionType);
+        if (kind) {
+          if (!organizationPlans.has(user.organizationId || "")) {
+            const org = user.organizationId
+              ? await prisma.organization.findUnique({ where: { id: user.organizationId }, select: { plan: true } })
+              : null;
+            organizationPlans.set(user.organizationId || "", org?.plan ?? null);
+          }
+          const snapshot = await getQuotaSnapshot({
+            user,
+            account,
+            planRaw: organizationPlans.get(user.organizationId || ""),
+            now,
           });
-          account.dailyInvitesSent = invitesSentToday;
-          account.dailyMsgSent = messagesSentToday;
-        }
 
-        const maxDailyInvites = user?.maxDailyInvites || 30;
-        const maxDailyMsg = user?.maxDailyMsg || 70;
+          // Synchroniser les compteurs d'affichage sur le compte LinkedIn si décalage détecté
+          const invitesSentToday = snapshot.actions.invites.usedToday;
+          const messagesSentToday = snapshot.actions.messages.usedToday;
+          if (account.dailyInvitesSent !== invitesSentToday || account.dailyMsgSent !== messagesSentToday) {
+            await prisma.linkedInAccount.update({
+              where: { id: account.id },
+              data: { dailyInvitesSent: invitesSentToday, dailyMsgSent: messagesSentToday },
+            });
+            account.dailyInvitesSent = invitesSentToday;
+            account.dailyMsgSent = messagesSentToday;
+          }
 
-        if (action.actionType === "INVITATION" && invitesSentToday >= maxDailyInvites) {
-          console.warn(`[CampaignWorker] Quota d'invitations journalières atteint (${invitesSentToday}/${maxDailyInvites}) pour le compte ${account.id}. Action différée.`);
-          const tomorrow = new Date();
-          tomorrow.setDate(tomorrow.getDate() + 1);
-          tomorrow.setHours(9, 0, 0, 0);
-          await prisma.actionQueue.update({
-            where: { id: action.id },
-            data: { scheduledFor: tomorrow, status: "QUEUED" },
-          });
-          continue;
-        }
-
-        if (action.actionType === "MESSAGE" && messagesSentToday >= maxDailyMsg) {
-          console.warn(`[CampaignWorker] Quota de messages journaliers atteint (${messagesSentToday}/${maxDailyMsg}) pour le compte ${account.id}. Action différée.`);
-          const tomorrow = new Date();
-          tomorrow.setDate(tomorrow.getDate() + 1);
-          tomorrow.setHours(9, 0, 0, 0);
-          await prisma.actionQueue.update({
-            where: { id: action.id },
-            data: { scheduledFor: tomorrow, status: "QUEUED" },
-          });
-          continue;
+          const status = snapshot.actions[kind];
+          if (status.blocked) {
+            const used =
+              status.blocked.reason === "MONTH"
+                ? `${status.usedMonth}/${status.limitMonth}`
+                : status.blocked.reason === "WEEK"
+                  ? `${status.usedWeek}/${status.limitWeek}`
+                  : `${status.usedToday}/${status.target}`;
+            console.warn(
+              `[CampaignWorker] Quota ${QUOTA_REASON_LABELS[status.blocked.reason]} ${kind} atteint (${used})` +
+                `${snapshot.warmup.active ? ` [warm-up J${snapshot.warmup.dayIndex + 1}/${snapshot.warmup.totalDays}]` : ""}` +
+                ` pour le compte ${account.id}. Action reportée au ${status.blocked.until.toISOString()}.`
+            );
+            await deferAction(action.id, status.blocked.until);
+            continue;
+          }
         }
 
         // Marquer comme en cours
@@ -624,25 +623,13 @@ export async function processActionQueue(): Promise<void> {
               data: { status: "SUCCESS", executedAt: new Date() },
             });
 
-            // Enrichissement automatique du prospect (coordonnées LinkedIn)
+            // Enrichissement automatique du prospect (photo, titre, entreprise).
+            // E-mail et téléphone ne sont jamais copiés ici : ils se révèlent uniquement
+            // via les tokens d'enrichissement (enrichment.service.ts).
             if (result.profile) {
               const profileData = result.profile;
-              const contactInfo = profileData?.contact_info;
-              const extractedEmail =
-                contactInfo?.emails?.[0]?.address ||
-                contactInfo?.emails?.[0] ||
-                profileData?.email;
-              const rawPhone =
-                contactInfo?.phones?.[0]?.number ||
-                contactInfo?.phones?.[0] ||
-                contactInfo?.phone_numbers?.[0]?.number ||
-                contactInfo?.phone_numbers?.[0] ||
-                profileData?.phone;
-              const extractedPhone = typeof rawPhone === "string" ? rawPhone.trim() : rawPhone ? String(rawPhone) : undefined;
 
               const enrichData: any = {};
-              if (extractedEmail && !prospect.email) enrichData.email = extractedEmail;
-              if (extractedPhone && !prospect.phone) enrichData.phone = extractedPhone;
               if (profileData?.profile_picture_url && (!prospect.avatarUrl || prospect.avatarUrl.includes("ui-avatars.com"))) {
                 enrichData.avatarUrl = profileData.profile_picture_url;
               }

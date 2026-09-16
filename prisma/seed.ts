@@ -47,8 +47,6 @@ async function main() {
       role: "SUPER_ADMIN",
       status: "ACTIVE",
       organizationId: mainOrg.id,
-      maxDailyInvites: 50,
-      maxDailyMsg: 100,
     },
   });
 
@@ -62,8 +60,6 @@ async function main() {
       role: "USER",
       status: "ACTIVE",
       organizationId: clientOrg.id,
-      maxDailyInvites: 30,
-      maxDailyMsg: 70,
     },
   });
 
@@ -76,8 +72,6 @@ async function main() {
       role: "USER",
       status: "ACTIVE",
       organizationId: clientOrg.id,
-      maxDailyInvites: 25,
-      maxDailyMsg: 50,
     },
   });
 
