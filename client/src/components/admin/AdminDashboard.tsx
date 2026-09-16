@@ -26,6 +26,75 @@ interface AdminDashboardProps {
   onNavigateToUsers: () => void;
 }
 
+/** Dotation manuelle de tokens d'enrichissement (mois en cours) — repliable, inline. */
+const GrantTokensForm: React.FC<{ organizationId: string }> = ({ organizationId }) => {
+  const [tokens, setTokens] = useState("");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const n = parseInt(tokens, 10);
+    if (!n || n < 1) return;
+    setBusy(true);
+    setFeedback(null);
+    try {
+      const res = await apiRequest(`/admin/organizations/${organizationId}/enrichment-grant`, {
+        method: "POST",
+        body: { tokens: n, note: note.trim() || undefined },
+      });
+      if (res.success) {
+        setFeedback({ ok: true, text: `+${n} tokens · solde ${res.balance?.remaining ?? "?"}` });
+        setTokens("");
+        setNote("");
+      } else {
+        setFeedback({ ok: false, text: res.error || "Échec de la dotation." });
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <details className="mt-3 group/grant">
+      <summary className="list-none cursor-pointer text-[11px] font-semibold text-[#5f5f69] hover:text-[#21164c] select-none [&::-webkit-details-marker]:hidden">
+        <span className="inline-block transition-transform group-open/grant:rotate-90">›</span> Ajouter des tokens d'enrichissement
+      </summary>
+      <form onSubmit={submit} className="mt-2 flex items-center gap-1.5">
+        <input
+          type="number"
+          min={1}
+          max={10000}
+          value={tokens}
+          onChange={(e) => setTokens(e.target.value)}
+          placeholder="Tokens"
+          className="w-20 px-2 py-1 rounded-lg border border-[#e0e0db] bg-white text-[11px] focus:outline-none focus:border-[#21164c]"
+          required
+        />
+        <input
+          type="text"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Note (facultatif)"
+          maxLength={200}
+          className="flex-1 min-w-0 px-2 py-1 rounded-lg border border-[#e0e0db] bg-white text-[11px] focus:outline-none focus:border-[#21164c]"
+        />
+        <button
+          type="submit"
+          disabled={busy}
+          className="px-2.5 py-1 rounded-lg bg-[#21164c] text-white text-[11px] font-semibold disabled:opacity-60"
+        >
+          Créditer
+        </button>
+      </form>
+      {feedback && (
+        <p className={`mt-1.5 text-[11px] ${feedback.ok ? "text-emerald-700" : "text-red-600"}`}>{feedback.text}</p>
+      )}
+    </details>
+  );
+};
+
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateToUsers }) => {
   const navigate = useNavigate();
   const { setImpersonatedOrg } = useAuth();
@@ -254,6 +323,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateToUser
                       {org._count?.users || 0} membre(s)
                     </span>
                   </div>
+                  <GrantTokensForm organizationId={org.id} />
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-[#e0e0db]/60 flex items-center justify-between gap-2">

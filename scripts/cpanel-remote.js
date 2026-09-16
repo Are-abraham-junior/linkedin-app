@@ -459,7 +459,7 @@ function cmdDbPush() {
     cd ${config.remoteApiDir};
     export TOKIO_WORKER_THREADS=2 UV_THREADPOOL_SIZE=2;
     node -v;
-    npx prisma db push --schema=./prisma/schema.prisma;
+    npx prisma db push --schema=./prisma/schema.prisma${process.argv.includes("--accept-data-loss") ? " --accept-data-loss" : ""};
     npx prisma generate --schema=./prisma/schema.prisma;
   `);
   const ok = runRemoteSsh(pushCmd, "prisma db push + generate (distant, via nodevenv)");
@@ -595,7 +595,7 @@ Commandes disponibles :
   logs         Affiche les dernières lignes de logs d'erreurs (stderr.log)
   diag         Lance 'node app.js' directement dans le nodevenv distant via SSH
   clean-env    Assainit le fichier .env (supprime BOM UTF-8 et retours CRLF) local et distant
-  db-push [--seed]  Applique 'prisma db push' DIRECTEMENT SUR LE SERVEUR via SSH (nodevenv distant).
+  db-push [--seed] [--accept-data-loss]  Applique 'prisma db push' DIRECTEMENT SUR LE SERVEUR via SSH (nodevenv distant).
                      Ajouter --seed pour exécuter 'prisma db seed' juste après.
   health       Interroge les endpoints de santé (/api/health et Frontend)
   deploy-all   Exécute le cycle complet : package -> push -> install-deps -> chmod -> db-push -> restart -> health

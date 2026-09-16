@@ -19,6 +19,7 @@ import {
   saveIntegration,
   testIntegrationConnection,
   getBillingInfo,
+  updateBillingPlan,
   downloadInvoicePdf,
 } from "../controllers/settings.controller.js";
 
@@ -57,6 +58,8 @@ router.post("/integrations/test", testIntegrationConnection);
 
 // 5. Facturation & Abonnement
 router.get("/billing", getBillingInfo);
+// Changement d'offre immédiat (super administrateur uniquement, compte non facturé)
+router.put("/billing/plan", updateBillingPlan);
 router.get("/billing/invoices/:id/pdf", downloadInvoicePdf);
 
 export default router;

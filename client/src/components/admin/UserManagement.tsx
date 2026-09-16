@@ -51,16 +51,16 @@ export const UserManagement: React.FC = () => {
     password: "",
     role: "USER" as Role,
     organizationId: "",
-    maxDailyInvites: 30,
-    maxDailyMsg: 70,
+    maxWeeklyInvites: null as number | null,
+    maxWeeklyMessages: null as number | null,
   });
 
   const [editFormData, setEditFormData] = useState({
     name: "",
     role: "USER" as Role,
     status: "ACTIVE" as UserStatus,
-    maxDailyInvites: 30,
-    maxDailyMsg: 70,
+    maxWeeklyInvites: null as number | null,
+    maxWeeklyMessages: null as number | null,
     newPassword: "",
   });
 
@@ -125,8 +125,8 @@ export const UserManagement: React.FC = () => {
           password: "",
           role: "USER",
           organizationId: "",
-          maxDailyInvites: 30,
-          maxDailyMsg: 70,
+          maxWeeklyInvites: null as number | null,
+          maxWeeklyMessages: null as number | null,
         });
         fetchUsers();
       } else {
@@ -150,8 +150,8 @@ export const UserManagement: React.FC = () => {
         name: editFormData.name,
         role: editFormData.role,
         status: editFormData.status,
-        maxDailyInvites: editFormData.maxDailyInvites,
-        maxDailyMsg: editFormData.maxDailyMsg,
+        maxWeeklyInvites: editFormData.maxWeeklyInvites,
+        maxWeeklyMessages: editFormData.maxWeeklyMessages,
       };
 
       if (editFormData.newPassword) {
@@ -208,8 +208,8 @@ export const UserManagement: React.FC = () => {
       name: user.name || "",
       role: user.role,
       status: user.status,
-      maxDailyInvites: user.maxDailyInvites,
-      maxDailyMsg: user.maxDailyMsg,
+      maxWeeklyInvites: user.maxWeeklyInvites ?? null,
+      maxWeeklyMessages: user.maxWeeklyMessages ?? null,
       newPassword: "",
     });
     setFormError(null);
@@ -389,11 +389,11 @@ export const UserManagement: React.FC = () => {
                     <td className="py-3.5 font-medium text-[#353241]">
                       <div className="flex items-center gap-1.5 text-[11px]">
                         <span className="bg-[#592eff]/10 text-[#592eff] px-1.5 py-0.5 rounded font-bold">
-                          {u.maxDailyInvites} inv/j
+                          {u.maxWeeklyInvites ?? "offre"} inv/sem
                         </span>
                         <span>•</span>
                         <span className="bg-[#2ed6ff]/15 text-[#00819e] px-1.5 py-0.5 rounded font-bold">
-                          {u.maxDailyMsg} msg/j
+                          {u.maxWeeklyMessages ?? "offre"} msg/sem
                         </span>
                       </div>
                     </td>
@@ -535,30 +535,28 @@ export const UserManagement: React.FC = () => {
               <div className="grid grid-cols-2 gap-3 p-3 rounded-2xl bg-[#f8f9fc] border border-[#e0e0db]">
                 <div>
                   <label className="block text-[11px] font-bold text-[#21164c] uppercase tracking-wider mb-1">
-                    Max Invits / Jour
+                    Max invitations / semaine (vide = offre)
                   </label>
                   <input
                     type="number"
-                    min={5}
-                    max={100}
-                    value={formData.maxDailyInvites}
+                    min={0}
+                    value={formData.maxWeeklyInvites ?? ""}
                     onChange={(e) =>
-                      setFormData({ ...formData, maxDailyInvites: parseInt(e.target.value) || 30 })
+                      setFormData({ ...formData, maxWeeklyInvites: e.target.value === "" ? null : parseInt(e.target.value) || 0 })
                     }
                     className="w-full px-3 py-1.5 rounded-lg border border-[#e0e0db] text-xs bg-white focus:outline-none focus:border-[#592eff]"
                   />
                 </div>
                 <div>
                   <label className="block text-[11px] font-bold text-[#21164c] uppercase tracking-wider mb-1">
-                    Max Messages / Jour
+                    Max messages / semaine (vide = offre)
                   </label>
                   <input
                     type="number"
-                    min={10}
-                    max={200}
-                    value={formData.maxDailyMsg}
+                    min={0}
+                    value={formData.maxWeeklyMessages ?? ""}
                     onChange={(e) =>
-                      setFormData({ ...formData, maxDailyMsg: parseInt(e.target.value) || 70 })
+                      setFormData({ ...formData, maxWeeklyMessages: e.target.value === "" ? null : parseInt(e.target.value) || 0 })
                     }
                     className="w-full px-3 py-1.5 rounded-lg border border-[#e0e0db] text-xs bg-white focus:outline-none focus:border-[#592eff]"
                   />
@@ -649,41 +647,33 @@ export const UserManagement: React.FC = () => {
               {/* Quotas */}
               <div className="p-3 rounded-2xl bg-[#f8f9fc] border border-[#e0e0db] space-y-3">
                 <p className="text-xs font-bold text-[#21164c] flex items-center gap-1.5">
-                  <Sliders className="w-3.5 h-3.5 text-[#592eff]" /> Quotas Quotidiens LinkedIn
+                  <Sliders className="w-3.5 h-3.5 text-[#592eff]" /> Plafonds hebdomadaires LinkedIn
                 </p>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[10px] text-[#5f5f69] uppercase font-bold mb-1">
-                      Invitations / jour
+                      Invitations / semaine (vide = offre)
                     </label>
                     <input
                       type="number"
-                      min={5}
-                      max={100}
-                      value={editFormData.maxDailyInvites}
+                      min={0}
+                      value={editFormData.maxWeeklyInvites ?? ""}
                       onChange={(e) =>
-                        setEditFormData({
-                          ...editFormData,
-                          maxDailyInvites: parseInt(e.target.value) || 30,
-                        })
+                        setEditFormData({ ...editFormData, maxWeeklyInvites: e.target.value === "" ? null : parseInt(e.target.value) || 0 })
                       }
                       className="w-full px-3 py-1.5 rounded-lg border border-[#e0e0db] text-xs bg-white focus:outline-none focus:border-[#592eff]"
                     />
                   </div>
                   <div>
                     <label className="block text-[10px] text-[#5f5f69] uppercase font-bold mb-1">
-                      Messages / jour
+                      Messages / semaine (vide = offre)
                     </label>
                     <input
                       type="number"
-                      min={10}
-                      max={200}
-                      value={editFormData.maxDailyMsg}
+                      min={0}
+                      value={editFormData.maxWeeklyMessages ?? ""}
                       onChange={(e) =>
-                        setEditFormData({
-                          ...editFormData,
-                          maxDailyMsg: parseInt(e.target.value) || 70,
-                        })
+                        setEditFormData({ ...editFormData, maxWeeklyMessages: e.target.value === "" ? null : parseInt(e.target.value) || 0 })
                       }
                       className="w-full px-3 py-1.5 rounded-lg border border-[#e0e0db] text-xs bg-white focus:outline-none focus:border-[#592eff]"
                     />
@@ -782,7 +772,7 @@ export const UserManagement: React.FC = () => {
               <div className="p-3.5 rounded-2xl bg-[#f8f9fc] border border-[#e0e0db] flex justify-between">
                 <span className="text-[#5f5f69]">Quotas autorisés :</span>
                 <span className="font-bold text-[#592eff]">
-                  {selectedUser.maxDailyInvites} inv/jour • {selectedUser.maxDailyMsg} msg/jour
+                  {selectedUser.maxWeeklyInvites ?? "offre"} inv/sem • {selectedUser.maxWeeklyMessages ?? "offre"} msg/sem
                 </span>
               </div>
 

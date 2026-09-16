@@ -506,12 +506,7 @@ export async function syncProspectsStatus(req: AuthenticatedRequest, res: Respon
       if (result.profile?.avatarUrl && (!p.avatarUrl || p.avatarUrl.includes("ui-avatars.com"))) {
         updateData.avatarUrl = result.profile.avatarUrl;
       }
-      if (result.profile?.email && !p.email) {
-        updateData.email = result.profile.email;
-      }
-      if (result.profile?.phone && !p.phone) {
-        updateData.phone = result.profile.phone;
-      }
+      // E-mail / téléphone : uniquement via les tokens d'enrichissement (enrichment.service.ts)
       if (result.profile?.company && (!p.company || p.company === "—")) {
         updateData.company = result.profile.company;
       }

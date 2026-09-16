@@ -38,12 +38,13 @@ export const FEATURES: Feature[] = [
     lead: "Importez vos fichiers CSV ou XLSX, organisez-les en listes, et laissez Bleadin dédoublonner sur l'URL LinkedIn.",
     paragraphs: [
       "Un prospect n'existe qu'une fois dans votre espace, quelle que soit la liste d'où il vient. L'historique des imports garde la trace de chaque fichier.",
-      "À mesure que les campagnes tournent, les fiches s'enrichissent avec le titre, l'entreprise, la photo et, lorsqu'ils sont disponibles, l'e-mail et le téléphone.",
+      "À mesure que les campagnes tournent, les fiches s'enrichissent avec le titre, l'entreprise et la photo. L'e-mail et le téléphone se révèlent à la demande avec vos tokens d'enrichissement : 1 token par e-mail trouvé, 5 par numéro, restitués s'ils sont introuvables.",
     ],
     points: [
       "Dédoublonnage sur l'URL LinkedIn à l'import",
       "Listes et historique des imports",
-      "Enrichissement automatique au fil des actions",
+      "Titre, entreprise et photo mis à jour au fil des actions",
+      "E-mail et téléphone à la demande, avec tokens restitués si introuvables",
     ],
   },
   {

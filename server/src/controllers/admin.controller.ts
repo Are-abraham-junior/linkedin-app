@@ -6,6 +6,7 @@ import { AuthenticatedRequest } from "../middlewares/auth.middleware.js";
 import { getWorkspaceAvatars } from "../services/workspace.service.js";
 import { UnipileService } from "../services/unipile.service.js";
 import { listReconciledAccounts, deleteUnipileAccountIfOrphan, reconcileUnipileAccounts } from "../services/unipileReconcile.service.js";
+import { grantTokens, getBalance as getEnrichmentBalance } from "../services/enrichment.service.js";
 
 const CreateUserSchema = z.object({
   name: z.string().min(2, "Le nom est obligatoire"),
@@ -13,8 +14,11 @@ const CreateUserSchema = z.object({
   password: z.string().min(6, "Mot de passe d'au moins 6 caractères"),
   role: z.enum(["SUPER_ADMIN", "USER"]).default("USER"),
   organizationId: z.string().optional(),
-  maxDailyInvites: z.number().min(5).max(100).default(30),
-  maxDailyMsg: z.number().min(10).max(200).default(70),
+  // Plafonds hebdo personnels ; null = quota de l'offre de l'organisation
+  maxWeeklyInvites: z.number().int().min(0).nullable().default(null),
+  maxWeeklyMessages: z.number().int().min(0).nullable().default(null),
+  maxWeeklyVisits: z.number().int().min(0).nullable().default(null),
+  maxWeeklyFollows: z.number().int().min(0).nullable().default(null),
 });
 
 const UpdateUserSchema = z.object({
@@ -22,8 +26,10 @@ const UpdateUserSchema = z.object({
   role: z.enum(["SUPER_ADMIN", "USER"]).optional(),
   status: z.enum(["ACTIVE", "SUSPENDED", "PENDING_INVITE"]).optional(),
   organizationId: z.string().nullable().optional(),
-  maxDailyInvites: z.number().min(5).max(100).optional(),
-  maxDailyMsg: z.number().min(10).max(200).optional(),
+  maxWeeklyInvites: z.number().int().min(0).nullable().optional(),
+  maxWeeklyMessages: z.number().int().min(0).nullable().optional(),
+  maxWeeklyVisits: z.number().int().min(0).nullable().optional(),
+  maxWeeklyFollows: z.number().int().min(0).nullable().optional(),
   password: z.string().min(6).optional(),
 });
 
@@ -144,8 +150,10 @@ export async function getUsers(req: AuthenticatedRequest, res: Response) {
         avatarUrl: u.avatarUrl,
         role: u.role,
         status: u.status,
-        maxDailyInvites: u.maxDailyInvites,
-        maxDailyMsg: u.maxDailyMsg,
+        maxWeeklyInvites: u.maxWeeklyInvites,
+        maxWeeklyMessages: u.maxWeeklyMessages,
+        maxWeeklyVisits: u.maxWeeklyVisits,
+        maxWeeklyFollows: u.maxWeeklyFollows,
         createdAt: u.createdAt,
         organization: u.organization,
         linkedInAccount: u.accounts[0] || null,
@@ -215,8 +223,10 @@ export async function createUser(req: AuthenticatedRequest, res: Response) {
         passwordHash,
         role: body.role,
         organizationId: body.organizationId || null,
-        maxDailyInvites: body.maxDailyInvites,
-        maxDailyMsg: body.maxDailyMsg,
+        maxWeeklyInvites: body.maxWeeklyInvites,
+        maxWeeklyMessages: body.maxWeeklyMessages,
+        maxWeeklyVisits: body.maxWeeklyVisits,
+        maxWeeklyFollows: body.maxWeeklyFollows,
         status: "ACTIVE",
       },
       include: {
@@ -320,6 +330,37 @@ export async function getOrganizations(req: AuthenticatedRequest, res: Response)
     res.json({ success: true, organizations: orgs.map((o) => ({ ...o, avatarUrl: avatars.get(o.id) || null })) });
   } catch (error: any) {
     console.error("[admin.controller:getOrganizations]", error);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
+  }
+}
+
+const GrantTokensSchema = z.object({
+  tokens: z.number().int().min(1).max(10_000),
+  note: z.string().max(200).optional(),
+});
+
+/**
+ * POST /api/admin/organizations/:id/enrichment-grant
+ * Ajoute des tokens d'enrichissement à une organisation pour le mois en cours.
+ */
+export async function grantEnrichmentTokens(req: AuthenticatedRequest, res: Response) {
+  try {
+    const organizationId = req.params.id as string;
+    const body = GrantTokensSchema.parse(req.body);
+    const org = await prisma.organization.findUnique({ where: { id: organizationId }, select: { id: true } });
+    if (!org) {
+      res.status(404).json({ success: false, error: "Organisation introuvable." });
+      return;
+    }
+    await grantTokens({ organizationId, tokens: body.tokens, note: body.note, byUserId: req.user!.originalSuperAdminId || req.user!.id });
+    const balance = await getEnrichmentBalance(organizationId);
+    res.json({ success: true, message: `${body.tokens} token(s) ajouté(s).`, balance });
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ success: false, error: error.issues?.[0]?.message || error.message });
+      return;
+    }
+    console.error("[admin.controller:grantEnrichmentTokens]", error);
     res.status(500).json({ success: false, error: "Une erreur inattendue est survenue. Veuillez réessayer." });
   }
 }
@@ -453,8 +494,6 @@ export async function addOrganizationMember(req: AuthenticatedRequest, res: Resp
         orgRole: body.orgRole,
         organizationId: orgId,
         status: "ACTIVE",
-        maxDailyInvites: 30,
-        maxDailyMsg: 70,
       },
     });
 

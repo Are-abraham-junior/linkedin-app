@@ -3,6 +3,7 @@ import { prisma } from "../../../lib/prisma.js";
 import { z } from "zod";
 import { AuthenticatedRequest } from "../middlewares/auth.middleware.js";
 import { sendTeamInvitationEmail } from "../services/mail.service.js";
+import { getQuotaSnapshot } from "../services/quota.service.js";
 
 /**
  * Journalise l'erreur réelle côté serveur et renvoie un message générique au
@@ -367,7 +368,7 @@ export async function getTeamMetrics(req: AuthenticatedRequest, res: Response) {
 
     const currentUser = await prisma.user.findUnique({
       where: { id: req.user.id },
-      select: { organizationId: true, orgRole: true, role: true },
+      select: { organizationId: true, orgRole: true, role: true, organization: { select: { plan: true } } },
     });
 
     if (!currentUser?.organizationId) {
@@ -399,8 +400,12 @@ export async function getTeamMetrics(req: AuthenticatedRequest, res: Response) {
         avatarUrl: true,
         orgRole: true,
         status: true,
-        maxDailyInvites: true,
-        maxDailyMsg: true,
+        maxWeeklyInvites: true,
+        maxWeeklyMessages: true,
+        maxWeeklyVisits: true,
+        maxWeeklyFollows: true,
+        workingDays: true,
+        timezone: true,
         createdAt: true,
         accounts: {
           select: {
@@ -408,6 +413,8 @@ export async function getTeamMetrics(req: AuthenticatedRequest, res: Response) {
             accountName: true,
             profilePicture: true,
             status: true,
+            accountType: true,
+            createdAt: true,
             dailyInvitesSent: true,
             dailyMsgSent: true,
           },
@@ -466,6 +473,12 @@ export async function getTeamMetrics(req: AuthenticatedRequest, res: Response) {
           where: { userId: m.id, status: "ACTIVE" },
         });
 
+        // Cibles du jour (répartition aléatoire du quota hebdo de l'offre)
+        const snapshot =
+          isConnected && primaryAcc
+            ? await getQuotaSnapshot({ user: m, account: primaryAcc, planRaw: currentUser.organization?.plan })
+            : null;
+
         return {
           id: m.id,
           name: m.name || m.email.split("@")[0],
@@ -477,8 +490,12 @@ export async function getTeamMetrics(req: AuthenticatedRequest, res: Response) {
           linkedInAccountName: primaryAcc?.accountName,
           dailyInvitesSent: invites,
           dailyMsgSent: msgs,
-          maxDailyInvites: m.maxDailyInvites,
-          maxDailyMsg: m.maxDailyMsg,
+          dailyInvitesTarget: snapshot?.actions.invites.target ?? null,
+          dailyMsgTarget: snapshot?.actions.messages.target ?? null,
+          maxWeeklyInvites: m.maxWeeklyInvites,
+          maxWeeklyMessages: m.maxWeeklyMessages,
+          maxWeeklyVisits: m.maxWeeklyVisits,
+          maxWeeklyFollows: m.maxWeeklyFollows,
           totalCampaigns: m._count.campaigns,
           activeCampaigns: memberActiveCampaigns,
           totalProspects: memberProspects,

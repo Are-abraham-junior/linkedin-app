@@ -35,8 +35,11 @@ export interface User {
   hasLinkedInAccount?: boolean;
   organizationId?: string | null;
   organization?: Organization | null;
-  maxDailyInvites: number;
-  maxDailyMsg: number;
+  /** Plafonds hebdo personnels ; null = quota de l'offre. */
+  maxWeeklyInvites?: number | null;
+  maxWeeklyMessages?: number | null;
+  maxWeeklyVisits?: number | null;
+  maxWeeklyFollows?: number | null;
   createdAt?: string;
   linkedinEmail?: string | null;
   linkedInAccount?: LinkedInAccount | null;
@@ -46,6 +49,74 @@ export interface User {
     listsCount?: number;
     campaignsCount?: number;
   };
+}
+
+export type ActionQuotaKind = "invites" | "messages" | "visits" | "follows";
+
+/** État d'un quota d'action LinkedIn (GET /settings/account → account.quotas, GET /settings/billing → billing.quotas). */
+export interface ActionQuotaInfo {
+  planWeek: number;
+  planMonth: number;
+  /** Plafond hebdo personnel s'il est inférieur au plan, sinon null. */
+  userWeek: number | null;
+  limitWeek: number;
+  limitMonth: number;
+  /** Cible du jour (répartition aléatoire) ; null sans compte LinkedIn connecté. */
+  target: number | null;
+  usedToday: number;
+  usedWeek: number;
+  usedMonth: number;
+}
+
+export interface QuotasInfo {
+  plan: "STARTER" | "PRO" | "BUSINESS";
+  planName: string;
+  accountType: string | null;
+  actions: Record<ActionQuotaKind, ActionQuotaInfo>;
+  warmup: { active: boolean; dayIndex: number; totalDays: number } | null;
+}
+
+/** Solde mensuel de tokens d'enrichissement (GET /enrichment/balance, billing.enrichment). */
+export interface EnrichmentBalance {
+  plan: string;
+  allowance: number;
+  granted: number;
+  debited: number;
+  pending: number;
+  refunded: number;
+  remaining: number;
+  lookups: number;
+  periodStart: string;
+  periodEnd: string;
+}
+
+export type EnrichmentSkipReason = "ALREADY_COMPLETE" | "INSUFFICIENT_TOKENS" | "VISITS_QUOTA" | "BATCH_LIMIT" | "NO_IDENTIFIER";
+
+export interface EnrichmentProspectResult {
+  prospectId: string;
+  status: "ENRICHED" | "NOT_FOUND" | "PARTIAL" | "SKIPPED" | "FAILED";
+  email: string | null;
+  phone: string | null;
+  reserved: number;
+  charged: number;
+  refunded: number;
+  reason?: EnrichmentSkipReason;
+}
+
+export interface EnrichmentHistoryRow {
+  id: string;
+  kind: "LOOKUP" | "GRANT";
+  status: "PENDING" | "DONE" | "FAILED";
+  createdAt: string;
+  prospect: { id: string; name: string; company: string | null } | null;
+  user: { id: string; name: string } | null;
+  reserved: number;
+  charged: number;
+  refunded: number;
+  emailFound: boolean;
+  phoneFound: boolean;
+  granted: number;
+  note: string | null;
 }
 
 export interface TeamMemberBreakdown {
@@ -59,8 +130,13 @@ export interface TeamMemberBreakdown {
   linkedInAccountName?: string | null;
   dailyInvitesSent: number;
   dailyMsgSent: number;
-  maxDailyInvites: number;
-  maxDailyMsg: number;
+  /** Cibles du jour (répartition aléatoire du quota hebdo) ; null sans compte connecté. */
+  dailyInvitesTarget: number | null;
+  dailyMsgTarget: number | null;
+  maxWeeklyInvites: number | null;
+  maxWeeklyMessages: number | null;
+  maxWeeklyVisits: number | null;
+  maxWeeklyFollows: number | null;
   totalCampaigns: number;
   activeCampaigns: number;
   totalProspects: number;
@@ -372,5 +448,12 @@ export interface DashboardStats {
     profilePicture: string | null;
     dailyInvitesSent: number;
     dailyMsgSent: number;
+    /** Cibles du jour (répartition aléatoire du quota hebdo de l'offre). */
+    dailyInvitesTarget: number | null;
+    dailyMsgTarget: number | null;
+  } | null;
+  quotas?: {
+    warmup: { active: boolean; dayIndex: number; totalDays: number };
+    actions: Record<ActionQuotaKind, Omit<ActionQuotaInfo, "userWeek">>;
   } | null;
 }

@@ -16,8 +16,6 @@ interface ScheduleSettings {
   workingHoursStart: string;
   workingHoursEnd: string;
   timezone: string;
-  maxDailyInvites: number;
-  maxDailyMsg: number;
 }
 
 interface ScheduleActivityModalProps {
@@ -56,8 +54,6 @@ export const ScheduleActivityModal: React.FC<ScheduleActivityModalProps> = ({
   const [workingHoursStart, setWorkingHoursStart] = useState("08:00");
   const [workingHoursEnd, setWorkingHoursEnd] = useState("19:00");
   const [timezone, setTimezone] = useState("Africa/Abidjan");
-  const [maxDailyInvites, setMaxDailyInvites] = useState(30);
-  const [maxDailyMsg, setMaxDailyMsg] = useState(70);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -72,8 +68,6 @@ export const ScheduleActivityModal: React.FC<ScheduleActivityModalProps> = ({
           setWorkingHoursStart(res.schedule.workingHoursStart || "08:00");
           setWorkingHoursEnd(res.schedule.workingHoursEnd || "19:00");
           setTimezone(res.schedule.timezone || "Africa/Abidjan");
-          setMaxDailyInvites(res.schedule.maxDailyInvites || 30);
-          setMaxDailyMsg(res.schedule.maxDailyMsg || 70);
         }
       } catch (err: any) {
         console.error("Erreur récupération planning:", err);
@@ -109,13 +103,11 @@ export const ScheduleActivityModal: React.FC<ScheduleActivityModalProps> = ({
           workingHoursStart,
           workingHoursEnd,
           timezone,
-          maxDailyInvites: Number(maxDailyInvites),
-          maxDailyMsg: Number(maxDailyMsg),
         }),
       });
 
       if (res.success) {
-        setSuccessMsg("Planning et quotas enregistrés avec succès !");
+        setSuccessMsg("Planning enregistré avec succès !");
         if (onSaved) onSaved();
         setTimeout(() => {
           onClose();
@@ -258,64 +250,16 @@ export const ScheduleActivityModal: React.FC<ScheduleActivityModalProps> = ({
             </div>
           </div>
 
-          {/* Section 3: Quotas Journaliers */}
+          {/* Section 3: Quotas (réglés dans Réglages > Compte) */}
           <div className="border-t border-[#e0e0db]/60 pt-5">
             <label className="block text-xs font-bold text-[#21164c] uppercase tracking-wider mb-2 flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-[#2ed6ff]" /> Quotas de sécurité journaliers
+              <ShieldCheck className="w-3.5 h-3.5 text-[#2ed6ff]" /> Quotas de sécurité
             </label>
-            <p className="text-xs text-[#5f5f69] mb-4">
-              Limites maximales par 24 heures pour éviter les restrictions LinkedIn.
+            <p className="text-xs text-[#5f5f69]">
+              Vos volumes hebdomadaires (invitations, messages, visites, suivis) dépendent de votre offre et se
+              règlent dans <span className="font-semibold text-[#21164c]">Réglages › Compte</span>. Bleadin les
+              répartit sur les jours sélectionnés ci-dessus, avec une quantité légèrement différente chaque jour.
             </p>
-
-            <div className="space-y-4">
-              {/* Invitations */}
-              <div className="bg-[#f8f9fc] p-4 rounded-2xl border border-[#e0e0db]">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-[#21164c]">Invitations max / jour</span>
-                  <span className="text-xs font-bold bg-[#592eff]/10 text-[#592eff] px-2 py-0.5 rounded-full">
-                    {maxDailyInvites} inv.
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min={5}
-                  max={80}
-                  step={5}
-                  value={maxDailyInvites}
-                  onChange={(e) => setMaxDailyInvites(Number(e.target.value))}
-                  className="w-full accent-[#592eff] cursor-pointer"
-                />
-                <div className="flex justify-between text-[10px] text-[#5f5f69] mt-1">
-                  <span>5 (Très prudent)</span>
-                  <span className="font-semibold text-[#592eff]">30 (Recommandé)</span>
-                  <span>80 (Maximum)</span>
-                </div>
-              </div>
-
-              {/* Messages */}
-              <div className="bg-[#f8f9fc] p-4 rounded-2xl border border-[#e0e0db]">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-[#21164c]">Messages max / jour</span>
-                  <span className="text-xs font-bold bg-[#2ed6ff]/10 text-[#0284c7] px-2 py-0.5 rounded-full">
-                    {maxDailyMsg} msg.
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min={10}
-                  max={150}
-                  step={10}
-                  value={maxDailyMsg}
-                  onChange={(e) => setMaxDailyMsg(Number(e.target.value))}
-                  className="w-full accent-[#2ed6ff] cursor-pointer"
-                />
-                <div className="flex justify-between text-[10px] text-[#5f5f69] mt-1">
-                  <span>10 (Prudent)</span>
-                  <span className="font-semibold text-[#0284c7]">70 (Recommandé)</span>
-                  <span>150 (Maximum)</span>
-                </div>
-              </div>
-            </div>
           </div>
 
           {/* Info card */}

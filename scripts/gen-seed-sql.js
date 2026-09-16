@@ -26,11 +26,11 @@ VALUES
   ('org-client-001', 'Acme Growth Agency', 'acme-growth', 'PRO', NOW(), NOW());
 
 -- 2. Create Users
-INSERT INTO "User" ("id", "email", "passwordHash", "name", "avatarUrl", "role", "status", "organizationId", "maxDailyInvites", "maxDailyMsg", "createdAt", "updatedAt")
+INSERT INTO "User" ("id", "email", "passwordHash", "name", "avatarUrl", "role", "status", "organizationId", "createdAt", "updatedAt")
 VALUES 
-  ('usr-superadmin-001', 'jeanregis@bimelink.io', '${defaultPasswordHash}', 'Jean-Regis N''GUESSAN', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80', 'SUPER_ADMIN', 'ACTIVE', 'org-main-001', 50, 100, NOW(), NOW()),
-  ('usr-tenantadmin-001', 'sarah.growth@acme.com', '${userPasswordHash}', 'Sarah Traoré', 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80', 'USER', 'ACTIVE', 'org-client-001', 30, 70, NOW(), NOW()),
-  ('usr-normaluser-001', 'marc.sales@acme.com', '${userPasswordHash}', 'Marc Koffi', 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80', 'USER', 'ACTIVE', 'org-client-001', 25, 50, NOW(), NOW());
+  ('usr-superadmin-001', 'jeanregis@bimelink.io', '${defaultPasswordHash}', 'Jean-Regis N''GUESSAN', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80', 'SUPER_ADMIN', 'ACTIVE', 'org-main-001', NOW(), NOW()),
+  ('usr-tenantadmin-001', 'sarah.growth@acme.com', '${userPasswordHash}', 'Sarah Traoré', 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80', 'USER', 'ACTIVE', 'org-client-001', NOW(), NOW()),
+  ('usr-normaluser-001', 'marc.sales@acme.com', '${userPasswordHash}', 'Marc Koffi', 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80', 'USER', 'ACTIVE', 'org-client-001', NOW(), NOW());
 
 -- 3. Create Connected LinkedIn Account for Super Admin
 INSERT INTO "LinkedInAccount" ("id", "userId", "unipileAccountId", "accountName", "headline", "profilePicture", "status", "dailyInvitesSent", "dailyMsgSent", "createdAt", "updatedAt")

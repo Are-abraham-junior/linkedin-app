@@ -230,13 +230,13 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({ onStartCampaign })
   const notConnectedPct = totalProspectsCount > 0 ? Math.round((notConnected / totalProspectsCount) * 100) : 0;
   const repliedPct = totalProspectsCount > 0 ? Math.round((replied / totalProspectsCount) * 100) : 0;
 
-  // Quotas du jour réels
+  // Quotas du jour réels (cible journalière aléatoire dérivée de l'offre, calculée côté serveur)
   const dailyInvites = stats?.linkedInAccount?.dailyInvitesSent || 0;
-  const maxInvites = user?.maxDailyInvites || 30;
+  const maxInvites = stats?.linkedInAccount?.dailyInvitesTarget ?? 0;
   const invitesGaugePct = Math.min(Math.round((dailyInvites / Math.max(maxInvites, 1)) * 100), 100);
 
   const dailyMsg = stats?.linkedInAccount?.dailyMsgSent || 0;
-  const maxMsg = user?.maxDailyMsg || 70;
+  const maxMsg = stats?.linkedInAccount?.dailyMsgTarget ?? 0;
   const msgGaugePct = Math.min(Math.round((dailyMsg / Math.max(maxMsg, 1)) * 100), 100);
 
   const responseRateNum = stats?.responseRate || 0;
@@ -423,10 +423,10 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({ onStartCampaign })
                         )}
                       </td>
                       <td className="py-3 font-semibold text-[#21164c]">
-                        {m.dailyInvitesSent} / {m.maxDailyInvites}
+                        {m.dailyInvitesSent} / {m.dailyInvitesTarget ?? "–"}
                       </td>
                       <td className="py-3 font-semibold text-[#21164c]">
-                        {m.dailyMsgSent} / {m.maxDailyMsg}
+                        {m.dailyMsgSent} / {m.dailyMsgTarget ?? "–"}
                       </td>
                       <td className="py-3 text-[#353241]">
                         <span className="font-bold text-[#592eff]">{m.activeCampaigns}</span> active{m.activeCampaigns > 1 ? "s" : ""} <span className="text-[10px] text-[#7c7c88]">({m.totalCampaigns} tot.)</span>

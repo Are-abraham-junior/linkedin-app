@@ -3,6 +3,7 @@ import { prisma } from "../../../lib/prisma.js";
 import { AuthenticatedRequest } from "../middlewares/auth.middleware.js";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
+import { getQuotaSnapshot } from "../services/quota.service.js";
 
 const UpdateProfileSchema = z.object({
   name: z.string().min(2).optional(),
@@ -41,8 +42,10 @@ export async function getProfile(req: AuthenticatedRequest, res: Response) {
         role: user.role,
         status: user.status,
         organization: user.organization,
-        maxDailyInvites: user.maxDailyInvites,
-        maxDailyMsg: user.maxDailyMsg,
+        maxWeeklyInvites: user.maxWeeklyInvites,
+        maxWeeklyMessages: user.maxWeeklyMessages,
+        maxWeeklyVisits: user.maxWeeklyVisits,
+        maxWeeklyFollows: user.maxWeeklyFollows,
         linkedInAccount: user.accounts[0] || null,
       },
     });
@@ -270,6 +273,12 @@ export async function getUserDashboardStats(req: AuthenticatedRequest, res: Resp
 
     const evolution30d = await Promise.all(last30DaysPromises);
 
+    // Quotas du jour (cible aléatoire dérivée de l'offre) pour les jauges du tableau de bord
+    const quotaSnapshot =
+      targetUser && linkedInAccount
+        ? await getQuotaSnapshot({ user: targetUser, account: linkedInAccount, planRaw: targetUser.organization?.plan })
+        : null;
+
     res.json({
       success: true,
       stats: {
@@ -306,8 +315,16 @@ export async function getUserDashboardStats(req: AuthenticatedRequest, res: Resp
               accountName: linkedInAccount.accountName,
               headline: linkedInAccount.headline,
               profilePicture: linkedInAccount.profilePicture,
-              dailyInvitesSent: linkedInAccount.dailyInvitesSent,
-              dailyMsgSent: linkedInAccount.dailyMsgSent,
+              dailyInvitesSent: quotaSnapshot?.actions.invites.usedToday ?? linkedInAccount.dailyInvitesSent,
+              dailyMsgSent: quotaSnapshot?.actions.messages.usedToday ?? linkedInAccount.dailyMsgSent,
+              dailyInvitesTarget: quotaSnapshot?.actions.invites.target ?? null,
+              dailyMsgTarget: quotaSnapshot?.actions.messages.target ?? null,
+            }
+          : null,
+        quotas: quotaSnapshot
+          ? {
+              warmup: quotaSnapshot.warmup,
+              actions: quotaSnapshot.actions,
             }
           : null,
       },

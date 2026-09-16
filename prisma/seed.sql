@@ -19,16 +19,16 @@ VALUES
   ('org-client-001', 'Acme Growth Agency', 'acme-growth', 'PRO', NOW(), NOW());
 
 -- 2. Create Users
-INSERT INTO "User" ("id", "email", "passwordHash", "name", "avatarUrl", "role", "status", "organizationId", "maxDailyInvites", "maxDailyMsg", "createdAt", "updatedAt")
+INSERT INTO "User" ("id", "email", "passwordHash", "name", "avatarUrl", "role", "status", "organizationId", "createdAt", "updatedAt")
 VALUES 
-  ('usr-superadmin-001', 'jeanregis@bimelink.io', '$2b$10$RT56jOI8CFSw49pSBdHxTOClJ05u.ntK5qYqjKxIJC3OgsAz0H0jO', 'Jean-Regis N''GUESSAN', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80', 'SUPER_ADMIN', 'ACTIVE', 'org-main-001', 50, 100, NOW(), NOW()),
-  ('usr-tenantadmin-001', 'sarah.growth@acme.com', '$2b$10$.DtrxwP/mqcPkpKl035xYexqnXA4vRIv8xS791d/VWHugVM258C4G', 'Sarah Traoré', 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80', 'USER', 'ACTIVE', 'org-client-001', 30, 70, NOW(), NOW()),
-  ('usr-normaluser-001', 'marc.sales@acme.com', '$2b$10$.DtrxwP/mqcPkpKl035xYexqnXA4vRIv8xS791d/VWHugVM258C4G', 'Marc Koffi', 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80', 'USER', 'ACTIVE', 'org-client-001', 25, 50, NOW(), NOW());
+  ('usr-superadmin-001', 'jeanregis@bimelink.io', '$2b$10$RT56jOI8CFSw49pSBdHxTOClJ05u.ntK5qYqjKxIJC3OgsAz0H0jO', 'Jean-Regis N''GUESSAN', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80', 'SUPER_ADMIN', 'ACTIVE', 'org-main-001', NOW(), NOW()),
+  ('usr-tenantadmin-001', 'sarah.growth@acme.com', '$2b$10$.DtrxwP/mqcPkpKl035xYexqnXA4vRIv8xS791d/VWHugVM258C4G', 'Sarah Traoré', 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80', 'USER', 'ACTIVE', 'org-client-001', NOW(), NOW()),
+  ('usr-normaluser-001', 'marc.sales@acme.com', '$2b$10$.DtrxwP/mqcPkpKl035xYexqnXA4vRIv8xS791d/VWHugVM258C4G', 'Marc Koffi', 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80', 'USER', 'ACTIVE', 'org-client-001', NOW(), NOW());
 
 -- 3. Create Connected LinkedIn Account for Super Admin
 INSERT INTO "LinkedInAccount" ("id", "userId", "unipileAccountId", "accountName", "headline", "profilePicture", "status", "dailyInvitesSent", "dailyMsgSent", "createdAt", "updatedAt")
 VALUES 
-  ('acc-linkedin-001', 'usr-superadmin-001', 'unipile_acc_jr_nguessan_01', 'Jean-Regis N''GUESSAN', 'CEO & Growth Lead @ Bime Link', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80', 'CONNECTED', 19, 44, NOW(), NOW());
+  ('acc-linkedin-001', 'usr-superadmin-001', 'unipile_acc_jr_nguessan_01', 'Jean-Regis N''GUESSAN', 'CEO & Growth Lead @ Bime Link', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80', 'CONNECTED', NOW(), NOW());
 
 -- 4. Create Prospect Lists
 INSERT INTO "ProspectList" ("id", "userId", "name", "description", "color", "createdAt", "updatedAt")
