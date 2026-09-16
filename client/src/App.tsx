@@ -18,6 +18,8 @@ import { Sidebar } from "./components/layout/Sidebar";
 import { Header } from "./components/layout/Header";
 import { AdminDashboard } from "./components/admin/AdminDashboard";
 import { UserManagement } from "./components/admin/UserManagement";
+import { AdminSettingsView } from "./components/admin/AdminSettingsView";
+import { BleadinIAView } from "./components/assistant/BleadinIAView";
 import { TeamPage } from "./components/admin/TeamPage";
 import { MainDashboard } from "./components/dashboard/MainDashboard";
 import { ProspectsView } from "./components/prospects/ProspectsView";
@@ -93,7 +95,8 @@ const AppLayout: React.FC = () => {
   const isNoScrollPage =
     location.pathname.startsWith("/prospects") ||
     location.pathname.startsWith("/campaigns") ||
-    location.pathname.startsWith("/inbox");
+    location.pathname.startsWith("/inbox") ||
+    location.pathname.startsWith("/bleadin-ia");
 
   // Déterminer si le compte a une session expirée ou checkpoint (y compris pour Super Admin)
   const hasExpiredSession = Boolean(
@@ -248,6 +251,7 @@ export const App: React.FC = () => {
           element={<ProspectsView onStartCampaign={() => navigate("/campaigns")} />}
         />
         <Route path="/inbox" element={<InboxView />} />
+        <Route path="/bleadin-ia" element={<BleadinIAView />} />
         <Route path="/team" element={<TeamPage />} />
         <Route path="/settings" element={<SettingsView />} />
 
@@ -271,6 +275,10 @@ export const App: React.FC = () => {
               <Navigate to="/dashboard" replace />
             )
           }
+        />
+        <Route
+          path="/admin/settings"
+          element={isSuperAdmin ? <AdminSettingsView /> : <Navigate to="/dashboard" replace />}
         />
       </Route>
 

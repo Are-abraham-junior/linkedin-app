@@ -62,6 +62,8 @@ export const Header: React.FC<HeaderProps> = ({
     const path = location.pathname;
     if (path === "/admin") return "Hub Plateforme";
     if (path.startsWith("/admin/users")) return "Gestion des Utilisateurs";
+    if (path.startsWith("/admin/settings")) return "Paramètres plateforme";
+    if (path.startsWith("/bleadin-ia")) return "Bleadin IA";
     if (path.startsWith("/dashboard")) return "Tableau de bord";
     if (path.startsWith("/prospects")) return "Contacts & Prospects";
     if (path.startsWith("/campaigns")) return "Campagnes";

@@ -17,7 +17,9 @@ import {
   Layers,
   Settings,
   FileBarChart,
+  SlidersHorizontal,
 } from "lucide-react";
+import { normalizePlanId } from "../../marketing/content/plans";
 
 interface SidebarProps {
   isCollapsed: boolean;
@@ -55,6 +57,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   if (!user) return null;
 
   const isSuperAdmin = user.role === "SUPER_ADMIN";
+  const aiPlanAllowed = isSuperAdmin || ["PRO", "BUSINESS"].includes(normalizePlanId(user.organization?.plan));
 
   // Construction des menus BLEADIN par catégories
   const navSections: NavSection[] = [
@@ -76,6 +79,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 path: "/admin/users",
                 icon: Users,
               },
+              {
+                id: "admin-settings",
+                label: "Paramètres plateforme",
+                path: "/admin/settings",
+                icon: SlidersHorizontal,
+              },
             ]
           : []),
         {
@@ -83,6 +92,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
           label: "Tableau de bord",
           path: "/dashboard",
           icon: LayoutDashboard,
+        },
+      ],
+    },
+    {
+      category: "Assistant",
+      items: [
+        {
+          id: "bleadin-ia",
+          label: "Bleadin IA",
+          path: "/bleadin-ia",
+          icon: Sparkles,
+          badge: aiPlanAllowed ? undefined : "Pro",
         },
       ],
     },
@@ -287,6 +308,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
                     {!isCollapsed && (
                       <span className="text-xs truncate flex-1">{item.label}</span>
+                    )}
+                    {!isCollapsed && item.badge && (
+                      <span
+                        className={`text-[9px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded-full border ${
+                          active ? "bg-white/15 border-white/30 text-white" : "bg-[#592eff]/10 border-[#592eff]/20 text-[#592eff]"
+                        }`}
+                      >
+                        {item.badge}
+                      </span>
                     )}
 
                     {/* Tooltip flottant en mode compact */}

@@ -17,6 +17,20 @@ import {
   deleteOrganization,
   grantEnrichmentTokens,
 } from "../controllers/admin.controller.js";
+import {
+  listAiProviders,
+  createAiProvider,
+  updateAiProvider,
+  deleteAiProvider,
+  activateAiProvider,
+  testAiProviderConfig,
+  testAiProviderById,
+  listKnowledgeDocs,
+  createKnowledgeDoc,
+  updateKnowledgeDoc,
+  deleteKnowledgeDoc,
+  reseedKnowledgeDocs,
+} from "../controllers/adminAi.controller.js";
 import { requireSuperAdmin } from "../middlewares/auth.middleware.js";
 
 const router = Router();
@@ -42,5 +56,20 @@ router.post("/impersonate-workspace/:id", impersonateWorkspace);
 router.get("/unipile/accounts", getUnipileAccounts);
 router.delete("/unipile/accounts/:id", deleteUnipileAccount);
 router.post("/unipile/reconcile", runUnipileReconcile);
+
+// Bleadin IA — providers et base de connaissances
+router.get("/ai-providers", listAiProviders);
+router.post("/ai-providers", createAiProvider);
+router.post("/ai-providers/test", testAiProviderConfig);
+router.put("/ai-providers/:id", updateAiProvider);
+router.delete("/ai-providers/:id", deleteAiProvider);
+router.post("/ai-providers/:id/activate", activateAiProvider);
+router.post("/ai-providers/:id/test", testAiProviderById);
+
+router.get("/ai-knowledge", listKnowledgeDocs);
+router.post("/ai-knowledge", createKnowledgeDoc);
+router.post("/ai-knowledge/reseed", reseedKnowledgeDocs);
+router.put("/ai-knowledge/:id", updateKnowledgeDoc);
+router.delete("/ai-knowledge/:id", deleteKnowledgeDoc);
 
 export default router;

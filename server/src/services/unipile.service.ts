@@ -2,8 +2,18 @@ import "dotenv/config";
 
 import { extractCompanyFromHeadline } from "../utils/companyExtractor.js";
 
-const UNIPILE_DSN = process.env.UNIPILE_DSN || "https://api64.unipile.com:19478";
-const UNIPILE_API_KEY = process.env.UNIPILE_API_KEY || "Xn10pe1e.5rETphPfo4LGT/oDPPFuLFaN4OCrAdMvzDP4RbxF1yA=";
+/**
+ * Aucun fallback en dur : le DSN et la clé API viennent exclusivement de l'environnement
+ * (.env local / .env de prod). Une variable manquante fait échouer le premier appel avec
+ * un message explicite plutôt que de taper silencieusement sur une ancienne instance.
+ */
+function requireEnv(name: "UNIPILE_DSN" | "UNIPILE_API_KEY"): string {
+  const value = process.env[name]?.trim();
+  if (!value) {
+    throw new Error(`[Unipile] Variable d'environnement ${name} manquante — vérifiez le fichier .env`);
+  }
+  return value;
+}
 
 /**
  * LWS (mutualisé) bloque toute connexion SORTANTE sur un port non-standard : seuls
@@ -32,7 +42,7 @@ function parseUnipileDsn(dsn: string): { hostBaseUrl: string; port: string | nul
   }
 }
 
-const BASE_URL = parseUnipileDsn(process.env.UNIPILE_DSN || UNIPILE_DSN).hostBaseUrl;
+const BASE_URL = parseUnipileDsn(requireEnv("UNIPILE_DSN")).hostBaseUrl;
 
 /**
  * Ajoute automatiquement `?port=` (ou `&port=` si l'URL a déjà une query string) à
@@ -42,7 +52,7 @@ const BASE_URL = parseUnipileDsn(process.env.UNIPILE_DSN || UNIPILE_DSN).hostBas
  * garanti même si un appel utilise `getBaseUrl()` ou `BASE_URL` directement.
  */
 function unipileFetch(url: string, options?: RequestInit): Promise<Response> {
-  const { port } = parseUnipileDsn(process.env.UNIPILE_DSN || UNIPILE_DSN);
+  const { port } = parseUnipileDsn(requireEnv("UNIPILE_DSN"));
   if (!port) return fetch(url, options);
   const sep = url.includes("?") ? "&" : "?";
   return fetch(`${url}${sep}port=${port}`, options);
@@ -106,7 +116,7 @@ export interface LinkedInPostSummary {
 
 export class UnipileService {
   public static getBaseUrl(): string {
-    return parseUnipileDsn(process.env.UNIPILE_DSN || BASE_URL).hostBaseUrl;
+    return parseUnipileDsn(requireEnv("UNIPILE_DSN")).hostBaseUrl;
   }
 
   public static parseErrorResponse(status: number, errText: string): string {
@@ -150,7 +160,7 @@ export class UnipileService {
 
   private static getHeaders() {
     return {
-      "X-API-KEY": process.env.UNIPILE_API_KEY || UNIPILE_API_KEY,
+      "X-API-KEY": requireEnv("UNIPILE_API_KEY"),
       "Content-Type": "application/json",
       "Accept": "application/json",
     };
@@ -831,6 +841,13 @@ export class UnipileService {
         if (!res.ok) {
           const errorText = await res.text();
           console.error("Unipile API error response:", res.status, errorText);
+          // Première page en échec : remonter l'erreur (compte expiré, 404…) plutôt que
+          // de la maquiller en « 0 résultat » — les pages suivantes gardent l'acquis.
+          if (accumulatedItems.length === 0) {
+            const error: any = new Error(`Erreur Unipile recherche (${res.status}): ${errorText.slice(0, 300)}`);
+            error.status = res.status;
+            throw error;
+          }
           break;
         }
 
@@ -918,6 +935,7 @@ export class UnipileService {
       };
     } catch (err: any) {
       console.error("Error in Unipile multi-page search:", err.message);
+      if (accumulatedItems.length === 0) throw err;
       return { items: accumulatedItems, totalCount: accumulatedItems.length, nextCursor: null };
     }
   }

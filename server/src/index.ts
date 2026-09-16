@@ -15,6 +15,8 @@ import queueRoutes from "./routes/queue.routes.js";
 import settingsRoutes from "./routes/settings.routes.js";
 import reportRoutes from "./routes/report.routes.js";
 import enrichmentRoutes from "./routes/enrichment.routes.js";
+import aiRoutes from "./routes/ai.routes.js";
+import { seedKnowledgeIfEmpty } from "./services/ai/knowledge.service.js";
 import { startReportScheduler } from "./workers/report.worker.js";
 import { startUnipileReconcileScheduler } from "./workers/unipile-reconcile.worker.js";
 import { handleUnipileWebhook } from "./controllers/webhook.controller.js";
@@ -66,6 +68,7 @@ app.use("/api/queue", queueRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/enrichment", enrichmentRoutes);
+app.use("/api/ai", aiRoutes);
 app.post("/api/webhooks/unipile", handleUnipileWebhook);
 
 // Serve static client assets and SPA fallback (Production / Render)
@@ -97,6 +100,8 @@ app.listen(PORT, () => {
   startReportScheduler();
   // Anti-doublon / anti-orphelin des comptes Unipile (facturés)
   startUnipileReconcileScheduler();
+  // Base de connaissances Bleadin IA (documents d'origine, une seule fois)
+  seedKnowledgeIfEmpty().catch((err) => console.error("Seed connaissances Bleadin IA:", err));
 
   // Self-ping pour garder le processus actif (Passenger met en veille après inactivité)
   if (process.env.NODE_ENV === "production" && process.env.SELF_PING_URL) {
