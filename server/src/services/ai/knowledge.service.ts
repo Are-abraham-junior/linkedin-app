@@ -2,8 +2,9 @@ import { prisma } from "../../../../lib/prisma.js";
 import { BLEADIN_APP_DOC } from "./knowledge/bleadinApp.js";
 import { PROSPECTION_DOC } from "./knowledge/prospection.js";
 import { REDACTION_DOC } from "./knowledge/redaction.js";
+import { STRATEGIES_DOC } from "./knowledge/strategies.js";
 
-export const SEED_DOCS = [BLEADIN_APP_DOC, PROSPECTION_DOC, REDACTION_DOC];
+export const SEED_DOCS = [BLEADIN_APP_DOC, PROSPECTION_DOC, STRATEGIES_DOC, REDACTION_DOC];
 
 interface Chunk {
   docSlug: string;
@@ -43,11 +44,11 @@ export function tokenize(text: string): string[] {
 
 function splitIntoChunks(doc: { slug: string; title: string; content: string }): Chunk[] {
   const chunks: Chunk[] = [];
-  const sections = doc.content.split(/\n(?=##? )/);
+  const sections = doc.content.split(/\n(?=#{1,3} )/);
   for (const section of sections) {
     const trimmed = section.trim();
     if (!trimmed) continue;
-    const headingMatch = trimmed.match(/^#{1,2}\s+(.+)$/m);
+    const headingMatch = trimmed.match(/^#{1,3}\s+(.+)$/m);
     const heading = headingMatch ? headingMatch[1].trim() : doc.title;
     const tokens = tokenize(`${heading} ${trimmed}`);
     const terms = new Map<string, number>();
@@ -91,11 +92,17 @@ export function invalidateKnowledgeIndex(): void {
   index = null;
 }
 
+/** Insère les documents d'origine absents (première installation ou nouveau document livré), sans écraser ceux déjà édités. */
 export async function seedKnowledgeIfEmpty(): Promise<void> {
-  const count = await prisma.aiKnowledgeDoc.count();
-  if (count > 0) return;
-  await reseedKnowledge();
-  console.log(`📚 Base de connaissances Bleadin IA initialisée (${SEED_DOCS.length} documents).`);
+  const existing = await prisma.aiKnowledgeDoc.findMany({ select: { slug: true } });
+  const known = new Set(existing.map((d) => d.slug));
+  const missing = SEED_DOCS.filter((d) => !known.has(d.slug));
+  if (missing.length === 0) return;
+  for (const doc of missing) {
+    await prisma.aiKnowledgeDoc.create({ data: { ...doc, enabled: true } });
+  }
+  invalidateKnowledgeIndex();
+  console.log(`📚 Base de connaissances Bleadin IA : ${missing.length} document(s) ajouté(s).`);
 }
 
 /** Réécrit les documents d'origine (upsert par slug), sans toucher aux documents ajoutés par l'admin. */

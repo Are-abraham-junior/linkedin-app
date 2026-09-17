@@ -18,9 +18,9 @@ interface UnipileAccountRow {
 }
 
 const STATUS_CLS: Record<string, string> = {
-  OK: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  CREDENTIALS: "bg-red-50 text-red-700 border-red-200",
-  CONNECTING: "bg-sky-50 text-sky-700 border-sky-200",
+  OK: "bg-surface-2 text-ok border-line",
+  CREDENTIALS: "bg-surface-2 text-danger border-line",
+  CONNECTING: "bg-surface-2 text-muted border-line",
 };
 
 /**
@@ -86,17 +86,17 @@ export const UnipileAccountsCard: React.FC = () => {
   const duplicates = accounts.filter((a) => a.duplicateOf.length > 0).length;
 
   return (
-    <div className="adora-card p-6 space-y-4">
+    <div className="rounded-2xl border border-line bg-surface p-6 space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <Server className="w-5 h-5 text-[#592eff]" />
-            <h3 className="text-lg font-extrabold text-[#21164c]">Comptes Unipile</h3>
-            <span className="badge-tag text-[10px] font-bold bg-[#f5f5f7] text-[#5f5f69] border border-[#e0e0db]">
+            <Server className="w-5 h-5 text-ink" />
+            <h3 className="text-lg font-semibold text-ink">Comptes Unipile</h3>
+            <span className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium text-xs font-medium bg-surface-2 text-muted border border-line">
               {accounts.length} facturé{accounts.length > 1 ? "s" : ""}
             </span>
           </div>
-          <p className="text-xs text-[#5f5f69] mt-0.5">
+          <p className="text-xs text-muted mt-0.5">
             Chaque compte est facturé par Unipile : un seul compte par personne, aucun compte sans utilisateur.
           </p>
         </div>
@@ -106,16 +106,16 @@ export const UnipileAccountsCard: React.FC = () => {
             onClick={handleReconcile}
             disabled={reconciling || loading}
             title="Supprime les doublons d'identité LinkedIn et liste les orphelins"
-            className="py-2 px-3.5 rounded-xl bg-white hover:bg-[#f5f5f7] border border-[#e0e0db] text-[#21164c] text-xs font-bold shadow-xs flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+            className="py-2 px-3.5 rounded-xl bg-white hover:bg-surface-2 border border-line text-ink text-xs font-medium flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
           >
-            {reconciling ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
+            {reconciling ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4 text-ok" />}
             Réconcilier
           </button>
           <button
             type="button"
             onClick={load}
             disabled={loading}
-            className="p-2 rounded-xl bg-white hover:bg-[#f5f5f7] border border-[#e0e0db] text-[#5f5f69] hover:text-[#21164c] transition-all cursor-pointer disabled:opacity-50"
+            className="p-2 rounded-xl bg-white hover:bg-surface-2 border border-line text-muted hover:text-ink transition-all cursor-pointer disabled:opacity-50"
             title="Actualiser"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
@@ -124,7 +124,7 @@ export const UnipileAccountsCard: React.FC = () => {
       </div>
 
       {(orphans > 0 || duplicates > 0) && (
-        <div className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
+        <div className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-surface-2 border border-line text-warn text-xs font-semibold">
           <AlertTriangle className="w-4 h-4 shrink-0" />
           {orphans > 0 && <span>{orphans} compte{orphans > 1 ? "s" : ""} orphelin{orphans > 1 ? "s" : ""} (facturé{orphans > 1 ? "s" : ""} sans utilisateur)</span>}
           {orphans > 0 && duplicates > 0 && <span>·</span>}
@@ -132,16 +132,16 @@ export const UnipileAccountsCard: React.FC = () => {
         </div>
       )}
       {error && (
-        <div className="px-4 py-3 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold">{error}</div>
+        <div className="px-4 py-3 rounded-2xl bg-surface-2 border border-line text-danger text-xs font-semibold">{error}</div>
       )}
       {notice && !error && (
-        <div className="px-4 py-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">{notice}</div>
+        <div className="px-4 py-3 rounded-2xl bg-surface-2 border border-line text-ok text-xs font-semibold">{notice}</div>
       )}
 
       <div className="overflow-x-auto -mx-2">
         <table className="w-full text-xs">
           <thead>
-            <tr className="text-[#5f5f69] uppercase text-[10px] font-bold tracking-wider">
+            <tr className="text-muted text-xs font-medium">
               <th className="text-left px-2 py-2">Compte LinkedIn</th>
               <th className="text-left px-2 py-2">Identifiant Unipile</th>
               <th className="text-left px-2 py-2">Statut</th>
@@ -153,24 +153,24 @@ export const UnipileAccountsCard: React.FC = () => {
           <tbody>
             {loading && accounts.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-2 py-8 text-center text-[#5f5f69]">
+                <td colSpan={6} className="px-2 py-8 text-center text-muted">
                   <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> Chargement…
                 </td>
               </tr>
             )}
             {!loading && accounts.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-2 py-8 text-center text-[#5f5f69]">Aucun compte Unipile.</td>
+                <td colSpan={6} className="px-2 py-8 text-center text-muted">Aucun compte Unipile.</td>
               </tr>
             )}
             {accounts.map((a) => (
-              <tr key={a.id} className={`border-t border-[#f0f0ed] ${a.orphan ? "bg-amber-50/40" : ""}`}>
+              <tr key={a.id} className={`border-t border-[#f0f0ed] ${a.orphan ? "bg-surface-2" : ""}`}>
                 <td className="px-2 py-2.5">
-                  <div className="font-bold text-[#21164c]">{a.name}</div>
-                  <div className="text-[10px] text-[#9a9aa5]">
+                  <div className="font-medium text-ink">{a.name}</div>
+                  <div className="text-xs text-[#9a9aa5]">
                     {a.publicIdentifier ? `linkedin.com/in/${a.publicIdentifier}` : a.providerId || "—"}
                     {a.duplicateOf.length > 0 && (
-                      <span className="ml-1.5 text-amber-700 font-bold">· doublon de {a.duplicateOf.join(", ")}</span>
+                      <span className="ml-1.5 text-warn font-medium">· doublon de {a.duplicateOf.join(", ")}</span>
                     )}
                   </div>
                 </td>
@@ -179,42 +179,42 @@ export const UnipileAccountsCard: React.FC = () => {
                     type="button"
                     onClick={() => navigator.clipboard?.writeText(a.id)}
                     title="Copier"
-                    className="inline-flex items-center gap-1 font-mono text-[11px] text-[#353241] hover:text-[#592eff] cursor-pointer"
+                    className="inline-flex items-center gap-1 font-mono text-xs text-ink-2 hover:text-ink cursor-pointer"
                   >
                     {a.id} <Copy className="w-3 h-3" />
                   </button>
                 </td>
                 <td className="px-2 py-2.5">
-                  <span className={`badge-tag text-[10px] font-bold border ${STATUS_CLS[a.status] || "bg-slate-50 text-slate-600 border-slate-200"}`}>
+                  <span className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium text-xs font-medium border ${STATUS_CLS[a.status] || "bg-surface-2 text-muted border-line"}`}>
                     {a.status}
                   </span>
                 </td>
                 <td className="px-2 py-2.5">
                   {a.user ? (
                     <div>
-                      <div className="font-semibold text-[#21164c]">{a.user.name || a.user.email}</div>
-                      <div className="text-[10px] text-[#9a9aa5]">
+                      <div className="font-semibold text-ink">{a.user.name || a.user.email}</div>
+                      <div className="text-xs text-[#9a9aa5]">
                         {a.user.organizationName || "—"} · base : {a.dbStatus}
                       </div>
                     </div>
                   ) : (
-                    <span className="inline-flex items-center gap-1 text-amber-700 font-bold">
+                    <span className="inline-flex items-center gap-1 text-warn font-medium">
                       <AlertTriangle className="w-3.5 h-3.5" /> Orphelin
                     </span>
                   )}
                 </td>
-                <td className="px-2 py-2.5 whitespace-nowrap text-[#5f5f69]">{new Date(a.created_at).toLocaleDateString("fr-FR")}</td>
+                <td className="px-2 py-2.5 whitespace-nowrap text-muted">{new Date(a.created_at).toLocaleDateString("fr-FR")}</td>
                 <td className="px-2 py-2.5 text-right">
                   {a.orphan ? (
                     <button
                       type="button"
                       onClick={() => setToDelete(a)}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-red-200 bg-white hover:bg-red-50 text-red-600 font-bold text-[11px] transition-all cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-line bg-white hover:bg-surface-2 text-danger font-medium text-xs transition-all cursor-pointer"
                     >
                       <Trash2 className="w-3.5 h-3.5" /> Supprimer
                     </button>
                   ) : (
-                    <span className="text-[10px] text-[#9a9aa5]">via le profil utilisateur</span>
+                    <span className="text-xs text-[#9a9aa5]">via le profil utilisateur</span>
                   )}
                 </td>
               </tr>

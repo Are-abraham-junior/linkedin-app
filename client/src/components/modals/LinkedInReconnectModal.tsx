@@ -157,24 +157,24 @@ export const LinkedInReconnectModal: React.FC<LinkedInReconnectModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-md animate-fadeIn">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40">
       <div
-        className="relative w-full max-w-lg bg-white rounded-3xl sm:rounded-[32px] shadow-2xl border border-[#592eff]/15 overflow-hidden transform transition-all animate-scaleUp"
+        className="relative w-full max-w-lg bg-white rounded-2xl sm:rounded-[32px] border border-ink overflow-hidden transform transition-all"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header Adora */}
-        <div className="relative px-6 sm:px-8 pt-7 pb-5 border-b border-gray-100 bg-gradient-to-b from-[#592eff]/5 to-transparent">
+        <div className="relative px-6 sm:px-8 pt-7 pb-5 border-b border-line bg-ink">
           <button
             type="button"
             onClick={onClose}
-            className="absolute top-6 right-6 w-9 h-9 rounded-full bg-gray-100/80 hover:bg-gray-200 text-gray-500 hover:text-gray-700 flex items-center justify-center transition-colors cursor-pointer"
+            className="absolute top-6 right-6 w-9 h-9 rounded-full bg-surface-2 hover:bg-line text-muted hover:text-muted flex items-center justify-center transition-colors cursor-pointer"
             aria-label="Fermer la boîte de dialogue"
           >
             <X className="w-4 h-4" />
           </button>
 
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#592eff] to-[#7c3aed] text-white flex items-center justify-center shadow-md shadow-[#592eff]/30">
+            <div className="w-12 h-12 rounded-2xl bg-ink text-white flex items-center justify-center">
               {isCheckpoint ? (
                 <KeyRound className="w-6 h-6" />
               ) : (
@@ -182,12 +182,12 @@ export const LinkedInReconnectModal: React.FC<LinkedInReconnectModalProps> = ({
               )}
             </div>
             <div>
-              <h2 className="text-lg font-black text-[#21164c] tracking-tight">
+              <h2 className="text-lg font-semibold text-ink tracking-tight">
                 {isCheckpoint
                   ? "Vérification de sécurité LinkedIn"
                   : "Renouveler votre session LinkedIn"}
               </h2>
-              <p className="text-xs text-gray-500 font-medium">
+              <p className="text-xs text-muted font-medium">
                 {isCheckpoint
                   ? "Saisissez le code de validation 2FA envoyé par LinkedIn"
                   : "Connexion sécurisée en direct pour réactiver vos campagnes"}
@@ -200,15 +200,15 @@ export const LinkedInReconnectModal: React.FC<LinkedInReconnectModalProps> = ({
         <div className="p-6 sm:p-8 space-y-5">
           {/* Notifications Alert */}
           {error && (
-            <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-start gap-3 animate-fadeIn">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-500" />
+            <div className="p-4 rounded-2xl bg-surface-2 border border-line text-danger text-xs flex items-start gap-3">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-danger" />
               <p className="font-medium leading-relaxed">{error}</p>
             </div>
           )}
 
           {success && (
-            <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-start gap-3 animate-fadeIn">
-              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
+            <div className="p-4 rounded-2xl bg-surface-2 border border-line text-ok text-xs flex items-start gap-3">
+              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-ok" />
               <p className="font-medium leading-relaxed">{success}</p>
             </div>
           )}
@@ -217,38 +217,38 @@ export const LinkedInReconnectModal: React.FC<LinkedInReconnectModalProps> = ({
             /* Étape 1 : Saisie des identifiants */
             <form onSubmit={handleCredentialsSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-[#21164c] mb-1.5">
+                <label className="block text-xs font-medium text-ink mb-1.5">
                   Adresse email du compte LinkedIn
                 </label>
                 <div className="relative">
-                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
                   <input
                     type="email"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="nom@exemple.com"
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-xs text-[#21164c] placeholder:text-gray-400 focus:outline-none focus:border-[#592eff] focus:ring-2 focus:ring-[#592eff]/10 transition-all font-medium"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-line text-xs text-ink placeholder:text-muted focus:outline-none focus:border-ink focus:ring-2 focus:ring-accent/10 transition-all font-medium"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#21164c] mb-1.5">
+                <label className="block text-xs font-medium text-ink mb-1.5">
                   Mot de passe du compte LinkedIn
                 </label>
                 <div className="relative">
-                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
                   <input
                     type="password"
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••••••"
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-xs text-[#21164c] placeholder:text-gray-400 focus:outline-none focus:border-[#592eff] focus:ring-2 focus:ring-[#592eff]/10 transition-all font-medium"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-line text-xs text-ink placeholder:text-muted focus:outline-none focus:border-ink focus:ring-2 focus:ring-accent/10 transition-all font-medium"
                   />
                 </div>
-                <p className="mt-1 text-[11px] text-gray-400">
+                <p className="mt-1 text-xs text-muted">
                   Vos identifiants ne sont jamais stockés en clair et servent uniquement à régénérer votre session LinkedIn.
                 </p>
               </div>
@@ -257,7 +257,7 @@ export const LinkedInReconnectModal: React.FC<LinkedInReconnectModalProps> = ({
                 <button
                   type="button"
                   onClick={handleGoToSettings}
-                  className="text-xs text-gray-500 hover:text-[#592eff] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                  className="text-xs text-muted hover:text-ink font-medium flex items-center gap-1 transition-colors cursor-pointer"
                 >
                   <span>Options avancées</span>
                   <ExternalLink className="w-3 h-3" />
@@ -266,7 +266,7 @@ export const LinkedInReconnectModal: React.FC<LinkedInReconnectModalProps> = ({
                 <button
                   type="submit"
                   disabled={loading}
-                  className="px-6 py-2.5 bg-gradient-to-r from-[#592eff] to-[#7c3aed] hover:from-[#4a22e0] hover:to-[#6d28d9] disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-lg shadow-[#592eff]/25 hover:shadow-[#592eff]/40 active:scale-[0.98] transition-all flex items-center gap-2 cursor-pointer ml-auto"
+                  className="px-6 py-2.5 bg-ink hover:from-[#4a22e0] hover:to-[#6d28d9] disabled:opacity-50 text-white font-medium text-xs rounded-xl transition-all flex items-center gap-2 cursor-pointer ml-auto"
                 >
                   {loading ? (
                     <>
@@ -285,19 +285,19 @@ export const LinkedInReconnectModal: React.FC<LinkedInReconnectModalProps> = ({
           ) : (
             /* Étape 2 : Saisie du code 2FA / Checkpoint */
             <form onSubmit={handleCheckpointSubmit} className="space-y-4">
-              <div className="p-3.5 rounded-2xl bg-[#592eff]/5 border border-[#592eff]/15 text-xs text-[#21164c] flex items-center gap-3">
-                <ShieldCheck className="w-5 h-5 text-[#592eff] shrink-0" />
+              <div className="p-3.5 rounded-2xl bg-surface-2 border border-ink text-xs text-ink flex items-center gap-3">
+                <ShieldCheck className="w-5 h-5 text-ink shrink-0" />
                 <p className="leading-tight">
                   LinkedIn vous a transmis un code de vérification à 6 chiffres par SMS, email ou sur votre application mobile.
                 </p>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#21164c] mb-1.5">
+                <label className="block text-xs font-medium text-ink mb-1.5">
                   Code de sécurité à 6 chiffres
                 </label>
                 <div className="relative">
-                  <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
                   <input
                     type="text"
                     required
@@ -306,7 +306,7 @@ export const LinkedInReconnectModal: React.FC<LinkedInReconnectModalProps> = ({
                     value={code}
                     onChange={(e) => setCode(e.target.value.trim())}
                     placeholder="Ex: 123456"
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm font-bold text-center tracking-widest text-[#21164c] placeholder:text-gray-300 focus:outline-none focus:border-[#592eff] focus:ring-2 focus:ring-[#592eff]/10 transition-all"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-line text-sm font-medium text-center text-ink placeholder:text-gray-300 focus:outline-none focus:border-ink focus:ring-2 focus:ring-accent/10 transition-all"
                   />
                 </div>
               </div>
@@ -316,7 +316,7 @@ export const LinkedInReconnectModal: React.FC<LinkedInReconnectModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setIsCheckpoint(false)}
-                    className="text-xs text-gray-500 hover:text-gray-700 font-bold transition-colors cursor-pointer"
+                    className="text-xs text-muted hover:text-muted font-medium transition-colors cursor-pointer"
                   >
                     Retour
                   </button>
@@ -324,7 +324,7 @@ export const LinkedInReconnectModal: React.FC<LinkedInReconnectModalProps> = ({
                     type="button"
                     onClick={handleResendCode}
                     disabled={resending || verifyingCode}
-                    className="text-xs text-[#592eff] hover:underline font-bold transition-colors cursor-pointer disabled:opacity-50"
+                    className="text-xs text-ink hover:underline font-medium transition-colors cursor-pointer disabled:opacity-50"
                   >
                     {resending ? "Envoi…" : "Renvoyer le code"}
                   </button>
@@ -333,7 +333,7 @@ export const LinkedInReconnectModal: React.FC<LinkedInReconnectModalProps> = ({
                 <button
                   type="submit"
                   disabled={verifyingCode || !code.trim()}
-                  className="px-6 py-2.5 bg-gradient-to-r from-[#592eff] to-[#7c3aed] hover:from-[#4a22e0] hover:to-[#6d28d9] disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-lg shadow-[#592eff]/25 hover:shadow-[#592eff]/40 active:scale-[0.98] transition-all flex items-center gap-2 cursor-pointer ml-auto"
+                  className="px-6 py-2.5 bg-ink hover:from-[#4a22e0] hover:to-[#6d28d9] disabled:opacity-50 text-white font-medium text-xs rounded-xl transition-all flex items-center gap-2 cursor-pointer ml-auto"
                 >
                   {verifyingCode ? (
                     <>

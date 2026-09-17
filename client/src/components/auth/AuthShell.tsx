@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import clsx from "clsx";
 import { Logo } from "../../marketing/ui/Logo";
+import { fieldClass } from "../ui/Field";
+import { Button } from "../ui/Button";
 
 /**
  * Coquille commune des pages d'authentification (connexion, inscription,
@@ -17,10 +19,10 @@ export const AuthShell: React.FC<{
   width?: "sm" | "md";
 }> = ({ title, lead, children, footer, width = "sm" }) => (
   <div className="site flex min-h-screen flex-col">
-    <header className="border-b border-[#e0e0db]">
+    <header className="border-b border-line">
       <div className="mx-auto flex h-16 w-full max-w-site items-center justify-between px-5 sm:px-8">
         <Logo />
-        <Link to="/" className="text-[14px] font-medium text-[#5f5f69] hover:text-[#21164c]">
+        <Link to="/" className="text-base font-medium text-muted hover:text-ink">
           Retour au site
         </Link>
       </div>
@@ -29,16 +31,15 @@ export const AuthShell: React.FC<{
     <main className="flex flex-1 items-start justify-center px-5 py-12 sm:px-8 sm:py-20">
       <div className={clsx("w-full", width === "sm" ? "max-w-[420px]" : "max-w-[560px]")}>
         <h1 className="display text-[30px] leading-[1.1] sm:text-[36px]">{title}</h1>
-        {lead && <p className="mt-3 text-[15px] leading-[1.6] text-[#5f5f69]">{lead}</p>}
-        <div className="mt-8 rounded-card border border-[#e0e0db] bg-white p-6 sm:p-8">{children}</div>
-        {footer && <div className="mt-6 text-[14px] text-[#5f5f69]">{footer}</div>}
+        {lead && <p className="mt-3 text-[15px] leading-[1.6] text-muted">{lead}</p>}
+        <div className="mt-8 rounded-2xl border border-line bg-surface p-6 sm:p-8">{children}</div>
+        {footer && <div className="mt-6 text-base text-muted">{footer}</div>}
       </div>
     </main>
   </div>
 );
 
-export const authInputClass =
-  "h-11 w-full rounded-lg border border-[#d6d6d0] bg-white px-3.5 text-[15px] text-[#21164c] placeholder:text-[#9a9aa3] focus:border-[#21164c] focus:outline-none focus:ring-2 focus:ring-[#592eff]/20 disabled:bg-[#f5f5f7] read-only:bg-[#f5f5f7] read-only:text-[#5f5f69]";
+export const authInputClass = clsx(fieldClass, "h-11 px-3.5 text-[15px]");
 
 export const AuthField: React.FC<{
   label: string;
@@ -48,11 +49,11 @@ export const AuthField: React.FC<{
 }> = ({ label, hint, action, children }) => (
   <div>
     <div className="mb-1.5 flex items-baseline justify-between">
-      <label className="text-[14px] font-medium text-[#21164c]">{label}</label>
+      <label className="text-base font-medium text-ink">{label}</label>
       {action}
     </div>
     {children}
-    {hint && <p className="mt-1.5 text-[13px] text-[#5f5f69]">{hint}</p>}
+    {hint && <p className="mt-1.5 text-sm text-muted">{hint}</p>}
   </div>
 );
 
@@ -81,7 +82,7 @@ export const PasswordInput: React.FC<{
       <button
         type="button"
         onClick={() => setShow((v) => !v)}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-[#5f5f69] hover:text-[#21164c]"
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-ink"
         aria-label={show ? "Masquer le mot de passe" : "Afficher le mot de passe"}
       >
         {show ? <EyeOff className="h-4 w-4" strokeWidth={1.75} /> : <Eye className="h-4 w-4" strokeWidth={1.75} />}
@@ -91,7 +92,7 @@ export const PasswordInput: React.FC<{
 };
 
 export const AuthError: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div role="alert" className="rounded-lg border border-[#e6b8b8] bg-[#fdf4f4] px-3.5 py-3 text-[14px] text-[#8a2a2a]">
+  <div role="alert" className="rounded-lg border border-[#e6b8b8] bg-[#fdf4f4] px-3.5 py-3 text-base text-[#8a2a2a]">
     {children}
   </div>
 );
@@ -102,20 +103,15 @@ export const AuthSubmit: React.FC<{
   loadingLabel?: string;
   children: React.ReactNode;
 }> = ({ loading, disabled, loadingLabel, children }) => (
-  <button
-    type="submit"
-    disabled={loading || disabled}
-    className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#592eff] px-5 text-[15px] font-semibold text-white transition-colors hover:bg-[#4a22e0] disabled:cursor-not-allowed disabled:opacity-60"
-  >
-    {loading && <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden />}
+  <Button type="submit" loading={loading} disabled={disabled} className="h-11 w-full text-[15px]">
     {loading && loadingLabel ? loadingLabel : children}
-  </button>
+  </Button>
 );
 
 export const AuthSecondary: React.FC<{ to: string; children: React.ReactNode }> = ({ to, children }) => (
   <Link
     to={to}
-    className="inline-flex h-11 w-full items-center justify-center rounded-lg border border-[#d6d6d0] bg-white px-5 text-[15px] font-semibold text-[#21164c] transition-colors hover:border-[#21164c]"
+    className="inline-flex h-11 w-full items-center justify-center rounded-lg border border-line-2 bg-white px-5 text-[15px] font-semibold text-ink transition-colors hover:border-ink"
   >
     {children}
   </Link>

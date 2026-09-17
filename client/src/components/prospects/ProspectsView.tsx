@@ -11,22 +11,16 @@ import { ConfirmModal } from "../common/ConfirmModal";
 import {
   Users,
   Search,
-  Filter,
   Plus,
   FileSpreadsheet,
   Download,
   Trash2,
-  FolderPlus,
   ExternalLink,
   Mail,
   Phone,
-  CheckSquare,
-  Square,
-  Sparkles,
   RefreshCw,
   SlidersHorizontal,
   ChevronRight,
-  ChevronLeft,
   Calendar,
   Building,
   Briefcase,
@@ -35,18 +29,28 @@ import {
   ArrowLeft,
   ArrowRight,
   RotateCcw,
-  Sliders,
   X,
   GripVertical,
   ChevronDown,
-  Rocket,
   Edit2,
   Check,
-  ShieldAlert,
-  Folder,
+  Send,
   ArrowRightLeft,
-  ShieldCheck,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { popoverClass } from "../layout/Header";
+import { Avatar } from "../ui/Avatar";
+import { Badge, StatusDot } from "../ui/Badge";
+import { Button, buttonClass } from "../ui/Button";
+import { Callout } from "../ui/Callout";
+import { Card } from "../ui/Card";
+import { EmptyState } from "../ui/EmptyState";
+import { Checkbox, Field, Input, Select, labelClass } from "../ui/Field";
+import { IconButton } from "../ui/IconButton";
+import { Modal } from "../ui/Modal";
+import { Skeleton } from "../ui/Skeleton";
+import { Pagination, Table, Td, TdActions, Th, Tr } from "../ui/Table";
+import { useMediaQuery } from "../ui/hooks";
 import { extractCompanyFromHeadline } from "../../utils/companyExtractor";
 import {
   enrichProspects,
@@ -94,6 +98,8 @@ interface ProspectsViewProps {
 
 export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign }) => {
   const { user, selectedMemberId, setSelectedMemberId, openLinkedInModal, impersonatedOrg } = useAuth();
+  const navigate = useNavigate();
+  const isNarrow = useMediaQuery("(max-width: 1023px)");
   const [lists, setLists] = useState<any[]>([]);
   const [selectedListId, setSelectedListId] = useState<string>("ALL");
   const [prospects, setProspects] = useState<any[]>([]);
@@ -813,25 +819,14 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
       case "prospect":
         return (
           <div className="flex items-center gap-2">
-            <img
-              src={
-                p.avatarUrl ||
-                `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                  p.firstName + " " + p.lastName
-                )}&background=592eff&color=fff`
-              }
-              alt={p.firstName}
-              className="w-6 h-6 rounded-full object-cover border border-[#e0e0db] shrink-0 shadow-2xs"
-            />
+            <Avatar name={`${p.firstName || ""} ${p.lastName || ""}`} src={p.avatarUrl} size="md" />
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 flex-wrap leading-tight">
-                <p className="font-bold text-[#21164c] text-xs hover:underline truncate leading-none">
+                <p className="truncate text-sm font-medium leading-none text-ink">
                   {p.firstName} {p.lastName}
                 </p>
                 {p.list?.user?.id && p.list.user.id !== user?.id && (
-                  <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-[#592eff]/10 text-[#592eff] font-bold border border-[#592eff]/20 shrink-0 leading-none">
-                    {p.list.user.firstName || p.list.user.name || "Collègue"}
-                  </span>
+                  <Badge size="sm">{p.list.user.firstName || p.list.user.name || "Collègue"}</Badge>
                 )}
                 {p.linkedinUrl && (
                   <a
@@ -839,7 +834,7 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
-                    className="text-[#0a66c2] hover:text-[#004182] transition-colors p-0.5 shrink-0 leading-none"
+                    className="shrink-0 p-0.5 leading-none text-muted transition-colors hover:text-ink"
                     title="Ouvrir le profil LinkedIn"
                   >
                     <ExternalLink className="w-2.5 h-2.5" />
@@ -847,10 +842,10 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                 )}
               </div>
               <div className="flex items-center gap-1.5 flex-wrap mt-0.5 leading-none">
-                <p className="text-[10px] text-[#5f5f69] truncate leading-none">{p.location || "Non renseigné"}</p>
+                <p className="text-xs text-muted truncate leading-none">{p.location || "Non renseigné"}</p>
                 {p.email && (
                   <span
-                    className="inline-flex items-center gap-1 text-[9px] text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded-full border border-emerald-200 font-medium shrink-0 leading-none"
+                    className="inline-flex shrink-0 items-center gap-1 text-xs leading-none text-muted"
                     title={`Email : ${p.email}`}
                   >
                     <Mail className="w-2.5 h-2.5" />
@@ -859,7 +854,7 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                 )}
                 {p.phone && (
                   <span
-                    className="inline-flex items-center gap-1 text-[9px] text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded-full border border-blue-200 font-medium shrink-0 leading-none"
+                    className="inline-flex shrink-0 items-center gap-1 text-xs leading-none text-muted"
                     title={`Téléphone : ${p.phone}`}
                   >
                     <Phone className="w-2.5 h-2.5" />
@@ -873,8 +868,8 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                   if (note) {
                     return (
                       <span
-                        className={`text-[9px] font-medium leading-none shrink-0 ${
-                          note.tone === "ok" ? "text-emerald-700" : note.tone === "error" ? "text-red-600" : "text-[#7c7c88]"
+                        className={`text-xs font-medium leading-none shrink-0 ${
+                          note.tone === "ok" ? "text-ok" : note.tone === "error" ? "text-danger" : "text-muted-2"
                         }`}
                       >
                         {note.text}
@@ -883,8 +878,8 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                   }
                   if (busy) {
                     return (
-                      <span className="inline-flex items-center gap-1 text-[9px] text-[#5f5f69] leading-none shrink-0">
-                        <RefreshCw className="w-2.5 h-2.5 animate-spin text-[#592eff]" /> Recherche…
+                      <span className="inline-flex items-center gap-1 text-xs text-muted leading-none shrink-0">
+                        <RefreshCw className="h-2.5 w-2.5 animate-spin" /> Recherche…
                       </span>
                     );
                   }
@@ -898,7 +893,7 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                         e.stopPropagation();
                         handleEnrichOne(p);
                       }}
-                      className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 inline-flex items-center gap-1 text-[9px] font-semibold text-[#21164c] border border-[#e0e0db] rounded-md px-1.5 py-[2px] leading-none shrink-0 hover:border-[#21164c] transition-[opacity,border-color] disabled:cursor-not-allowed disabled:text-[#7c7c88]"
+                      className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 inline-flex items-center gap-1 text-xs font-semibold text-ink border border-line rounded-md px-1.5 py-[2px] leading-none shrink-0 hover:border-ink transition-[opacity,border-color] disabled:cursor-not-allowed disabled:text-muted-2"
                       title={
                         noTokens
                           ? "Plus de tokens ce mois-ci"
@@ -916,7 +911,7 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
 
       case "headline":
         return (
-          <p className="font-medium text-[#21164c] line-clamp-1 text-[11px] leading-tight" title={p.headline || ""}>
+          <p className="line-clamp-1 text-sm leading-tight text-ink-2" title={p.headline || ""}>
             {p.headline || "Professionnel"}
           </p>
         );
@@ -926,14 +921,12 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
         return (
           <div className="flex items-center gap-1" title={comp || "Non renseigné"}>
             {comp ? (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-[#592eff]/10 text-[#21164c] border border-[#592eff]/20 max-w-[180px] shadow-2xs group-hover:border-[#592eff]/40 transition-colors leading-tight">
-                <Building className="w-2.5 h-2.5 text-[#592eff] shrink-0" />
+              <span className="inline-flex max-w-[180px] items-center gap-1.5 text-sm leading-tight text-ink-2">
+                <Building className="h-3.5 w-3.5 shrink-0 text-muted-2" strokeWidth={1.75} />
                 <span className="truncate">{comp}</span>
               </span>
             ) : (
-              <span className="text-[10px] text-[#8a8a93] italic flex items-center gap-1 leading-tight">
-                <Building className="w-2.5 h-2.5 text-[#c4c4cc]" /> Indépendant
-              </span>
+              <span className="text-sm leading-tight text-muted-2">—</span>
             )}
           </div>
         );
@@ -941,35 +934,17 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
 
       case "list":
         return (
-          <span
-            className="inline-flex items-center text-[10px] font-bold py-0.5 px-2 rounded-full border leading-none"
-            style={{
-              backgroundColor: `${p.list?.color || "#592eff"}15`,
-              color: p.list?.color || "#592eff",
-              borderColor: `${p.list?.color || "#592eff"}30`,
-            }}
-          >
-            {p.list?.name || "Sans liste"}
+          <span className="inline-flex max-w-[160px] items-center gap-1.5 text-sm text-ink-2">
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: p.list?.color || "#592eff" }} aria-hidden />
+            <span className="truncate">{p.list?.name || "Sans liste"}</span>
           </span>
         );
 
       case "status":
         return (
-          <span
-            className={`inline-flex items-center text-[10px] font-medium py-0.5 px-2 rounded-full border leading-none ${
-              p.connectionStatus === "CONNECTED"
-                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                : p.connectionStatus === "PENDING"
-                ? "bg-amber-50 text-amber-700 border border-amber-200"
-                : "bg-[#f5f5f7] text-[#5f5f69] border border-[#e0e0db]"
-            }`}
-          >
-            {p.connectionStatus === "CONNECTED"
-              ? "Connecté"
-              : p.connectionStatus === "PENDING"
-              ? "En attente"
-              : "Non connecté"}
-          </span>
+          <StatusDot tone={p.connectionStatus === "CONNECTED" ? "ok" : p.connectionStatus === "PENDING" ? "warn" : "neutral"}>
+            {p.connectionStatus === "CONNECTED" ? "Connecté" : p.connectionStatus === "PENDING" ? "En attente" : "Non connecté"}
+          </StatusDot>
         );
 
       case "campaigns": {
@@ -981,9 +956,9 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                 {campaignsList.map((cp: any) => (
                   <span
                     key={cp.campaign?.id || Math.random()}
-                    className="px-1.5 py-0.5 bg-[#592eff]/10 text-[#592eff] border border-[#592eff]/20 rounded font-semibold text-[9px] flex items-center gap-1"
+                    className="inline-flex items-center gap-1 rounded-md bg-surface-2 px-1.5 py-0.5 text-xs text-ink-2"
                   >
-                    <Megaphone className="w-2 h-2" /> {cp.campaign?.name || "Campagne"}
+                    <Megaphone className="h-3 w-3 text-muted" strokeWidth={1.75} /> {cp.campaign?.name || "Campagne"}
                   </span>
                 ))}
               </div>
@@ -992,11 +967,11 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  alert(`Prêt à ajouter ${p.firstName} à une campagne !`);
+                  navigate("/campaigns");
                 }}
-                className="text-[10px] text-[#592eff] hover:text-[#4d25e0] hover:underline font-semibold flex items-center gap-1"
+                className="flex items-center gap-1 text-xs text-muted hover:text-ink hover:underline"
               >
-                <Plus className="w-2.5 h-2.5" /> Ajouter à une campagne
+                <Plus className="h-3 w-3" /> Ajouter à une campagne
               </button>
             )}
           </div>
@@ -1009,13 +984,13 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
             {(p.tags || []).slice(0, 2).map((t: string) => (
               <span
                 key={t}
-                className="px-1.5 py-0.5 bg-[#f5f5f7] text-[#5f5f69] border border-[#e0e0db] rounded font-medium text-[9px] flex items-center gap-1"
+                className="px-1.5 py-0.5 bg-surface-2 text-muted border border-line rounded font-medium text-xs flex items-center gap-1"
               >
-                <Tag className="w-2 h-2 text-[#592eff]" /> {t}
+                <Tag className="h-3 w-3 text-muted-2" strokeWidth={1.75} /> {t}
               </span>
             ))}
             {(p.tags || []).length > 2 && (
-              <span className="text-[9px] text-[#5f5f69] font-bold">
+              <span className="text-xs text-muted font-bold">
                 +{p.tags.length - 2}
               </span>
             )}
@@ -1031,8 +1006,8 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
             })
           : "—";
         return (
-          <span className="text-[11px] text-[#5f5f69] font-medium flex items-center gap-1">
-            <Calendar className="w-2.5 h-2.5 text-[#592eff]" /> {dateStr}
+          <span className="text-xs text-muted font-medium flex items-center gap-1">
+            {dateStr}
           </span>
         );
       }
@@ -1042,11 +1017,24 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
     }
   };
 
+  const isCustomList = selectedListId !== "ALL" && selectedListId !== "DO_NOT_CONTACT";
+  const canFilterMembers = (user?.role === "SUPER_ADMIN" || user?.orgRole === "OWNER") && teamMembers.length > 0;
+  const allSelected = selectedIds.size > 0 && selectedIds.size === prospects.length;
+  const enrichDisabled = enrichEstimate.incomplete.length === 0 || (enrichBalance !== null && enrichBalance.remaining < 1);
+
+  const startCampaign = () => {
+    if (!user?.hasLinkedInAccount) {
+      setRequiredFeatureName("Lancement de campagne");
+      setShowLinkedInRequiredModal(true);
+      return;
+    }
+    if (onStartCampaign) onStartCampaign();
+    else navigate("/campaigns");
+  };
+
   return (
-    <div className="max-w-[1640px] w-full mx-auto px-4 sm:px-6 py-2.5 h-full min-h-0 flex flex-col overflow-hidden animate-in fade-in duration-300">
-      {/* 2-Column Waalaxy Layout */}
-      <div className="flex items-stretch gap-4 flex-1 min-h-0 overflow-hidden">
-        {/* LEFT COLUMN: Dedicated Waalaxy Lists Sidebar */}
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-[1640px] flex-col overflow-hidden px-4 py-4 sm:px-6">
+      <div className="flex min-h-0 flex-1 items-stretch gap-4 overflow-hidden">
         <ListsSidebar
           lists={lists}
           selectedListId={selectedListId}
@@ -1059,137 +1047,72 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
             setRenameInputText(list.name);
           }}
           onDeleteList={(id) => handleDeleteList(id)}
-          isCollapsed={isSidebarCollapsed}
+          isCollapsed={isSidebarCollapsed || isNarrow}
           onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         />
 
-        {/* RIGHT COLUMN: Active List Header, Waalaxy Filter Chips & Data Table */}
-        <div className="flex-1 min-w-0 h-full flex flex-col gap-2.5 overflow-hidden">
-          {/* HERO HEADER OF ACTIVE LIST (Waalaxy Style) */}
-          <div className="adora-card p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-[#e0e0db] shadow-xs shrink-0">
-            <div className="flex items-center gap-3">
-              {/* List Icon Avatar */}
-              <div
-                className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-xs shrink-0"
-                style={{
-                  backgroundColor: `${activeListColor}20`,
-                  color: activeListColor,
-                }}
-              >
-                {selectedListId === "ALL" ? (
-                  <Users className="w-5 h-5" />
-                ) : selectedListId === "DO_NOT_CONTACT" ? (
-                  <ShieldAlert className="w-5 h-5 text-red-600" />
+        <div className="flex h-full min-w-0 flex-1 flex-col gap-3 overflow-hidden">
+          {/* En-tête de la liste active */}
+          <div className="flex shrink-0 flex-col justify-between gap-3 sm:flex-row sm:items-end">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                {isInlineEditingTitle && isCustomList ? (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      handleRenameList(selectedListId, inlineTitleText);
+                    }}
+                    className="flex items-center gap-1.5"
+                  >
+                    <Input
+                      autoFocus
+                      value={inlineTitleText}
+                      onChange={(e) => setInlineTitleText(e.target.value)}
+                      onBlur={() => handleRenameList(selectedListId, inlineTitleText)}
+                      className="display h-9 w-64 text-lg"
+                    />
+                    <IconButton label="Valider" icon={Check} type="submit" />
+                  </form>
                 ) : (
-                  <Folder className="w-5 h-5" />
-                )}
-              </div>
-
-              {/* Title with Inline Edit option */}
-              <div>
-                <div className="flex items-center gap-2">
-                  {isInlineEditingTitle && selectedListId !== "ALL" && selectedListId !== "DO_NOT_CONTACT" ? (
-                    <form
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        handleRenameList(selectedListId, inlineTitleText);
-                      }}
-                      className="flex items-center gap-1.5"
-                    >
-                      <input
-                        type="text"
-                        autoFocus
-                        value={inlineTitleText}
-                        onChange={(e) => setInlineTitleText(e.target.value)}
-                        onBlur={() => handleRenameList(selectedListId, inlineTitleText)}
-                        className="text-lg font-extrabold text-[#21164c] px-2 py-0.5 rounded-lg border-2 border-[#592eff] focus:outline-none"
+                  <div className="group flex items-center gap-1.5">
+                    <h1 className="display truncate text-xl">{activeListTitle}</h1>
+                    {isCustomList && (
+                      <IconButton
+                        label="Renommer cette liste"
+                        icon={Edit2}
+                        onClick={() => {
+                          setInlineTitleText(activeListTitle);
+                          setIsInlineEditingTitle(true);
+                        }}
+                        className="opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
                       />
-                      <button
-                        type="submit"
-                        className="p-1 rounded-lg bg-[#592eff] text-white hover:bg-[#4d25e0]"
-                      >
-                        <Check className="w-3.5 h-3.5" />
-                      </button>
-                    </form>
-                  ) : (
-                    <div className="flex items-center gap-1.5 group">
-                      <h1 className="text-lg sm:text-xl font-extrabold text-[#21164c] tracking-tight">
-                        {activeListTitle}
-                      </h1>
-                      {selectedListId !== "ALL" && selectedListId !== "DO_NOT_CONTACT" && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setInlineTitleText(activeListTitle);
-                            setIsInlineEditingTitle(true);
-                          }}
-                          className="opacity-0 group-hover:opacity-100 p-1 rounded-lg hover:bg-[#f5f5f7] text-[#8a8a93] hover:text-[#592eff] transition-all"
-                          title="Renommer cette liste"
-                        >
-                          <Edit2 className="w-3 h-3" />
-                        </button>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Prospect Count Badge */}
-                  <span className="badge-tag bg-[#592eff]/10 text-[#592eff] border border-[#592eff]/20 text-[11px] font-bold px-2 py-0.5">
-                    {total}
-                  </span>
-                </div>
-
-                <p className="text-[11px] text-[#5f5f69] mt-0.5">
-                  {selectedListId === "ALL"
-                    ? "Tous les prospects importés dans votre compte Bleadin."
-                    : selectedListId === "DO_NOT_CONTACT"
-                    ? "Contacts exclus de vos automatisations et envois de messages."
-                    : `Liste dédiée • ${total} prospect(s) qualifié(s).`}
-                </p>
+                    )}
+                  </div>
+                )}
+                <Badge>{total}</Badge>
               </div>
+              <p className="mt-0.5 text-sm text-muted">
+                {selectedListId === "ALL"
+                  ? "Tous les prospects importés dans votre espace."
+                  : selectedListId === "DO_NOT_CONTACT"
+                    ? "Contacts exclus des automatisations et des envois."
+                    : `${total} prospect(s) dans cette liste.`}
+              </p>
             </div>
 
-            {/* Top Right Action Buttons (Waalaxy Style) */}
-            <div className="flex items-center gap-2 shrink-0">
-              {/* Button Start Campaign */}
-              <button
-                type="button"
-                onClick={() => {
-                  if (!user?.hasLinkedInAccount) {
-                    setRequiredFeatureName("Lancement de campagne");
-                    setShowLinkedInRequiredModal(true);
-                    return;
-                  }
-                  if (onStartCampaign) {
-                    onStartCampaign();
-                  } else {
-                    alert(
-                      selectedIds.size > 0
-                        ? `Lancement d'une campagne pour ${selectedIds.size} prospect(s) sélectionné(s) !`
-                        : `Lancement d'une campagne pour la liste "${activeListTitle}" (${total} prospects) !`
-                    );
-                  }
-                }}
-                className="py-1.5 px-3 rounded-xl border border-[#592eff]/30 bg-[#592eff]/10 hover:bg-[#592eff]/20 text-[#592eff] text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-2xs cursor-pointer"
-              >
-                <Rocket className="w-3.5 h-3.5" /> Démarrer une campagne
-              </button>
-
-              {/* Primary Unified Import Button with Dropdown Menu */}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="secondary" icon={Send} onClick={startCampaign}>
+                Démarrer une campagne
+              </Button>
               <div className="relative" ref={importDropdownRef}>
-                <button
-                  type="button"
-                  onClick={() => setIsImportDropdownOpen(!isImportDropdownOpen)}
-                  className="py-1.5 px-3 rounded-xl bg-[#592eff] hover:bg-[#4d25e0] text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-[#592eff]/25 hover:shadow-lg transition-all active:scale-95"
-                >
-                  <span>Importer des prospects</span>
-                  <ChevronDown className="w-3.5 h-3.5" />
-                </button>
-
-                {/* Dropdown Menu */}
+                <Button icon={Plus} iconRight={ChevronDown} onClick={() => setIsImportDropdownOpen((v) => !v)} aria-expanded={isImportDropdownOpen} aria-haspopup="menu">
+                  Importer
+                </Button>
                 {isImportDropdownOpen && (
-                  <div className="absolute right-0 top-11 z-50 w-64 bg-white rounded-2xl border border-[#e0e0db] shadow-2xl p-2 animate-in fade-in zoom-in-95">
+                  <div className={`${popoverClass} z-50 w-72`} role="menu">
                     <button
                       type="button"
+                      role="menuitem"
                       onClick={() => {
                         setIsImportDropdownOpen(false);
                         if (!user?.hasLinkedInAccount) {
@@ -1199,40 +1122,28 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                         }
                         setIsSearchModalOpen(true);
                       }}
-                      className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-[#0a66c2]/10 text-left transition-colors group"
+                      className="flex w-full items-start gap-3 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-surface-2"
                     >
-                      <div className="w-8 h-8 rounded-lg bg-[#0a66c2]/15 text-[#0a66c2] flex items-center justify-center shrink-0">
-                        <Search className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-[#21164c] group-hover:text-[#0a66c2]">
-                          Recherche LinkedIn
-                        </p>
-                        <p className="text-[10px] text-[#5f5f69]">
-                          Extraction directe par poste, ville ou entreprise
-                        </p>
-                      </div>
+                      <Search className="mt-0.5 h-4 w-4 shrink-0 text-muted" strokeWidth={1.75} />
+                      <span>
+                        <span className="block text-sm font-medium text-ink">Recherche LinkedIn</span>
+                        <span className="block text-xs text-muted">Par poste, ville ou entreprise</span>
+                      </span>
                     </button>
-
                     <button
                       type="button"
+                      role="menuitem"
                       onClick={() => {
                         setIsImportDropdownOpen(false);
                         setIsExcelModalOpen(true);
                       }}
-                      className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-emerald-50 text-left transition-colors group mt-1"
+                      className="flex w-full items-start gap-3 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-surface-2"
                     >
-                      <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                        <FileSpreadsheet className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-[#21164c] group-hover:text-emerald-700">
-                          Fichier Excel / CSV
-                        </p>
-                        <p className="text-[10px] text-[#5f5f69]">
-                          Import avec mapping intelligent de colonnes
-                        </p>
-                      </div>
+                      <FileSpreadsheet className="mt-0.5 h-4 w-4 shrink-0 text-muted" strokeWidth={1.75} />
+                      <span>
+                        <span className="block text-sm font-medium text-ink">Fichier Excel ou CSV</span>
+                        <span className="block text-xs text-muted">Import avec mise en correspondance des colonnes</span>
+                      </span>
                     </button>
                   </div>
                 )}
@@ -1240,142 +1151,74 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
             </div>
           </div>
 
-          {/* WAALAXY SEARCH & QUICK FILTER CHIPS BAR */}
-          <div className="adora-card p-2.5 px-3.5 space-y-2 border border-[#e0e0db] shadow-xs shrink-0">
-            {/* Search Input */}
-            <form onSubmit={handleSearchSubmit} className="relative w-full">
-              <Search className="w-3.5 h-3.5 text-[#8a8a93] absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Rechercher par nom, poste, entreprise, localisation ou email..."
+          {/* Recherche + filtres */}
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <form onSubmit={handleSearchSubmit} className="min-w-[240px] flex-1">
+              <Input
+                size="sm"
+                leftIcon={Search}
+                placeholder="Rechercher par nom, poste, entreprise, localisation ou e-mail…"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-8 pr-3 py-1.5 rounded-xl border border-[#e0e0db] bg-[#fcfcfe] text-xs text-[#21164c] placeholder-[#8a8a93] focus:outline-none focus:border-[#592eff] transition-all"
               />
             </form>
-
-            {/* Horizontal Filter Chips (Waalaxy Style) */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-0.5 text-xs custom-scrollbar">
-              {/* Statut LinkedIn Filter Chip */}
-              <div className="relative shrink-0">
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className={`px-2.5 py-1 rounded-xl border text-[11px] font-semibold focus:outline-none cursor-pointer transition-all ${
-                    statusFilter !== "ALL"
-                      ? "bg-[#592eff]/10 border-[#592eff] text-[#592eff]"
-                      : "bg-white border-[#e0e0db] text-[#5f5f69] hover:bg-[#f8f9fc]"
-                  }`}
-                >
-                  <option value="ALL">Statut : Tous</option>
-                  <option value="CONNECTED">Connecté</option>
-                  <option value="PENDING">En attente</option>
-                  <option value="NOT_CONNECTED">Non connecté</option>
-                </select>
-              </div>
-
-              {/* Email trouvé Toggle Chip */}
-              <button
-                type="button"
-                onClick={() => setHasEmailFilter(!hasEmailFilter)}
-                className={`px-2.5 py-1 rounded-xl border text-[11px] font-semibold flex items-center gap-1.5 shrink-0 transition-all ${
-                  hasEmailFilter
-                    ? "bg-sky-50 border-sky-400 text-sky-700 shadow-2xs"
-                    : "bg-white border-[#e0e0db] text-[#5f5f69] hover:bg-[#f8f9fc]"
-                }`}
-              >
-                <Mail className="w-3 h-3" /> Email Pro
-              </button>
-
-              {/* Campagne Filter Chip */}
-              <div className="relative shrink-0">
-                <select
-                  value={campaignFilter}
-                  onChange={(e: any) => setCampaignFilter(e.target.value)}
-                  className={`px-2.5 py-1 rounded-xl border text-[11px] font-semibold focus:outline-none cursor-pointer transition-all ${
-                    campaignFilter !== "ALL"
-                      ? "bg-[#592eff]/10 border-[#592eff] text-[#592eff]"
-                      : "bg-white border-[#e0e0db] text-[#5f5f69] hover:bg-[#f8f9fc]"
-                  }`}
-                >
-                  <option value="ALL">Campagnes : Toutes</option>
-                  <option value="WITH_CAMPAIGN">En campagne</option>
-                  <option value="NO_CAMPAIGN">Sans campagne</option>
-                </select>
-              </div>
-
-              {/* Collaborateur Filter Chip (Super Admin 360° ou Owner) */}
-              {(user?.role === "SUPER_ADMIN" || user?.orgRole === "OWNER") && teamMembers.length > 0 && (
-                <div className="relative shrink-0">
-                  <select
-                    value={selectedMemberId || "ALL"}
-                    onChange={(e) => setSelectedMemberId(e.target.value === "ALL" ? null : e.target.value)}
-                    className={`px-2.5 py-1 rounded-xl border text-[11px] font-bold focus:outline-none cursor-pointer transition-all ${
-                      selectedMemberId
-                        ? "bg-[#592eff]/10 border-[#592eff] text-[#592eff]"
-                        : "bg-white border-[#e0e0db] text-[#5f5f69] hover:bg-[#f8f9fc]"
-                    }`}
-                  >
-                    <option value="ALL">Collaborateur : toute l'équipe</option>
-                    {teamMembers.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name || m.email} {m.orgRole === "OWNER" ? "(Propriétaire)" : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* Spacer */}
-              <div className="flex-1"></div>
-
-              {/* Colonnes Switcher Chip */}
-              <button
-                type="button"
-                onClick={() => setIsColumnOrganizerOpen(true)}
-                className="px-2.5 py-1 rounded-xl border border-[#e0e0db] bg-white hover:bg-[#f5f5f7] text-[#5f5f69] text-[11px] font-bold flex items-center gap-1.5 shrink-0 transition-all"
-                title="Personnaliser et réorganiser les colonnes"
-              >
-                <SlidersHorizontal className="w-3 h-3 text-[#592eff]" /> Colonnes
-              </button>
-
-              {/* Export CSV Chip */}
-              <button
-                type="button"
-                onClick={() => handleExportCSV()}
-                className="p-1.5 rounded-xl border border-[#e0e0db] bg-white hover:bg-[#f5f5f7] text-[#5f5f69] shrink-0 transition-colors"
-                title="Exporter en CSV"
-              >
-                <Download className="w-3 h-3" />
-              </button>
-
-              {/* Refresh & Sync Chip */}
-              <button
-                type="button"
+            <Select inline size="sm" aria-label="Statut LinkedIn" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="ALL">Tous les statuts</option>
+              <option value="CONNECTED">Connecté</option>
+              <option value="PENDING">En attente</option>
+              <option value="NOT_CONNECTED">Non connecté</option>
+            </Select>
+            <Button
+              variant={hasEmailFilter ? "secondary" : "ghost"}
+              size="sm"
+              icon={Mail}
+              onClick={() => setHasEmailFilter(!hasEmailFilter)}
+              aria-pressed={hasEmailFilter}
+              className={hasEmailFilter ? "border-ink" : undefined}
+            >
+              E-mail trouvé
+            </Button>
+            <Select inline size="sm" aria-label="Campagne" value={campaignFilter} onChange={(e: any) => setCampaignFilter(e.target.value)}>
+              <option value="ALL">Toutes les campagnes</option>
+              <option value="WITH_CAMPAIGN">En campagne</option>
+              <option value="NO_CAMPAIGN">Sans campagne</option>
+            </Select>
+            {canFilterMembers && (
+              <Select inline size="sm" aria-label="Collaborateur" value={selectedMemberId || "ALL"} onChange={(e) => setSelectedMemberId(e.target.value === "ALL" ? null : e.target.value)}>
+                <option value="ALL">Toute l'équipe</option>
+                {teamMembers.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name || m.email} {m.orgRole === "OWNER" ? "(Propriétaire)" : ""}
+                  </option>
+                ))}
+              </Select>
+            )}
+            <div className="ml-auto flex items-center gap-1">
+              <Button variant="ghost" size="sm" icon={SlidersHorizontal} onClick={() => setIsColumnOrganizerOpen(true)}>
+                Colonnes
+              </Button>
+              <IconButton label="Exporter en CSV" icon={Download} onClick={() => handleExportCSV()} />
+              <IconButton
+                label="Synchroniser le statut LinkedIn"
+                icon={RefreshCw}
                 onClick={handleSyncStatus}
                 disabled={isSyncingStatus || loading}
-                className="p-1.5 rounded-xl border border-[#e0e0db] bg-white hover:bg-[#f5f5f7] text-[#5f5f69] shrink-0 transition-colors disabled:opacity-50"
-                title="Synchroniser le statut de connexion LinkedIn réel"
-              >
-                <RefreshCw className={`w-3 h-3 ${isSyncingStatus || loading ? "animate-spin text-[#592eff]" : ""}`} />
-              </button>
+                className={isSyncingStatus ? "[&>svg]:animate-spin" : undefined}
+              />
             </div>
           </div>
 
-          {/* Bulk Action Bar (When selected) */}
+          {/* Barre de sélection */}
           {selectedIds.size > 0 && (
-            <div className="p-2.5 px-4 rounded-xl bg-[#21164c] text-white flex items-center justify-between shadow-lg shadow-[#21164c]/15 animate-in slide-in-from-top-2 shrink-0">
-              <div className="flex items-center gap-2 text-xs font-bold">
-                <span className="w-2 h-2 rounded-full bg-[#a2ea13] animate-pulse"></span>
-                <span>{selectedIds.size} prospect(s) sélectionné(s)</span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {/* Seul CTA violet de la barre : révéler les coordonnées manquantes */}
-                <button
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface px-3 py-2 shadow-pop">
+              <span className="text-sm text-ink">
+                <span className="font-medium">{selectedIds.size}</span> prospect(s) sélectionné(s)
+              </span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Button
+                  size="sm"
                   onClick={() => openEnrichPanel(false)}
-                  disabled={enrichEstimate.incomplete.length === 0 || (enrichBalance !== null && enrichBalance.remaining < 1)}
-                  className="py-1 px-2.5 rounded-lg bg-[#592eff] hover:bg-[#4d25e0] disabled:bg-white/10 disabled:text-white/50 disabled:cursor-not-allowed text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  disabled={enrichDisabled}
                   title={
                     enrichEstimate.incomplete.length === 0
                       ? "Tous les prospects sélectionnés ont déjà e-mail et téléphone"
@@ -1384,7 +1227,6 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                         : "Rechercher l'e-mail et le téléphone des prospects sélectionnés"
                   }
                 >
-                  <Sparkles className="w-3 h-3" />
                   {enrichBalance !== null && enrichBalance.remaining < 1 ? (
                     "Plus de tokens ce mois-ci"
                   ) : (
@@ -1392,44 +1234,39 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                       Enrichir ({enrichEstimate.incomplete.length}) · ≈ {enrichEstimate.maxCost} <TokenGlyph />
                     </>
                   )}
-                </button>
+                </Button>
                 {teamMembers.length > 1 && (
-                  <button
-                    onClick={() => setIsTransferModalOpen(true)}
-                    className="py-1 px-2.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-                    title="Transférer les prospects à un collègue"
-                  >
-                    <ArrowRightLeft className="w-3 h-3" /> Transférer
-                  </button>
+                  <Button variant="secondary" size="sm" icon={ArrowRightLeft} onClick={() => setIsTransferModalOpen(true)}>
+                    Transférer
+                  </Button>
                 )}
-                {/* Export : menu natif <details>, avec ou sans enrichissement préalable */}
-                <details className="relative group/export">
-                  <summary className="list-none py-1 px-2.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer select-none [&::-webkit-details-marker]:hidden">
-                    <Download className="w-3 h-3" /> Exporter <ChevronDown className="w-3 h-3 opacity-70" />
+                <details className="group/export relative">
+                  <summary className={`${buttonClass("secondary", "sm")} list-none [&::-webkit-details-marker]:hidden`}>
+                    <Download className="h-4 w-4" strokeWidth={1.75} aria-hidden /> Exporter <ChevronDown className="h-4 w-4 opacity-70" strokeWidth={1.75} aria-hidden />
                   </summary>
-                  <div className="absolute right-0 top-full mt-1.5 z-30 min-w-[260px] rounded-xl border border-[#e0e0db] bg-white text-[#21164c] shadow-lg shadow-[#21164c]/10 p-1">
+                  <div className={`${popoverClass} z-30 min-w-[260px]`}>
                     <button
                       type="button"
                       onClick={(e) => {
                         (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open");
                         handleExportCSV();
                       }}
-                      className="w-full text-left px-3 py-2 rounded-lg hover:bg-[#f5f5f7] text-xs font-semibold"
+                      className="w-full rounded-lg px-2.5 py-2 text-left text-sm text-ink hover:bg-surface-2"
                     >
                       Exporter tel quel
-                      <span className="block text-[10px] font-normal text-[#7c7c88]">CSV des {selectedIds.size} prospects sélectionnés</span>
+                      <span className="block text-xs text-muted">CSV des {selectedIds.size} prospects sélectionnés</span>
                     </button>
                     <button
                       type="button"
-                      disabled={enrichEstimate.incomplete.length === 0 || (enrichBalance !== null && enrichBalance.remaining < 1)}
+                      disabled={enrichDisabled}
                       onClick={(e) => {
                         (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open");
                         openEnrichPanel(true);
                       }}
-                      className="w-full text-left px-3 py-2 rounded-lg hover:bg-[#f5f5f7] text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full rounded-lg px-2.5 py-2 text-left text-sm text-ink hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Enrichir puis exporter
-                      <span className="block text-[10px] font-normal text-[#7c7c88]">
+                      <span className="block text-xs text-muted">
                         {enrichEstimate.incomplete.length === 0
                           ? "Toutes les coordonnées sont déjà présentes"
                           : `${enrichEstimate.incomplete.length} sans coordonnées · ≈ ${enrichEstimate.maxCost} tokens maximum`}
@@ -1437,115 +1274,81 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                     </button>
                   </div>
                 </details>
-                <button
-                  onClick={handleOpenDeleteModal}
-                  className="py-1 px-2.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-                >
-                  <Trash2 className="w-3 h-3" /> Supprimer
-                </button>
+                <Button variant="danger" size="sm" icon={Trash2} onClick={handleOpenDeleteModal}>
+                  Supprimer
+                </Button>
               </div>
             </div>
           )}
 
           {/* Panneau de confirmation d'enrichissement — inline, jamais en modale */}
           {enrichPanel && selectedIds.size > 0 && (
-            <div className="rounded-xl border border-[#e0e0db] bg-white px-4 py-3 shrink-0 animate-in fade-in slide-in-from-top-1 duration-200">
-              <div className="flex flex-col md:flex-row md:items-start gap-4">
-                <div className="flex-1 min-w-0 max-w-[65ch]">
-                  <p className="text-xs font-bold text-[#21164c]">
+            <div className="shrink-0 rounded-xl border border-line bg-surface px-4 py-3">
+              <div className="flex flex-col gap-4 md:flex-row md:items-start">
+                <div className="min-w-0 max-w-[65ch] flex-1">
+                  <p className="text-sm font-medium text-ink">
                     {enrichPanel.thenExport ? "Enrichir puis exporter" : "Enrichir"} {enrichBatch.length} prospect{enrichBatch.length > 1 ? "s" : ""}
                     {enrichEstimate.incomplete.length > enrichBatch.length && (
-                      <span className="font-medium text-[#7c7c88]"> — {enrichEstimate.incomplete.length - enrichBatch.length} au-delà du lot de 50, à relancer ensuite</span>
+                      <span className="font-normal text-muted"> — {enrichEstimate.incomplete.length - enrichBatch.length} au-delà du lot de 50, à relancer ensuite</span>
                     )}
                   </p>
-                  <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[11px] text-[#5f5f69]">
+                  <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs text-muted">
                     <dt>Coût maximum</dt>
-                    <dd className="font-semibold text-[#21164c]">
-                      {enrichBatchCost} <TokenGlyph /> <span className="font-normal text-[#7c7c88]">— 1 par e-mail, 5 par téléphone, uniquement ce qui manque</span>
+                    <dd className="text-ink">
+                      {enrichBatchCost} <TokenGlyph /> <span className="text-muted">— 1 par e-mail, 5 par téléphone, uniquement ce qui manque</span>
                     </dd>
                     <dt>Solde après</dt>
-                    <dd className="font-semibold text-[#21164c]">
+                    <dd className="text-ink">
                       {enrichBalance ? Math.max(0, enrichBalance.remaining - enrichBatchCost) : "—"} <TokenGlyph />
                       {enrichBalance && enrichBalance.remaining < enrichBatchCost && (
-                        <span className="font-normal text-amber-700"> — solde insuffisant pour tout le lot, les derniers prospects ne seront pas traités</span>
+                        <span className="text-warn"> — solde insuffisant pour tout le lot, les derniers prospects ne seront pas traités</span>
                       )}
                     </dd>
                   </dl>
-                  <p className="mt-1.5 text-[11px] text-[#7c7c88]">
-                    Les tokens des coordonnées introuvables vous sont restitués. Chaque recherche compte comme une visite de profil.
-                  </p>
-                  {enrichPanelError && <p className="mt-1.5 text-[11px] font-semibold text-red-600">{enrichPanelError}</p>}
+                  <p className="mt-1.5 text-xs text-muted">Les tokens des coordonnées introuvables vous sont restitués. Chaque recherche compte comme une visite de profil.</p>
+                  {enrichPanelError && <p className="mt-1.5 text-xs text-danger">{enrichPanelError}</p>}
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setEnrichPanel(null)}
-                    disabled={enrichRunning}
-                    className="py-1.5 px-3 rounded-lg text-xs font-semibold text-[#5f5f69] hover:text-[#21164c] hover:bg-[#f5f5f7] transition-colors disabled:opacity-50"
-                  >
+                <div className="flex shrink-0 items-center gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setEnrichPanel(null)} disabled={enrichRunning}>
                     Annuler
-                  </button>
-                  <button
-                    type="button"
-                    onClick={confirmEnrichSelection}
-                    disabled={enrichRunning}
-                    className="py-1.5 px-3 rounded-lg bg-[#21164c] hover:bg-[#2c1f66] text-white text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-60"
-                  >
-                    {enrichRunning ? (
-                      <>
-                        <RefreshCw className="w-3 h-3 animate-spin" /> Recherche en cours…
-                      </>
-                    ) : (
-                      "Confirmer"
-                    )}
-                  </button>
+                  </Button>
+                  <Button size="sm" onClick={confirmEnrichSelection} loading={enrichRunning}>
+                    {enrichRunning ? "Recherche en cours…" : "Confirmer"}
+                  </Button>
                 </div>
               </div>
             </div>
           )}
 
           {enrichSummary && (
-            <div className="flex items-center justify-between gap-3 rounded-xl border border-[#e0e0db] bg-[#f8f9fc] px-4 py-2 text-[11px] text-[#21164c] shrink-0">
+            <div className="flex shrink-0 items-center justify-between gap-3 rounded-xl border border-line bg-surface-2 px-4 py-2 text-sm text-ink">
               <span>
-                <span className="font-bold">Enrichissement terminé.</span> {enrichSummary}
+                <span className="font-medium">Enrichissement terminé.</span> {enrichSummary}
               </span>
-              <button type="button" onClick={() => setEnrichSummary(null)} className="text-[#7c7c88] hover:text-[#21164c]" aria-label="Fermer">
-                <X className="w-3.5 h-3.5" />
-              </button>
+              <IconButton label="Fermer" icon={X} onClick={() => setEnrichSummary(null)} />
             </div>
           )}
 
-          {/* PROSPECTS TABLE WITH INTERNAL VERTICAL SCROLL & STICKY HEADER */}
-          <div className="adora-card p-0 flex-1 min-h-0 flex flex-col border border-[#e0e0db] shadow-xs overflow-hidden">
-            {/* Scrollable Container with Custom Scrollbar */}
-            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto custom-scrollbar">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead className="sticky top-0 bg-[#fbfbfe] z-10 shadow-2xs border-b border-[#e0e0db]">
-                  <tr className="text-[#5f5f69] uppercase font-bold tracking-wider select-none text-[11px]">
-                    <th className="py-1.5 px-3 w-10">
-                      <button onClick={toggleSelectAll}>
-                        {selectedIds.size > 0 && selectedIds.size === prospects.length ? (
-                          <CheckSquare className="w-3.5 h-3.5 text-[#592eff]" />
-                        ) : (
-                          <Square className="w-3.5 h-3.5 text-[#5f5f69]" />
-                        )}
-                      </button>
-                    </th>
-
-                    {/* En-têtes réorganisables par Drag & Drop avec curseur main */}
+          {/* Tableau */}
+          <Card padding="none" className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div className="custom-scrollbar min-h-0 flex-1 overflow-auto">
+              <Table>
+                <thead>
+                  <tr className="select-none">
+                    <Th className="w-10">
+                      <Checkbox checked={allSelected} onChange={toggleSelectAll} aria-label="Tout sélectionner" />
+                    </Th>
                     {columnsOrder.map((colKey, index) => {
                       const colDef = DEFAULT_COLUMNS.find((c) => c.key === colKey);
                       if (!colDef) return null;
-
                       const isFirst = index === 0;
                       const isLast = index === columnsOrder.length - 1;
                       const isDragging = draggedColIndex === index;
                       const isDragOver = dragOverColIndex === index;
                       const isBefore = isDragOver && dropIndicator === "before";
                       const isAfter = isDragOver && dropIndicator === "after";
-
                       return (
-                        <th
+                        <Th
                           key={colKey}
                           draggable
                           onDragStart={(e) => handleDragStart(e, index)}
@@ -1553,31 +1356,15 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                           onDragLeave={handleDragLeave}
                           onDrop={(e) => handleDrop(e, index)}
                           onDragEnd={handleDragEnd}
-                          title="Maintenez le clic pour déplacer cette colonne partout dans le tableau"
-                          className={`relative py-1.5 px-2.5 transition-all duration-150 select-none group cursor-grab active:cursor-grabbing hover:bg-[#f3f0ff] rounded-lg ${
-                            isDragging
-                              ? "opacity-30 bg-[#592eff]/10 border-2 border-dashed border-[#592eff] cursor-grabbing"
-                              : ""
-                          } ${
-                            isBefore
-                              ? "border-l-4 border-l-[#592eff] bg-[#592eff]/10 pl-1.5"
-                              : ""
-                          } ${
-                            isAfter
-                              ? "border-r-4 border-r-[#592eff] bg-[#592eff]/10 pr-1.5"
-                              : ""
-                          }`}
+                          title="Glissez pour déplacer cette colonne"
+                          className={`group cursor-grab active:cursor-grabbing ${isDragging ? "opacity-30" : ""} ${isBefore ? "border-l-2 border-l-ink" : ""} ${isAfter ? "border-r-2 border-r-ink" : ""}`}
                         >
-                          <div className="flex items-center justify-between gap-1 py-0.5">
-                            <div className="flex items-center gap-1">
-                              <GripVertical className="w-3 h-3 text-[#8a8a93] group-hover:text-[#592eff] transition-colors shrink-0 cursor-grab active:cursor-grabbing" />
-                              <span className="font-bold tracking-wide text-[11px] text-[#5f5f69] group-hover:text-[#21164c] transition-colors whitespace-nowrap">
-                                {colDef.label}
-                              </span>
-                            </div>
-
-                            {/* Boutons rapides gauche/droite au survol */}
-                            <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity bg-white border border-[#e0e0db] rounded p-0.5 shadow-xs ml-1">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="flex items-center gap-1">
+                              <GripVertical className="h-3 w-3 shrink-0 text-muted-2" strokeWidth={1.75} aria-hidden />
+                              <span className="whitespace-nowrap">{colDef.label}</span>
+                            </span>
+                            <span className="ml-1 flex items-center opacity-0 transition-opacity group-hover:opacity-100">
                               <button
                                 type="button"
                                 disabled={isFirst}
@@ -1585,10 +1372,10 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                                   e.stopPropagation();
                                   moveColumn(index, "LEFT");
                                 }}
-                                className="p-0.5 hover:bg-[#592eff]/10 text-[#5f5f69] hover:text-[#592eff] disabled:opacity-20 rounded"
+                                className="rounded p-0.5 text-muted hover:bg-surface-2 hover:text-ink disabled:opacity-20"
                                 title="Déplacer vers la gauche"
                               >
-                                <ArrowLeft className="w-2.5 h-2.5" />
+                                <ArrowLeft className="h-3 w-3" />
                               </button>
                               <button
                                 type="button"
@@ -1597,518 +1384,277 @@ export const ProspectsView: React.FC<ProspectsViewProps> = ({ onStartCampaign })
                                   e.stopPropagation();
                                   moveColumn(index, "RIGHT");
                                 }}
-                                className="p-0.5 hover:bg-[#592eff]/10 text-[#5f5f69] hover:text-[#592eff] disabled:opacity-20 rounded"
+                                className="rounded p-0.5 text-muted hover:bg-surface-2 hover:text-ink disabled:opacity-20"
                                 title="Déplacer vers la droite"
                               >
-                                <ArrowRight className="w-2.5 h-2.5" />
+                                <ArrowRight className="h-3 w-3" />
                               </button>
-                            </div>
+                            </span>
                           </div>
-                        </th>
+                        </Th>
                       );
                     })}
-
-                    <th className="py-1.5 text-right pr-3 text-[11px]">Action</th>
+                    <Th />
                   </tr>
                 </thead>
-                <tbody ref={tbodyRef} className="divide-y divide-[#e0e0db]/50">
+                <tbody ref={tbodyRef}>
                   {loading ? (
-                    <tr>
-                      <td colSpan={columnsOrder.length + 2} className="py-10 text-center text-[#5f5f69]">
-                        <RefreshCw className="w-5 h-5 animate-spin mx-auto text-[#592eff] mb-2" />
-                        Chargement des prospects...
-                      </td>
-                    </tr>
+                    Array.from({ length: 8 }).map((_, i) => (
+                      <tr key={i}>
+                        <Td colSpan={columnsOrder.length + 2}>
+                          <Skeleton className="h-4 w-full" />
+                        </Td>
+                      </tr>
+                    ))
                   ) : prospects.length === 0 ? (
                     <tr>
-                      <td colSpan={columnsOrder.length + 2} className="py-10 text-center text-[#5f5f69]">
-                        <Users className="w-8 h-8 mx-auto text-[#e0e0db] mb-2" />
-                        <p className="font-bold text-[#21164c] text-xs">Aucun prospect dans cette vue</p>
-                        <p className="text-[11px] text-[#5f5f69] mt-0.5">
-                          Importez un fichier Excel ou lancez une recherche LinkedIn pour enrichir votre liste.
-                        </p>
-                      </td>
+                      <Td colSpan={columnsOrder.length + 2} className="border-b-0">
+                        <EmptyState
+                          bare
+                          icon={Users}
+                          title="Aucun prospect dans cette vue"
+                          description="Importez un fichier ou lancez une recherche LinkedIn pour alimenter cette liste."
+                        />
+                      </Td>
                     </tr>
                   ) : (
                     prospects.map((p) => {
                       const isSelected = selectedIds.has(p.id);
-
                       return (
-                        <tr
-                          key={p.id}
-                          onClick={() => setSelectedProspect(p)}
-                          className={`group/row hover:bg-[#f8f9fc] transition-colors cursor-pointer border-b border-[#e0e0db]/40 ${
-                            isSelected ? "bg-[#592eff]/5" : ""
-                          }`}
-                        >
-                          {/* Checkbox */}
-                          <td
-                            className="py-1.5 px-3"
+                        <Tr key={p.id} selected={isSelected} clickable onClick={() => setSelectedProspect(p)}>
+                          <Td
                             onClick={(e) => {
                               e.stopPropagation();
                               toggleSelectOne(p.id);
                             }}
                           >
-                            {isSelected ? (
-                              <CheckSquare className="w-3.5 h-3.5 text-[#592eff]" />
-                            ) : (
-                              <Square className="w-3.5 h-3.5 text-[#5f5f69]" />
-                            )}
-                          </td>
-
-                          {/* Cellules dynamiques ordonnées */}
+                            <Checkbox checked={isSelected} onChange={() => toggleSelectOne(p.id)} aria-label="Sélectionner" />
+                          </Td>
                           {columnsOrder.map((colKey) => (
-                            <td key={colKey} className="py-1.5 px-2.5">
+                            <Td key={colKey} className="py-2">
                               {renderCellContent(p, colKey)}
-                            </td>
+                            </Td>
                           ))}
-
-                          {/* Action détail CRM & suppression rapide */}
-                          <td className="py-1.5 text-right pr-3">
-                            <div className="flex items-center justify-end gap-1">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setProspectsToDelete({
-                                    ids: [p.id],
-                                    singleProspect: p,
-                                  });
-                                }}
-                                className="p-1 rounded-lg border border-transparent hover:border-rose-200 hover:bg-rose-50 text-[#8a8a93] hover:text-rose-600 transition-colors cursor-pointer"
-                                title="Supprimer ce prospect"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedProspect(p);
-                                }}
-                                className="p-1 rounded-lg border border-[#e0e0db] hover:bg-[#592eff]/10 hover:border-[#592eff]/30 text-[#353241] hover:text-[#592eff] transition-colors cursor-pointer"
-                                title="Ouvrir la fiche CRM"
-                              >
-                                <ChevronRight className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
+                          <TdActions>
+                            <IconButton
+                              label="Supprimer ce prospect"
+                              icon={Trash2}
+                              tone="danger"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setProspectsToDelete({ ids: [p.id], singleProspect: p });
+                              }}
+                            />
+                            <IconButton
+                              label="Ouvrir la fiche"
+                              icon={ChevronRight}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedProspect(p);
+                              }}
+                            />
+                          </TdActions>
+                        </Tr>
                       );
                     })
                   )}
                 </tbody>
-              </table>
+              </Table>
             </div>
 
-            {/* PINNED BOTTOM WAALAXY PAGINATION & NAVIGATION BAR */}
-            <div className="shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-2 bg-white border-t border-[#e0e0db]/80 text-xs select-none">
-              {/* Left: Rows Per Page & Display Range */}
-              <div className="flex items-center gap-2.5 text-[#5f5f69]">
-                <div className="flex items-center gap-1.5">
-                  <span className="font-medium text-[#8a8a93] text-[11px]">Afficher :</span>
-                  <select
-                    value={pageSize}
-                    onChange={(e) => {
-                      setPageSize(Number(e.target.value));
-                      setCurrentPage(1);
-                    }}
-                    className="px-2 py-0.5 rounded-lg border border-[#e0e0db] bg-white text-[#21164c] font-bold text-xs focus:outline-none focus:border-[#592eff] cursor-pointer hover:border-[#592eff]/40 transition-colors shadow-2xs"
-                  >
-                    <option value={10}>10 par page</option>
-                    <option value={20}>20 par page</option>
-                    <option value={50}>50 par page</option>
-                  </select>
-                </div>
-
-                <span className="text-[#e0e0db] font-light">•</span>
-
-                <span className="font-semibold text-[#21164c] text-[11px]">
+            <Pagination
+              page={currentPage}
+              pageCount={totalPages}
+              onPage={(p) => setCurrentPage(p)}
+              summary={
+                <span>
                   {total === 0
-                    ? "0 prospect"
-                    : `Affichage de ${(currentPage - 1) * pageSize + 1} à ${Math.min(
-                        currentPage * pageSize,
-                        total
-                      )} sur ${total} prospects`}
+                    ? "Aucun prospect"
+                    : `${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, total)} sur ${total}`}
                 </span>
-              </div>
-
-              {/* Right: Page Navigation Controls (Waalaxy Style) */}
-              <div className="flex items-center gap-1">
-                {/* Previous Button */}
-                <button
-                  type="button"
-                  disabled={currentPage <= 1 || loading}
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  className="px-2.5 py-1 rounded-xl border border-[#e0e0db] bg-white text-[#5f5f69] hover:bg-[#f8f9fc] hover:text-[#592eff] disabled:opacity-30 disabled:hover:bg-white disabled:hover:text-[#5f5f69] transition-all flex items-center gap-1 font-semibold shadow-2xs text-[11px]"
-                  title="Page précédente"
+              }
+              extra={
+                <Select
+                  inline
+                  size="sm"
+                  aria-label="Par page"
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
                 >
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Précédent</span>
-                </button>
-
-                {/* Page Numbers */}
-                <div className="flex items-center gap-1 mx-0.5">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1)
-                    .filter((page) => {
-                      return (
-                        page === 1 ||
-                        page === totalPages ||
-                        (page >= currentPage - 1 && page <= currentPage + 1)
-                      );
-                    })
-                    .map((page, idx, arr) => {
-                      const prevPage = arr[idx - 1];
-                      const hasGap = prevPage && page - prevPage > 1;
-
-                      return (
-                        <React.Fragment key={page}>
-                          {hasGap && (
-                            <span className="px-1 text-[#8a8a93] font-bold text-xs">...</span>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => setCurrentPage(page)}
-                            className={`min-w-[28px] h-7 px-1.5 rounded-lg text-xs font-bold transition-all ${
-                              currentPage === page
-                                ? "bg-[#592eff] text-white shadow-sm shadow-[#592eff]/25 scale-105"
-                                : "bg-white border border-[#e0e0db] text-[#5f5f69] hover:bg-[#f5f3ff] hover:text-[#592eff] hover:border-[#592eff]/30"
-                            }`}
-                          >
-                            {page}
-                          </button>
-                        </React.Fragment>
-                      );
-                    })}
-                </div>
-
-                {/* Next Button */}
-                <button
-                  type="button"
-                  disabled={currentPage >= totalPages || loading}
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  className="px-2.5 py-1 rounded-xl border border-[#e0e0db] bg-white text-[#5f5f69] hover:bg-[#f8f9fc] hover:text-[#592eff] disabled:opacity-30 disabled:hover:bg-white disabled:hover:text-[#5f5f69] transition-all flex items-center gap-1 font-semibold shadow-2xs text-[11px]"
-                  title="Page suivante"
-                >
-                  <span className="hidden sm:inline">Suivant</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          </div>
+                  <option value={10}>10 par page</option>
+                  <option value={20}>20 par page</option>
+                  <option value={50}>50 par page</option>
+                </Select>
+              }
+            />
+          </Card>
         </div>
       </div>
 
-      {/* RENAME LIST MODAL */}
-      {renameListModal && (
-        <div className="fixed inset-0 bg-[#21164c]/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in">
-          <div className="adora-card bg-white w-full max-w-md p-6 sm:p-8 shadow-2xl relative">
-            <h2 className="text-lg font-bold text-[#21164c] mb-1">Renommer la liste</h2>
-            <p className="text-xs text-[#5f5f69] mb-4">
-              Modifiez le libellé de votre liste de prospects.
-            </p>
+      {/* Renommer une liste */}
+      <Modal
+        open={Boolean(renameListModal)}
+        onClose={() => setRenameListModal(null)}
+        title="Renommer la liste"
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setRenameListModal(null)}>
+              Annuler
+            </Button>
+            <Button type="submit" form="rename-list-form">
+              Enregistrer
+            </Button>
+          </>
+        }
+      >
+        <form
+          id="rename-list-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (renameListModal) handleRenameList(renameListModal.id, renameInputText);
+          }}
+          className="pb-2"
+        >
+          <Field label="Nom de la liste">
+            <Input required autoFocus value={renameInputText} onChange={(e) => setRenameInputText(e.target.value)} />
+          </Field>
+        </form>
+      </Modal>
 
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleRenameList(renameListModal.id, renameInputText);
-              }}
-              className="space-y-4"
-            >
-              <div>
-                <label className="block text-[11px] font-bold text-[#21164c] uppercase tracking-wider mb-1">
-                  Nom de la liste
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={renameInputText}
-                  onChange={(e) => setRenameInputText(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-[#e0e0db] text-xs focus:outline-none focus:border-[#592eff]"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#e0e0db]">
-                <button
-                  type="button"
-                  onClick={() => setRenameListModal(null)}
-                  className="px-4 py-2 rounded-xl border border-[#e0e0db] text-xs font-semibold text-[#5f5f69] hover:bg-[#f5f5f7]"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-[#592eff] hover:bg-[#4d25e0] text-white text-xs font-bold shadow-md shadow-[#592eff]/25"
-                >
-                  Enregistrer
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* COLUMN ORGANIZER MODAL */}
-      {isColumnOrganizerOpen && (
-        <div className="fixed inset-0 bg-[#21164c]/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in">
-          <div className="adora-card bg-white w-full max-w-lg p-6 sm:p-8 shadow-2xl relative">
-            <button
-              onClick={() => setIsColumnOrganizerOpen(false)}
-              className="absolute right-5 top-5 p-2 rounded-full hover:bg-[#f5f5f7] text-[#5f5f69]"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-9 h-9 rounded-xl bg-[#592eff]/10 text-[#592eff] flex items-center justify-center">
-                <Sliders className="w-5 h-5" />
-              </div>
-              <div>
-                <h2 className="text-lg font-bold text-[#21164c]">
-                  Organisation des Colonnes
-                </h2>
-                <p className="text-xs text-[#5f5f69]">
-                  Glissez-déposez les colonnes pour personnaliser leur ordre d'affichage.
-                </p>
-              </div>
-            </div>
-
-            <div className="my-4 space-y-2 border border-[#e0e0db] rounded-2xl p-3 bg-[#f8f9fc] max-h-[340px] overflow-y-auto">
-              <p className="text-[11px] text-[#5f5f69] italic mb-2 flex items-center gap-1">
-                <GripVertical className="w-3.5 h-3.5 text-[#592eff]" />
-                Glissez-déposez les colonnes ou utilisez les boutons pour modifier leur ordre.
-              </p>
-              {columnsOrder.map((colKey, index) => {
-                const colDef = DEFAULT_COLUMNS.find((c) => c.key === colKey);
-                if (!colDef) return null;
-
-                const isFirst = index === 0;
-                const isLast = index === columnsOrder.length - 1;
-                const isDragging = modalDraggedIndex === index;
-                const isDragOver = modalDragOverIndex === index;
-
-                return (
-                  <div
-                    key={colKey}
-                    draggable
-                    onDragStart={(e) => handleModalDragStart(e, index)}
-                    onDragOver={(e) => handleModalDragOver(e, index)}
-                    onDrop={(e) => handleModalDrop(e, index)}
-                    onDragEnd={handleModalDragEnd}
-                    className={`flex items-center justify-between p-2.5 bg-white rounded-xl border text-xs shadow-2xs transition-all cursor-grab active:cursor-grabbing select-none ${
-                      isDragging
-                        ? "opacity-30 border-dashed border-[#592eff] bg-[#592eff]/10 cursor-grabbing"
-                        : isDragOver
-                        ? "border-[#592eff] ring-2 ring-[#592eff]/20 bg-[#592eff]/5"
-                        : "border-[#e0e0db] hover:border-[#592eff]/40"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <GripVertical className="w-4 h-4 text-[#8a8a93] group-hover:text-[#592eff] cursor-grab active:cursor-grabbing shrink-0" />
-                      <span className="w-5 h-5 rounded-full bg-[#f5f5f7] text-[#5f5f69] font-bold text-[10px] flex items-center justify-center">
-                        {index + 1}
-                      </span>
-                      <span className="font-bold text-[#21164c]">{colDef.label}</span>
-                    </div>
-
-                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        disabled={isFirst}
-                        onClick={() => moveColumn(index, "LEFT")}
-                        className="px-2 py-1 rounded-lg border border-[#e0e0db] hover:bg-[#592eff]/10 hover:border-[#592eff]/30 text-[#353241] text-[11px] font-semibold flex items-center gap-1 disabled:opacity-30 transition-colors"
-                      >
-                        <ArrowLeft className="w-3 h-3" /> Monter
-                      </button>
-                      <button
-                        type="button"
-                        disabled={isLast}
-                        onClick={() => moveColumn(index, "RIGHT")}
-                        className="px-2 py-1 rounded-lg border border-[#e0e0db] hover:bg-[#592eff]/10 hover:border-[#592eff]/30 text-[#353241] text-[11px] font-semibold flex items-center gap-1 disabled:opacity-30 transition-colors"
-                      >
-                        <ArrowRight className="w-3 h-3" /> Descendre
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="flex items-center justify-between pt-3 border-t border-[#e0e0db]">
-              <button
-                type="button"
-                onClick={resetColumnsOrder}
-                className="text-xs font-bold text-[#5f5f69] hover:text-[#592eff] flex items-center gap-1"
+      {/* Organisation des colonnes */}
+      <Modal
+        open={isColumnOrganizerOpen}
+        onClose={() => setIsColumnOrganizerOpen(false)}
+        title="Colonnes du tableau"
+        description="Glissez-déposez ou utilisez les flèches pour changer l'ordre."
+        size="md"
+        footer={
+          <>
+            <Button variant="ghost" icon={RotateCcw} onClick={resetColumnsOrder}>
+              Réinitialiser
+            </Button>
+            <Button onClick={() => setIsColumnOrganizerOpen(false)}>Terminé</Button>
+          </>
+        }
+      >
+        <ol className="max-h-[360px] space-y-1.5 overflow-y-auto pb-2">
+          {columnsOrder.map((colKey, index) => {
+            const colDef = DEFAULT_COLUMNS.find((c) => c.key === colKey);
+            if (!colDef) return null;
+            const isFirst = index === 0;
+            const isLast = index === columnsOrder.length - 1;
+            const isDragging = modalDraggedIndex === index;
+            const isDragOver = modalDragOverIndex === index;
+            return (
+              <li
+                key={colKey}
+                draggable
+                onDragStart={(e) => handleModalDragStart(e, index)}
+                onDragOver={(e) => handleModalDragOver(e, index)}
+                onDrop={(e) => handleModalDrop(e, index)}
+                onDragEnd={handleModalDragEnd}
+                className={`flex cursor-grab select-none items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors active:cursor-grabbing ${
+                  isDragging ? "border-dashed border-ink opacity-40" : isDragOver ? "border-ink bg-surface-2" : "border-line hover:border-ink"
+                }`}
               >
-                <RotateCcw className="w-3.5 h-3.5" /> Réinitialiser l'ordre
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsColumnOrganizerOpen(false)}
-                className="px-5 py-2 rounded-xl bg-[#592eff] hover:bg-[#4d25e0] text-white text-xs font-bold shadow-md shadow-[#592eff]/25"
-              >
-                Enregistrer & Fermer
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+                <span className="flex items-center gap-2">
+                  <GripVertical className="h-4 w-4 shrink-0 text-muted-2" strokeWidth={1.75} aria-hidden />
+                  <span className="w-5 tabular-nums text-xs text-muted">{index + 1}</span>
+                  <span className="font-medium text-ink">{colDef.label}</span>
+                </span>
+                <span className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+                  <IconButton label="Monter" icon={ArrowLeft} disabled={isFirst} onClick={() => moveColumn(index, "LEFT")} className="[&>svg]:rotate-90" />
+                  <IconButton label="Descendre" icon={ArrowRight} disabled={isLast} onClick={() => moveColumn(index, "RIGHT")} className="[&>svg]:rotate-90" />
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+      </Modal>
 
-      {/* CREATE LIST MODAL */}
-      {isCreateListModalOpen && (
-        <div className="fixed inset-0 bg-[#21164c]/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in">
-          <div className="adora-card bg-white w-full max-w-md p-6 sm:p-8 shadow-2xl relative">
-            <h2 className="text-xl font-bold text-[#21164c] mb-1">Créer une nouvelle liste</h2>
-            <p className="text-xs text-[#5f5f69] mb-5">
-              Organisez vos prospects par persona, secteur ou campagne.
-            </p>
-
-            <form onSubmit={handleCreateList} className="space-y-4">
-              <div>
-                <label className="block text-[11px] font-bold text-[#21164c] uppercase tracking-wider mb-1">
-                  Nom de la liste
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="ex: Directeurs Commerciaux CI, Fondateurs SaaS..."
-                  value={newListName}
-                  onChange={(e) => setNewListName(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-[#e0e0db] text-xs focus:outline-none focus:border-[#592eff]"
+      {/* Créer une liste */}
+      <Modal
+        open={isCreateListModalOpen}
+        onClose={() => setIsCreateListModalOpen(false)}
+        title="Nouvelle liste"
+        description="Organisez vos prospects par persona, secteur ou campagne."
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setIsCreateListModalOpen(false)}>
+              Annuler
+            </Button>
+            <Button type="submit" form="create-list-form">
+              Créer la liste
+            </Button>
+          </>
+        }
+      >
+        <form id="create-list-form" onSubmit={handleCreateList} className="space-y-4 pb-2">
+          <Field label="Nom de la liste">
+            <Input required autoFocus placeholder="Ex. : Directeurs commerciaux, Fondateurs SaaS…" value={newListName} onChange={(e) => setNewListName(e.target.value)} />
+          </Field>
+          <div>
+            <p className={labelClass}>Couleur</p>
+            <div className="flex items-center gap-2" role="radiogroup" aria-label="Couleur">
+              {["#592eff", "#21164c", "#1f7a4d", "#9a5b00", "#b42318", "#8a8a94"].map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  role="radio"
+                  aria-checked={newListColor === c}
+                  aria-label={c}
+                  onClick={() => setNewListColor(c)}
+                  className={`h-7 w-7 rounded-full border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 ${
+                    newListColor === c ? "border-ink" : "border-transparent hover:border-line-2"
+                  }`}
+                  style={{ backgroundColor: c }}
                 />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-[#21164c] uppercase tracking-wider mb-2">
-                  Couleur du dossier
-                </label>
-                <div className="flex items-center gap-3">
-                  {["#592eff", "#2ed6ff", "#a2ea13", "#ff7a00", "#ff2e7a", "#8c52ff"].map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => setNewListColor(c)}
-                      className={`w-7 h-7 rounded-full transition-transform ${
-                        newListColor === c ? "scale-125 ring-2 ring-offset-2 ring-[#592eff]" : ""
-                      }`}
-                      style={{ backgroundColor: c }}
-                    ></button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#e0e0db]">
-                <button
-                  type="button"
-                  onClick={() => setIsCreateListModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-[#e0e0db] text-xs font-semibold text-[#5f5f69] hover:bg-[#f5f5f7]"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-[#592eff] hover:bg-[#4d25e0] text-white text-xs font-bold shadow-md shadow-[#592eff]/25"
-                >
-                  Créer la liste
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* TEAM TRANSFER MODAL */}
-      {isTransferModalOpen && (
-        <div className="fixed inset-0 bg-[#21164c]/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in">
-          <div className="adora-card bg-white w-full max-w-md p-6 shadow-2xl relative">
-            <button
-              onClick={() => {
-                setIsTransferModalOpen(false);
-                setTransferMessage(null);
-              }}
-              className="absolute right-5 top-5 p-2 rounded-full hover:bg-[#f5f5f7] text-[#5f5f69] cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            <div className="flex items-center gap-3 mb-5">
-              <div className="w-10 h-10 rounded-2xl bg-[#592eff]/10 text-[#592eff] flex items-center justify-center">
-                <ArrowRightLeft className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-[#21164c]">Transférer les prospects</h3>
-                <p className="text-xs text-[#5f5f69]">
-                  {selectedIds.size} prospect(s) sélectionné(s) à réassigner
-                </p>
-              </div>
-            </div>
-
-            {transferMessage && (
-              <div className={`mb-4 p-3 rounded-xl text-xs font-semibold ${
-                transferMessage.includes("succès")
-                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                  : "bg-red-50 text-red-700 border border-red-200"
-              }`}>
-                {transferMessage}
-              </div>
-            )}
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-[#21164c] uppercase tracking-wider mb-2">
-                  Collaborateur destinataire
-                </label>
-                <select
-                  value={targetMemberId}
-                  onChange={(e) => setTargetMemberId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#e0e0db] bg-white text-xs font-semibold text-[#21164c] focus:outline-none focus:border-[#592eff] cursor-pointer"
-                >
-                  {teamMembers.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name || m.email} ({m.orgRole === "OWNER" ? "Propriétaire" : "Membre"})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="p-3 rounded-xl bg-[#f8f9fc] border border-[#e0e0db] text-xs text-[#5f5f69] space-y-1">
-                <p className="font-semibold text-[#21164c] flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5 text-[#592eff]" />
-                  Transfert sécurisé
-                </p>
-                <p className="text-[11px]">
-                  Les prospects seront transférés dans une liste du collaborateur avec conservation de l'historique.
-                </p>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#e0e0db]">
-                <button
-                  type="button"
-                  onClick={() => setIsTransferModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-[#e0e0db] text-xs font-semibold text-[#5f5f69] hover:bg-[#f5f5f7] cursor-pointer"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="button"
-                  disabled={transferLoading || !targetMemberId}
-                  onClick={handleConfirmTransfer}
-                  className="px-5 py-2 rounded-xl bg-[#592eff] hover:bg-[#4d25e0] text-white text-xs font-bold shadow-md shadow-[#592eff]/25 flex items-center gap-2 cursor-pointer disabled:opacity-50"
-                >
-                  {transferLoading ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Transfert...
-                    </>
-                  ) : (
-                    <>
-                      <span>Confirmer le transfert</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </>
-                  )}
-                </button>
-              </div>
+              ))}
             </div>
           </div>
+        </form>
+      </Modal>
+
+      {/* Transférer à un collaborateur */}
+      <Modal
+        open={isTransferModalOpen}
+        onClose={() => {
+          setIsTransferModalOpen(false);
+          setTransferMessage(null);
+        }}
+        title="Transférer les prospects"
+        description={`${selectedIds.size} prospect(s) sélectionné(s) à réassigner.`}
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setIsTransferModalOpen(false)}>
+              Annuler
+            </Button>
+            <Button onClick={handleConfirmTransfer} loading={transferLoading} disabled={!targetMemberId} iconRight={ArrowRight}>
+              Confirmer le transfert
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4 pb-2">
+          {transferMessage && <Callout tone={transferMessage.includes("succès") ? "ok" : "danger"}>{transferMessage}</Callout>}
+          <Field label="Collaborateur destinataire">
+            <Select value={targetMemberId} onChange={(e) => setTargetMemberId(e.target.value)}>
+              {teamMembers.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name || m.email} ({m.orgRole === "OWNER" ? "Propriétaire" : "Membre"})
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <p className="text-xs text-muted">Les prospects sont déplacés dans une liste du collaborateur ; l'historique est conservé.</p>
         </div>
-      )}
+      </Modal>
 
       {/* DELETE LIST CONFIRMATION MODAL (ADORA STYLE) */}
       <ConfirmModal

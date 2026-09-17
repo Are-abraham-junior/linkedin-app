@@ -9,7 +9,6 @@ import {
   Clock,
   Check,
   CheckCheck,
-  Sparkles,
   Tag,
   Building,
   MapPin,
@@ -33,6 +32,7 @@ import {
   FolderPlus,
 } from "lucide-react";
 import { InboxConversation, ChatMessage, InboxProspect } from "../../types";
+import { initialsDataUrl } from "../ui/avatarFallback";
 import { apiRequest } from "../../services/api";
 import { NewConversationModal } from "./NewConversationModal";
 import { useAuth } from "../../context/AuthContext";
@@ -41,9 +41,7 @@ export const InboxView: React.FC = () => {
   const { impersonatedOrg, user: currentUser } = useAuth();
   const currentUserAvatar =
     currentUser?.avatarUrl ||
-    `https://ui-avatars.com/api/?name=${encodeURIComponent(
-      currentUser?.name || currentUser?.email || "Moi"
-    )}&background=592eff&color=fff`;
+    initialsDataUrl(currentUser?.name || currentUser?.email || "Moi");
   const [conversations, setConversations] = useState<InboxConversation[]>([]);
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -427,20 +425,20 @@ export const InboxView: React.FC = () => {
   };
 
   return (
-    <div className="flex h-[calc(100vh-5rem)] bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden font-sans">
+    <div className="flex h-full min-h-0 flex-1 overflow-hidden bg-canvas text-ink">
       {/* ========================================================= */}
       {/* COLONNE 1 : LISTE DES DISCUSSIONS (Gauche - 340px) */}
       {/* ========================================================= */}
-      <div className="w-80 lg:w-96 flex flex-col border-r border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-900 shrink-0 select-none">
+      <div className="w-80 lg:w-96 flex flex-col border-r border-line bg-white shrink-0 select-none">
         {/* Header Discussions */}
-        <div className="p-4 border-b border-slate-100 dark:border-slate-800/80 space-y-3">
+        <div className="p-4 border-b border-line space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <h2 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">
+              <h2 className="text-lg font-semibold tracking-tight text-ink">
                 Discussions
               </h2>
               {totalUnread > 0 && (
-                <span className="px-2 py-0.5 text-xs font-bold bg-indigo-600 text-white rounded-full shadow-sm">
+                <span className="px-2 py-0.5 text-xs font-semibold bg-accent text-white rounded-full">
                   {totalUnread}
                 </span>
               )}
@@ -451,14 +449,14 @@ export const InboxView: React.FC = () => {
                 onClick={handleSyncAll}
                 disabled={syncing}
                 title="Synchroniser avec LinkedIn"
-                className="p-2 text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all"
+                className="p-2 text-muted hover:text-accent hover:bg-surface-2 rounded-xl transition-all"
               >
-                <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin text-indigo-600" : ""}`} />
+                <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin text-accent" : ""}`} />
               </button>
 
               <button
                 onClick={() => setIsNewConvModalOpen(true)}
-                className="px-2.5 py-1.5 text-xs font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 rounded-xl transition-all flex items-center gap-1.5 border border-indigo-200/60 dark:border-indigo-800/50"
+                className="px-2.5 py-1.5 text-xs font-semibold bg-accent-soft text-accent hover:bg-accent-soft rounded-xl transition-all flex items-center gap-1.5 border border-line"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Nouvelle</span>
@@ -467,7 +465,7 @@ export const InboxView: React.FC = () => {
           </div>
 
           {syncSuccessMsg && (
-            <div className="p-2 text-xs bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900 rounded-lg flex items-center gap-2 animate-fade-in">
+            <div className="p-2 text-xs bg-ok-soft text-ok border border-ok/30 rounded-lg flex items-center gap-2">
               <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
               {syncSuccessMsg}
             </div>
@@ -475,24 +473,24 @@ export const InboxView: React.FC = () => {
 
           {/* Search bar */}
           <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-muted-2 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               placeholder="Rechercher un contact, message..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/80 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white placeholder-slate-400 transition-all"
+              className="w-full pl-9 pr-3 py-2 text-xs bg-canvas border border-line rounded-xl focus:outline-none focus:ring-2 focus:ring-accent/20 text-ink placeholder:text-muted-2 transition-all"
             />
           </div>
 
           {/* Filter Pills */}
-          <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/60 p-1 rounded-xl">
+          <div className="flex items-center gap-1.5 bg-surface-2 p-1 rounded-xl">
             <button
               onClick={() => setFilterTab("ALL")}
               className={`flex-1 py-1 text-xs font-medium rounded-lg transition-all ${
                 filterTab === "ALL"
-                  ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs font-semibold"
-                  : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                  ? "bg-white text-ink font-semibold"
+                  : "text-muted hover:text-ink"
               }`}
             >
               Tous
@@ -501,13 +499,13 @@ export const InboxView: React.FC = () => {
               onClick={() => setFilterTab("UNREAD")}
               className={`flex-1 py-1 text-xs font-medium rounded-lg transition-all flex items-center justify-center gap-1 ${
                 filterTab === "UNREAD"
-                  ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs font-semibold"
-                  : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                  ? "bg-white text-ink font-semibold"
+                  : "text-muted hover:text-ink"
               }`}
             >
               Non lu
               {totalUnread > 0 && (
-                <span className="w-4 h-4 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+                <span className="w-4 h-4 rounded-full bg-danger text-white text-xs font-semibold flex items-center justify-center">
                   {totalUnread}
                 </span>
               )}
@@ -516,8 +514,8 @@ export const InboxView: React.FC = () => {
               onClick={() => setFilterTab("IN_CAMPAIGN")}
               className={`flex-1 py-1 text-xs font-medium rounded-lg transition-all ${
                 filterTab === "IN_CAMPAIGN"
-                  ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs font-semibold"
-                  : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                  ? "bg-white text-ink font-semibold"
+                  : "text-muted hover:text-ink"
               }`}
             >
               En campagne
@@ -526,21 +524,19 @@ export const InboxView: React.FC = () => {
         </div>
 
         {/* Conversations List */}
-        <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/50">
+        <div className="flex-1 overflow-y-auto divide-y divide-line">
           {loadingList && conversations.length === 0 ? (
             <div className="p-8 text-center space-y-3">
-              <RefreshCw className="w-6 h-6 animate-spin text-indigo-500 mx-auto" />
-              <p className="text-xs text-slate-400">Chargement des conversations...</p>
+              <RefreshCw className="w-6 h-6 animate-spin text-accent mx-auto" />
+              <p className="text-xs text-muted-2">Chargement des conversations...</p>
             </div>
           ) : conversations.length === 0 ? (
             <div className="p-8 text-center space-y-3">
-              <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto text-slate-400">
-                <MessageSquare className="w-6 h-6" />
-              </div>
-              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+              <MessageSquare className="mx-auto h-5 w-5 text-muted" strokeWidth={1.75} />
+              <p className="text-sm font-semibold text-ink">
                 Aucune conversation
               </p>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-muted-2">
                 Les messages reçus ou envoyés sur LinkedIn apparaîtront ici automatiquement.
               </p>
             </div>
@@ -556,8 +552,8 @@ export const InboxView: React.FC = () => {
                   onClick={() => handleSelectConversation(conv.id)}
                   className={`p-3 flex items-start gap-2.5 cursor-pointer transition-all relative ${
                     isSelected
-                      ? "bg-violet-50/80 dark:bg-violet-950/30 border-l-3 border-[#592eff]"
-                      : "hover:bg-slate-50 dark:hover:bg-slate-800/40"
+                      ? "bg-accent-soft border-l-3 border-accent"
+                      : "hover:bg-canvas"
                   }`}
                 >
                   {/* Prospect Avatar with connection ring */}
@@ -565,15 +561,13 @@ export const InboxView: React.FC = () => {
                     <img
                       src={
                         prospect.avatarUrl ||
-                        `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                          `${prospect.firstName} ${prospect.lastName}`
-                        )}&background=592eff&color=fff`
+                        initialsDataUrl(`${prospect.firstName} ${prospect.lastName}`)
                       }
                       alt=""
-                      className="w-10 h-10 rounded-full object-cover border border-slate-200 dark:border-slate-700 shadow-xs"
+                      className="w-10 h-10 rounded-full object-cover border border-line"
                     />
                     {prospect.connectionStatus === "CONNECTED" && (
-                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900" />
+                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
                     )}
                   </div>
 
@@ -583,13 +577,13 @@ export const InboxView: React.FC = () => {
                       <h4
                         className={`text-xs truncate ${
                           hasUnread
-                            ? "font-bold text-slate-900 dark:text-white"
-                            : "font-semibold text-slate-800 dark:text-slate-200"
+                            ? "font-semibold text-ink"
+                            : "font-semibold text-ink"
                         }`}
                       >
                         {prospect.firstName} {prospect.lastName}
                       </h4>
-                      <span className="text-[10px] text-slate-400 font-medium shrink-0 ml-1">
+                      <span className="text-xs text-muted-2 font-medium shrink-0 ml-1">
                         {formatListDate(conv.lastMessageAt || conv.updatedAt)}
                       </span>
                     </div>
@@ -597,8 +591,8 @@ export const InboxView: React.FC = () => {
                     <p
                       className={`text-xs truncate line-clamp-1 mb-1 ${
                         hasUnread
-                          ? "font-semibold text-slate-900 dark:text-white"
-                          : "text-slate-500 dark:text-slate-400"
+                          ? "font-semibold text-ink"
+                          : "text-muted"
                       }`}
                     >
                       {conv.lastMessageText || "Discussion synchronisée"}
@@ -607,12 +601,12 @@ export const InboxView: React.FC = () => {
                     {/* Meta badges */}
                     <div className="flex items-center gap-1.5">
                       {prospect.campaignState && (
-                        <span className="px-1.5 py-0.5 text-[9px] font-medium bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-300 rounded border border-purple-200/60 dark:border-purple-800/40 truncate max-w-[120px]">
+                        <span className="px-1.5 py-0.5 text-xs font-medium bg-purple-50 text-purple-600 rounded border border-purple-200/60 truncate max-w-[120px]">
                           {prospect.campaignState.campaignName}
                         </span>
                       )}
                       {prospect.company && (
-                        <span className="text-[10px] text-slate-400 truncate max-w-[100px]">
+                        <span className="text-xs text-muted-2 truncate max-w-[100px]">
                           {prospect.company}
                         </span>
                       )}
@@ -622,7 +616,7 @@ export const InboxView: React.FC = () => {
                   {/* Unread counter badge */}
                   {hasUnread && (
                     <div className="shrink-0 self-center">
-                      <span className="w-5 h-5 rounded-full bg-[#592eff] text-white text-[10px] font-bold flex items-center justify-center shadow-xs">
+                      <span className="w-5 h-5 rounded-full bg-accent text-white text-xs font-semibold flex items-center justify-center">
                         {conv.unreadCount}
                       </span>
                     </div>
@@ -638,30 +632,28 @@ export const InboxView: React.FC = () => {
       {/* COLONNE 2 : ZONE DE DISCUSSION ACTIVE (Centre - Flex 1) */}
       {/* ========================================================= */}
       {selectedConversation && currentProspect ? (
-        <div className="flex-1 flex flex-col bg-slate-50/50 dark:bg-slate-950/50 min-w-0">
+        <div className="flex-1 flex flex-col bg-canvas/50 min-w-0">
           {/* Chat Header */}
-          <div className="h-16 px-6 border-b border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900 flex items-center justify-between shrink-0 shadow-xs">
+          <div className="h-16 px-6 border-b border-line bg-white flex items-center justify-between shrink-0">
             <div className="flex items-center gap-3.5 min-w-0">
               <img
                 src={
                   currentProspect.avatarUrl ||
-                  `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                    `${currentProspect.firstName} ${currentProspect.lastName}`
-                  )}&background=592eff&color=fff`
+                  initialsDataUrl(`${currentProspect.firstName} ${currentProspect.lastName}`)
                 }
                 alt=""
-                className="w-10 h-10 rounded-full object-cover border border-slate-200 dark:border-slate-700 shadow-xs shrink-0"
+                className="w-10 h-10 rounded-full object-cover border border-line shrink-0"
               />
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                  <h3 className="text-sm font-semibold text-ink truncate">
                     {currentProspect.firstName} {currentProspect.lastName}
                   </h3>
-                  <span className="px-2 py-0.5 text-[10px] font-semibold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 rounded-full">
+                  <span className="px-2 py-0.5 text-xs font-semibold bg-ok-soft text-ok border border-ok/30 rounded-full">
                     {currentProspect.connectionStatus === "CONNECTED" ? "1er degré" : "Contact"}
                   </span>
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                <p className="text-xs text-muted truncate">
                   {currentProspect.headline || currentProspect.company || "Profil LinkedIn"}
                 </p>
               </div>
@@ -673,9 +665,9 @@ export const InboxView: React.FC = () => {
                 href={currentProspect.linkedinUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700/80 flex items-center gap-1.5 transition-all"
+                className="px-3 py-1.5 text-xs font-medium text-ink-2 hover:bg-surface-2 rounded-xl border border-line flex items-center gap-1.5 transition-all"
               >
-                <ExternalLink className="w-3.5 h-3.5 text-indigo-500" />
+                <ExternalLink className="w-3.5 h-3.5 text-accent" />
                 <span className="hidden sm:inline">LinkedIn</span>
               </a>
 
@@ -683,8 +675,8 @@ export const InboxView: React.FC = () => {
                 onClick={() => setShowRightDrawer(!showRightDrawer)}
                 className={`p-2 rounded-xl border transition-all ${
                   showRightDrawer
-                    ? "bg-indigo-50 dark:bg-indigo-950/60 border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-300"
-                    : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
+                    ? "bg-accent-soft border-line text-accent"
+                    : "bg-white border-line text-ink-2"
                 }`}
                 title="Afficher/Masquer les détails du prospect"
               >
@@ -697,18 +689,16 @@ export const InboxView: React.FC = () => {
           <div className="flex-1 p-6 overflow-y-auto space-y-4">
             {loadingMessages ? (
               <div className="py-16 text-center space-y-2">
-                <RefreshCw className="w-6 h-6 animate-spin text-indigo-500 mx-auto" />
-                <p className="text-xs text-slate-400">Chargement de la discussion...</p>
+                <RefreshCw className="w-6 h-6 animate-spin text-accent mx-auto" />
+                <p className="text-xs text-muted-2">Chargement de la discussion...</p>
               </div>
             ) : messages.length === 0 ? (
               <div className="py-20 text-center space-y-3">
-                <div className="w-12 h-12 rounded-full bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto">
-                  <Sparkles className="w-6 h-6" />
-                </div>
-                <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                <MessageSquare className="mx-auto h-5 w-5 text-muted" strokeWidth={1.75} />
+                <p className="text-sm font-semibold text-ink">
                   Début de la conversation
                 </p>
-                <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                <p className="text-xs text-muted-2 max-w-sm mx-auto">
                   Envoyez un message pour démarrer ou poursuivre l'échange directement sur LinkedIn.
                 </p>
               </div>
@@ -719,9 +709,7 @@ export const InboxView: React.FC = () => {
                 const isUser = m.senderType === "USER";
                 const prospectAvatar =
                   currentProspect.avatarUrl ||
-                  `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                    `${currentProspect.firstName} ${currentProspect.lastName}`
-                  )}&background=592eff&color=fff`;
+                  initialsDataUrl(`${currentProspect.firstName} ${currentProspect.lastName}`);
                 const avatarSrc = isUser ? currentUserAvatar : prospectAvatar;
                 const avatarTitle = isUser
                   ? currentUser?.name || "Vous"
@@ -736,16 +724,16 @@ export const InboxView: React.FC = () => {
                       alt=""
                       title={avatarTitle}
                       className={`w-6 h-6 rounded-full object-cover mb-1 shrink-0 border ${
-                        isUser ? "border-[#592eff]/40" : "border-slate-200 dark:border-slate-700"
+                        "border-line"
                       }`}
                     />
 
                     <div className={`max-w-[75%] sm:max-w-[65%] space-y-1 flex flex-col ${isUser ? "items-start" : "items-end"}`}>
                       <div
-                        className={`px-3.5 py-2.5 rounded-2xl text-xs leading-relaxed shadow-xs break-words ${
+                        className={`px-3.5 py-2.5 rounded-2xl text-xs leading-relaxed break-words ${
                           isUser
-                            ? "bg-[#592eff] text-white rounded-tl-xs"
-                            : "bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200/80 dark:border-slate-700/80 rounded-tr-xs"
+                            ? "bg-ink text-white rounded-tl-md"
+                            : "bg-surface border border-line text-ink rounded-tr-md"
                         }`}
                       >
                         <p className="whitespace-pre-wrap">{m.text}</p>
@@ -756,7 +744,7 @@ export const InboxView: React.FC = () => {
                             {m.attachments.map((att, attIdx) => (
                               <div
                                 key={attIdx}
-                                className="flex items-center gap-2 p-1.5 bg-black/10 rounded-lg text-[11px]"
+                                className="flex items-center gap-2 p-1.5 bg-black/10 rounded-lg text-xs"
                               >
                                 <Paperclip className="w-3.5 h-3.5" />
                                 <span className="truncate">{att.file_name || "Pièce jointe"}</span>
@@ -767,7 +755,7 @@ export const InboxView: React.FC = () => {
                       </div>
 
                       <div
-                        className={`flex items-center gap-1 text-[10px] text-slate-400 px-1 ${
+                        className={`flex items-center gap-1 text-xs text-muted-2 px-1 ${
                           isUser ? "justify-start" : "justify-end"
                         }`}
                       >
@@ -775,19 +763,19 @@ export const InboxView: React.FC = () => {
                         {isUser && (
                           <span>
                             {m.status === "sending" ? (
-                              <Clock className="w-3 h-3 text-slate-400 animate-pulse" />
+                              <Clock className="w-3 h-3 text-muted-2 animate-pulse" />
                             ) : m.status === "error" ? (
                               <button
                                 type="button"
                                 onClick={() => handleRetryMessage(m)}
-                                className="inline-flex items-center gap-1 text-[10px] text-rose-500 hover:text-rose-600 dark:text-rose-400 font-semibold cursor-pointer transition-colors"
+                                className="inline-flex items-center gap-1 text-xs text-rose-500 hover:text-rose-600 font-semibold cursor-pointer transition-colors"
                                 title="Échec de transmission LinkedIn — Cliquer pour réessayer"
                               >
                                 <AlertCircle className="w-3 h-3 text-rose-500" />
                                 <span>Échec • Réessayer</span>
                               </button>
                             ) : (
-                              <CheckCheck className="w-3.5 h-3.5 text-[#592eff]" />
+                              <CheckCheck className="w-3.5 h-3.5 text-accent" />
                             )}
                           </span>
                         )}
@@ -801,9 +789,9 @@ export const InboxView: React.FC = () => {
           </div>
 
           {/* Chat Input Footer */}
-          <div className="p-3 bg-white dark:bg-slate-900 border-t border-slate-200/80 dark:border-slate-800/80 space-y-2">
+          <div className="p-3 bg-white border-t border-line space-y-2">
             {sendError && (
-              <div className="p-2.5 px-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 flex items-center justify-between text-xs text-rose-700 dark:text-rose-300 animate-in fade-in">
+              <div className="p-2.5 px-3 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-between text-xs text-rose-700">
                 <div className="flex items-center gap-2 min-w-0">
                   <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
                   <span className="truncate">{sendError}</span>
@@ -811,7 +799,7 @@ export const InboxView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setSendError(null)}
-                  className="text-rose-400 hover:text-rose-600 dark:hover:text-rose-200 font-bold ml-2 text-xs shrink-0 cursor-pointer"
+                  className="text-rose-400 hover:text-rose-600 font-semibold ml-2 text-xs shrink-0 cursor-pointer"
                   title="Fermer"
                 >
                   ✕
@@ -819,7 +807,7 @@ export const InboxView: React.FC = () => {
               </div>
             )}
             <form onSubmit={handleSendMessage} className="space-y-2">
-              <div className="relative border border-slate-200 dark:border-slate-700/80 rounded-2xl bg-slate-50/70 dark:bg-slate-800/60 focus-within:ring-2 focus-within:ring-[#592eff] focus-within:border-transparent transition-all overflow-hidden">
+              <div className="relative border border-line rounded-2xl bg-canvas/70 focus-within:ring-2 focus-within:ring-accent focus-within:border-transparent transition-all overflow-hidden">
                 <textarea
                   ref={messageInputRef}
                   rows={2}
@@ -832,14 +820,14 @@ export const InboxView: React.FC = () => {
                     }
                   }}
                   placeholder="Écrivez votre message LinkedIn... (Entrée pour envoyer, Shift+Entrée pour saut de ligne)"
-                  className="w-full p-3 text-xs bg-transparent focus:outline-none text-slate-900 dark:text-white placeholder-slate-400 resize-none max-h-32"
+                  className="w-full p-3 text-xs bg-transparent focus:outline-none text-ink placeholder:text-muted-2 resize-none max-h-32"
                 />
 
-                <div className="px-3 py-1.5 flex items-center justify-end border-t border-slate-200/40 dark:border-slate-700/40 bg-white/40 dark:bg-slate-900/40">
+                <div className="px-3 py-1.5 flex items-center justify-end border-t border-line bg-white/40">
                   <button
                     type="submit"
                     disabled={!inputMessage.trim() || sending}
-                    className="px-4 py-1.5 text-xs font-semibold text-white bg-[#592eff] hover:bg-[#4a24dd] rounded-xl shadow-xs flex items-center gap-1.5 disabled:opacity-40 transition-all cursor-pointer"
+                    className="px-4 py-1.5 text-xs font-semibold text-white bg-accent hover:bg-accent-hover rounded-xl flex items-center gap-1.5 disabled:opacity-40 transition-all cursor-pointer"
                   >
                     <Send className="w-3.5 h-3.5" />
                     <span>Envoyer</span>
@@ -850,21 +838,19 @@ export const InboxView: React.FC = () => {
           </div>
         </div>
       ) : (
-        <div className="flex-1 flex flex-col items-center justify-center bg-slate-50/50 dark:bg-slate-950/50 text-center p-8 space-y-4">
-          <div className="w-16 h-16 rounded-3xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shadow-lg shadow-indigo-500/10">
-            <MessageSquare className="w-8 h-8" />
-          </div>
+        <div className="flex-1 flex flex-col items-center justify-center bg-canvas/50 text-center p-8 space-y-4">
+          <MessageSquare className="h-6 w-6 text-muted" strokeWidth={1.75} />
           <div>
-            <h3 className="text-base font-bold text-slate-900 dark:text-white">
+            <h3 className="text-base font-semibold text-ink">
               Sélectionnez une discussion
             </h3>
-            <p className="text-xs text-slate-400 max-w-sm mt-1">
+            <p className="text-xs text-muted-2 max-w-sm mt-1">
               Choisissez un contact dans la liste de gauche ou démarrez une nouvelle discussion pour synchroniser vos échanges en direct.
             </p>
           </div>
           <button
             onClick={() => setIsNewConvModalOpen(true)}
-            className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm flex items-center gap-2 transition-all"
+            className="px-4 py-2 text-xs font-semibold text-white bg-accent hover:bg-accent-hover rounded-xl flex items-center gap-2 transition-all"
           >
             <Plus className="w-4 h-4" />
             Nouvelle conversation
@@ -876,10 +862,10 @@ export const InboxView: React.FC = () => {
       {/* COLONNE 3 : VOLET PROSPECT CRM (Droite - Compact & Rétractable) */}
       {/* ========================================================= */}
       {showRightDrawer && currentProspect && (
-        <div className="w-72 lg:w-80 flex flex-col border-l border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-900 shrink-0 overflow-y-auto select-none">
+        <div className="w-72 lg:w-80 flex flex-col border-l border-line bg-white shrink-0 overflow-y-auto select-none">
           {/* Brand Header */}
-          <div className="h-14 px-4 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between shrink-0">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-[#592eff] dark:text-violet-400">
+          <div className="h-14 px-4 border-b border-line flex items-center justify-between shrink-0">
+            <span className="text-xs font-semibold text-accent">
               Fiche Prospect CRM
             </span>
             <div className="flex items-center gap-1">
@@ -887,14 +873,14 @@ export const InboxView: React.FC = () => {
                 href={currentProspect.linkedinUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="p-1.5 text-slate-400 hover:text-[#592eff] rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                className="p-1.5 text-muted-2 hover:text-accent rounded-lg hover:bg-surface-2 transition-colors"
                 title="Voir le profil sur LinkedIn"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
               <button
                 onClick={() => setShowRightDrawer(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                className="p-1.5 text-muted-2 hover:text-ink-2 rounded-lg hover:bg-surface-2 transition-colors cursor-pointer"
                 title="Masquer le volet"
               >
                 <X className="w-3.5 h-3.5" />
@@ -904,32 +890,30 @@ export const InboxView: React.FC = () => {
 
           <div className="p-4 space-y-4 flex-1">
             {/* Profile Hero Card */}
-            <div className="flex flex-col items-center text-center space-y-2 pb-3 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex flex-col items-center text-center space-y-2 pb-3 border-b border-line">
               <div className="relative">
                 <img
                   src={
                     currentProspect.avatarUrl ||
-                    `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                      `${currentProspect.firstName} ${currentProspect.lastName}`
-                    )}&background=592eff&color=fff`
+                    initialsDataUrl(`${currentProspect.firstName} ${currentProspect.lastName}`)
                   }
                   alt=""
-                  className="w-12 h-12 rounded-full object-cover border border-[#592eff]/30 shadow-xs"
+                  className="w-12 h-12 rounded-full object-cover border border-line"
                 />
-                <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-[#592eff] text-white flex items-center justify-center text-[9px] font-bold ring-2 ring-white dark:ring-slate-900">
+                <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-accent text-white flex items-center justify-center text-xs font-semibold ring-2 ring-white">
                   in
                 </span>
               </div>
 
               <div>
-                <h3 className="text-xs font-bold text-slate-900 dark:text-white">
+                <h3 className="text-xs font-semibold text-ink">
                   {currentProspect.firstName} {currentProspect.lastName}
                 </h3>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">
+                <p className="text-xs text-muted mt-0.5 line-clamp-2">
                   {currentProspect.headline || "Contact LinkedIn"}
                 </p>
                 {currentProspect.company && (
-                  <p className="text-[11px] font-medium text-[#592eff] dark:text-violet-400 mt-0.5 flex items-center justify-center gap-1">
+                  <p className="text-xs font-medium text-accent mt-0.5 flex items-center justify-center gap-1">
                     <Building className="w-3 h-3" />
                     {currentProspect.company}
                   </p>
@@ -941,7 +925,7 @@ export const InboxView: React.FC = () => {
                   href={currentProspect.linkedinUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="w-full py-1.5 text-xs font-semibold bg-violet-50 dark:bg-violet-950/60 text-[#592eff] dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/60 rounded-xl transition-all border border-violet-200/50 flex items-center justify-center gap-1.5"
+                  className="w-full py-1.5 text-xs font-semibold bg-accent-soft text-accent hover:bg-violet-100 rounded-xl transition-all border border-violet-200/50 flex items-center justify-center gap-1.5"
                 >
                   <ExternalLink className="w-3 h-3" />
                   Voir sur LinkedIn
@@ -950,16 +934,16 @@ export const InboxView: React.FC = () => {
             </div>
 
             {/* Section Liste CRM */}
-            <div className="p-3 bg-slate-50/80 dark:bg-slate-800/40 rounded-2xl border border-slate-200/70 dark:border-slate-700/60 space-y-2">
+            <div className="p-3 bg-canvas/80 rounded-2xl border border-line space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                  <Shield className="w-3.5 h-3.5 text-[#592eff]" />
+                <span className="text-xs font-semibold text-ink-2 flex items-center gap-1.5">
+                  <Shield className="w-3.5 h-3.5 text-accent" />
                   Liste CRM
                 </span>
                 {currentProspect.list && (
                   <button
                     onClick={() => setShowListSelector(!showListSelector)}
-                    className="text-[11px] text-[#592eff] hover:underline font-medium cursor-pointer"
+                    className="text-xs text-accent hover:underline font-medium cursor-pointer"
                   >
                     Changer
                   </button>
@@ -967,32 +951,32 @@ export const InboxView: React.FC = () => {
               </div>
 
               {listAssignSuccess && (
-                <div className="p-2 text-[11px] text-emerald-700 bg-emerald-50 dark:bg-emerald-950/50 dark:text-emerald-300 rounded-lg border border-emerald-200/60">
+                <div className="p-2 text-xs text-ok bg-ok-soft rounded-lg border border-ok/30/60">
                   {listAssignSuccess}
                 </div>
               )}
 
               {currentProspect.list ? (
-                <div className="flex items-center justify-between p-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
+                <div className="flex items-center justify-between p-2 bg-white rounded-xl border border-line">
                   <div className="flex items-center gap-2 min-w-0">
                     <span
                       className="w-2.5 h-2.5 rounded-full shrink-0"
                       style={{ backgroundColor: currentProspect.list.color || "#592eff" }}
                     />
-                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">
+                    <span className="text-xs font-semibold text-ink truncate">
                       {currentProspect.list.name}
                     </span>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  <p className="text-xs text-muted">
                     Ce contact n'appartient à aucune liste de prospection CRM.
                   </p>
                   {!showListSelector && (
                     <button
                       onClick={() => setShowListSelector(true)}
-                      className="w-full py-1.5 px-3 text-xs font-semibold text-white bg-[#592eff] hover:bg-[#4a24dd] rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                      className="w-full py-1.5 px-3 text-xs font-semibold text-white bg-accent hover:bg-accent-hover rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       Ajouter à une liste CRM
@@ -1002,20 +986,20 @@ export const InboxView: React.FC = () => {
               )}
 
               {showListSelector && (
-                <div className="mt-2 p-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 space-y-1.5">
-                  <div className="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-700/50">
-                    <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                <div className="mt-2 p-2 bg-white rounded-xl border border-line space-y-1.5">
+                  <div className="flex items-center justify-between pb-1 border-b border-line">
+                    <span className="text-xs font-semibold text-ink-2">
                       Choisir une liste :
                     </span>
                     <button
                       onClick={() => setShowListSelector(false)}
-                      className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs cursor-pointer"
+                      className="text-muted-2 hover:text-ink-2 text-xs cursor-pointer"
                     >
                       Annuler
                     </button>
                   </div>
                   {availableLists.length === 0 ? (
-                    <p className="text-[11px] text-slate-400 p-1">Aucune liste disponible.</p>
+                    <p className="text-xs text-muted-2 p-1">Aucune liste disponible.</p>
                   ) : (
                     <div className="max-h-32 overflow-y-auto space-y-1 no-scrollbar">
                       {availableLists.map((l) => (
@@ -1023,10 +1007,10 @@ export const InboxView: React.FC = () => {
                           key={l.id}
                           disabled={assigningList}
                           onClick={() => handleAssignToList(l.id)}
-                          className={`w-full text-left px-2.5 py-1.5 text-xs rounded-lg flex items-center justify-between hover:bg-violet-50 dark:hover:bg-violet-950/40 transition-colors cursor-pointer ${
+                          className={`w-full text-left px-2.5 py-1.5 text-xs rounded-lg flex items-center justify-between hover:bg-accent-soft transition-colors cursor-pointer ${
                             currentProspect.list?.id === l.id
-                              ? "bg-violet-50 text-[#592eff] font-bold"
-                              : "text-slate-700 dark:text-slate-300"
+                              ? "bg-accent-soft text-accent font-semibold"
+                              : "text-ink-2"
                           }`}
                         >
                           <span className="flex items-center gap-2 truncate">
@@ -1037,7 +1021,7 @@ export const InboxView: React.FC = () => {
                             <span className="truncate">{l.name}</span>
                           </span>
                           {currentProspect.list?.id === l.id && (
-                            <Check className="w-3.5 h-3.5 text-[#592eff]" />
+                            <Check className="w-3.5 h-3.5 text-accent" />
                           )}
                         </button>
                       ))}
@@ -1050,20 +1034,20 @@ export const InboxView: React.FC = () => {
             {/* Tags Section */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                  <Tag className="w-3.5 h-3.5 text-[#592eff]" />
+                <label className="text-xs font-semibold text-ink-2 flex items-center gap-1.5">
+                  <Tag className="w-3.5 h-3.5 text-accent" />
                   Tags & Segments
                 </label>
                 <button
                   onClick={() => setShowAddTag(!showAddTag)}
-                  className="text-xs text-[#592eff] hover:underline font-medium cursor-pointer"
+                  className="text-xs text-accent hover:underline font-medium cursor-pointer"
                 >
                   + Ajouter
                 </button>
               </div>
 
               {showAddTag && (
-                <div className="flex items-center gap-1.5 animate-fade-in">
+                <div className="flex items-center gap-1.5">
                   <input
                     type="text"
                     placeholder="Nom du tag..."
@@ -1075,11 +1059,11 @@ export const InboxView: React.FC = () => {
                         handleAddTag();
                       }
                     }}
-                    className="flex-1 px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#592eff] text-slate-900 dark:text-white"
+                    className="flex-1 px-3 py-1.5 text-xs bg-canvas border border-line rounded-lg focus:outline-none focus:ring-1 focus:ring-accent text-ink"
                   />
                   <button
                     onClick={handleAddTag}
-                    className="px-2.5 py-1.5 text-xs bg-[#592eff] hover:bg-[#4a24dd] text-white rounded-lg font-medium cursor-pointer"
+                    className="px-2.5 py-1.5 text-xs bg-accent hover:bg-accent-hover text-white rounded-lg font-medium cursor-pointer"
                   >
                     OK
                   </button>
@@ -1091,46 +1075,46 @@ export const InboxView: React.FC = () => {
                   currentProspect.tags.map((tag, tIdx) => (
                     <span
                       key={tIdx}
-                      className="px-2 py-0.5 text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg border border-slate-200/60 dark:border-slate-700/60 flex items-center gap-1.5 group"
+                      className="px-2 py-0.5 text-xs font-medium bg-surface-2 text-ink-2 rounded-lg border border-line flex items-center gap-1.5 group"
                     >
                       {tag}
                       <button
                         onClick={() => handleRemoveTag(tag)}
-                        className="text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
+                        className="text-muted-2 hover:text-danger transition-colors cursor-pointer"
                       >
                         ×
                       </button>
                     </span>
                   ))
                 ) : (
-                  <p className="text-[11px] text-slate-400 italic">Aucun tag pour le moment.</p>
+                  <p className="text-xs text-muted-2 italic">Aucun tag pour le moment.</p>
                 )}
               </div>
             </div>
 
             {/* Campaign Widget */}
-            <div className="p-3 bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200/60 dark:border-purple-900/40 rounded-2xl space-y-1.5">
+            <div className="p-3 bg-purple-50/70 border border-purple-200/60 rounded-2xl space-y-1.5">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-purple-900 dark:text-purple-300 flex items-center gap-1.5">
+                <span className="text-xs font-semibold text-purple-900 flex items-center gap-1.5">
                   <Layers className="w-3.5 h-3.5 text-purple-600" />
                   Campagne en cours
                 </span>
-                <span className="px-2 py-0.5 text-[10px] font-bold bg-purple-200/60 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300 rounded-md">
+                <span className="px-2 py-0.5 text-xs font-semibold bg-purple-200/60 text-purple-700 rounded-md">
                   {currentProspect.campaignState?.status || "Hors campagne"}
                 </span>
               </div>
 
               {currentProspect.campaignState ? (
                 <div className="space-y-1">
-                  <p className="text-xs font-semibold text-purple-900 dark:text-purple-200">
+                  <p className="text-xs font-semibold text-purple-900">
                     {currentProspect.campaignState.campaignName}
                   </p>
-                  <p className="text-[11px] text-purple-700 dark:text-purple-400">
+                  <p className="text-xs text-purple-700">
                     Séquence active synchronisée. Les campagnes s'arrêtent automatiquement dès que le prospect répond.
                   </p>
                 </div>
               ) : (
-                <p className="text-[11px] text-purple-700 dark:text-purple-400">
+                <p className="text-xs text-purple-700">
                   Ce prospect n'est associé à aucune campagne active.
                 </p>
               )}
@@ -1138,23 +1122,23 @@ export const InboxView: React.FC = () => {
 
             {/* Tabs Infos / Notes */}
             <div className="space-y-2.5 pt-1">
-              <div className="flex border-b border-slate-100 dark:border-slate-800">
+              <div className="flex border-b border-line">
                 <button
                   onClick={() => setCrmTab("INFOS")}
-                  className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+                  className={`pb-2 px-3 text-xs font-semibold border-b-2 transition-all cursor-pointer ${
                     crmTab === "INFOS"
-                      ? "border-[#592eff] text-[#592eff] dark:text-violet-400"
-                      : "border-transparent text-slate-400 hover:text-slate-600"
+                      ? "border-accent text-accent"
+                      : "border-transparent text-muted-2 hover:text-ink-2"
                   }`}
                 >
                   Infos Prospect
                 </button>
                 <button
                   onClick={() => setCrmTab("NOTES")}
-                  className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+                  className={`pb-2 px-3 text-xs font-semibold border-b-2 transition-all cursor-pointer ${
                     crmTab === "NOTES"
-                      ? "border-[#592eff] text-[#592eff] dark:text-violet-400"
-                      : "border-transparent text-slate-400 hover:text-slate-600"
+                      ? "border-accent text-accent"
+                      : "border-transparent text-muted-2 hover:text-ink-2"
                   }`}
                 >
                   Notes & Historique
@@ -1163,16 +1147,16 @@ export const InboxView: React.FC = () => {
 
               {crmTab === "INFOS" ? (
                 <div className="space-y-2 text-xs">
-                  <div className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <span className="text-slate-400 flex items-center gap-2">
+                  <div className="flex items-center justify-between p-2 rounded-xl hover:bg-canvas">
+                    <span className="text-muted-2 flex items-center gap-2">
                       <Mail className="w-3.5 h-3.5" /> Email
                     </span>
-                    <div className="flex items-center gap-1.5 font-medium text-slate-800 dark:text-slate-200">
+                    <div className="flex items-center gap-1.5 font-medium text-ink">
                       <span>{currentProspect.email || "Non renseigné"}</span>
                       {currentProspect.email && (
                         <button
                           onClick={() => handleCopy(currentProspect.email!, "email")}
-                          className="text-slate-400 hover:text-[#592eff] cursor-pointer"
+                          className="text-muted-2 hover:text-accent cursor-pointer"
                         >
                           <Copy className="w-3 h-3" />
                         </button>
@@ -1180,38 +1164,38 @@ export const InboxView: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <span className="text-slate-400 flex items-center gap-2">
+                  <div className="flex items-center justify-between p-2 rounded-xl hover:bg-canvas">
+                    <span className="text-muted-2 flex items-center gap-2">
                       <Phone className="w-3.5 h-3.5" /> Téléphone
                     </span>
-                    <span className="font-medium text-slate-800 dark:text-slate-200">
+                    <span className="font-medium text-ink">
                       {currentProspect.phone || "Non renseigné"}
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <span className="text-slate-400 flex items-center gap-2">
+                  <div className="flex items-center justify-between p-2 rounded-xl hover:bg-canvas">
+                    <span className="text-muted-2 flex items-center gap-2">
                       <Building className="w-3.5 h-3.5" /> Entreprise
                     </span>
-                    <span className="font-medium text-slate-800 dark:text-slate-200">
+                    <span className="font-medium text-ink">
                       {currentProspect.company || "Non renseigné"}
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <span className="text-slate-400 flex items-center gap-2">
+                  <div className="flex items-center justify-between p-2 rounded-xl hover:bg-canvas">
+                    <span className="text-muted-2 flex items-center gap-2">
                       <MapPin className="w-3.5 h-3.5" /> Région
                     </span>
-                    <span className="font-medium text-slate-800 dark:text-slate-200">
+                    <span className="font-medium text-ink">
                       {currentProspect.location || "Côte d'Ivoire / International"}
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <span className="text-slate-400 flex items-center gap-2">
+                  <div className="flex items-center justify-between p-2 rounded-xl hover:bg-canvas">
+                    <span className="text-muted-2 flex items-center gap-2">
                       <Shield className="w-3.5 h-3.5" /> Liste CRM
                     </span>
-                    <span className="font-medium text-[#592eff] dark:text-violet-400">
+                    <span className="font-medium text-accent">
                       {currentProspect.list?.name || "Non assigné"}
                     </span>
                   </div>
@@ -1219,7 +1203,7 @@ export const InboxView: React.FC = () => {
               ) : (
                 <div className="space-y-2.5">
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-semibold text-slate-500">
+                    <label className="text-xs font-semibold text-muted">
                       Notes internes sur ce prospect :
                     </label>
                     <textarea
@@ -1227,7 +1211,7 @@ export const InboxView: React.FC = () => {
                       placeholder="Notez des détails clés (besoins, budget, rappel convenu)..."
                       value={prospectNote}
                       onChange={(e) => setProspectNote(e.target.value)}
-                      className="w-full p-2 text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#592eff] text-slate-900 dark:text-white resize-none"
+                      className="w-full p-2 text-xs bg-canvas border border-line rounded-xl focus:outline-none focus:ring-1 focus:ring-accent text-ink resize-none"
                     />
                   </div>
                   <button
@@ -1235,9 +1219,9 @@ export const InboxView: React.FC = () => {
                       setSavingNote(true);
                       setTimeout(() => setSavingNote(false), 800);
                     }}
-                    className="w-full py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="w-full py-2 text-xs font-semibold bg-surface-2 hover:bg-line text-ink rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    {savingNote ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> : <FileText className="w-3.5 h-3.5" />}
+                    {savingNote ? <CheckCircle2 className="w-3.5 h-3.5 text-ok" /> : <FileText className="w-3.5 h-3.5" />}
                     {savingNote ? "Note enregistrée !" : "Enregistrer la note"}
                   </button>
                 </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Modal } from "../ui/Modal";
 import {
   X,
   Search,
@@ -11,6 +12,7 @@ import {
   Loader2,
   CheckCircle2,
 } from "lucide-react";
+import { initialsDataUrl } from "../ui/avatarFallback";
 import { apiRequest } from "../../services/api";
 import { InboxConversation, ProspectItem } from "../../types";
 
@@ -58,7 +60,6 @@ export const NewConversationModal: React.FC<NewConversationModalProps> = ({
     }
   };
 
-  if (!isOpen) return null;
 
   const filteredProspects = prospects.filter((p) => {
     const q = searchQuery.toLowerCase();
@@ -132,33 +133,10 @@ export const NewConversationModal: React.FC<NewConversationModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/50">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20">
-              <MessageSquare className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-base font-semibold text-slate-900 dark:text-white">
-                Nouvelle conversation LinkedIn
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Démarrez une discussion directe synchronisée avec votre compte LinkedIn
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
+    <Modal open={isOpen} onClose={onClose} size="md" title="Nouvelle conversation" description="Discussion directe, synchronisée avec votre compte LinkedIn." bodyClassName="px-6 pb-6">
+      <div className="flex flex-col">
         {/* Tab Selection */}
-        <div className="flex border-b border-slate-100 dark:border-slate-800 px-6 pt-2 bg-slate-50/30 dark:bg-slate-900/30">
+        <div className="flex border-b border-line">
           <button
             onClick={() => {
               setActiveTab("PROSPECT");
@@ -166,8 +144,8 @@ export const NewConversationModal: React.FC<NewConversationModalProps> = ({
             }}
             className={`pb-3 px-3 text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${
               activeTab === "PROSPECT"
-                ? "border-indigo-600 text-indigo-600 dark:text-indigo-400"
-                : "border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                ? "border-accent text-ink"
+                : "border-transparent text-muted hover:text-ink-2"
             }`}
           >
             <User className="w-4 h-4" />
@@ -180,8 +158,8 @@ export const NewConversationModal: React.FC<NewConversationModalProps> = ({
             }}
             className={`pb-3 px-3 text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${
               activeTab === "LINKEDIN_URL"
-                ? "border-indigo-600 text-indigo-600 dark:text-indigo-400"
-                : "border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                ? "border-accent text-ink"
+                : "border-transparent text-muted hover:text-ink-2"
             }`}
           >
             <ExternalLink className="w-4 h-4" />
@@ -189,38 +167,38 @@ export const NewConversationModal: React.FC<NewConversationModalProps> = ({
           </button>
         </div>
 
-        <form onSubmit={handleStartConversation} className="p-6 flex-1 overflow-y-auto space-y-4">
+        <form onSubmit={handleStartConversation} className="space-y-4 pt-5">
           {error && (
-            <div className="p-3 text-xs bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/60 rounded-xl">
+            <div className="p-3 text-xs bg-danger-soft text-danger border border-danger-line rounded-xl">
               {error}
             </div>
           )}
 
           {activeTab === "PROSPECT" ? (
             <div className="space-y-3">
-              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+              <label className="text-xs font-semibold text-ink-2">
                 Sélectionner le destinataire
               </label>
               <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <Search className="w-4 h-4 text-muted-2 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   placeholder="Rechercher par nom, poste, entreprise..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 text-sm bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
+                  className="w-full pl-10 pr-4 py-2 text-sm bg-canvas border border-line rounded-xl focus:outline-none focus:ring-2 focus:ring-accent/20 text-ink"
                 />
               </div>
 
               {/* Prospects list */}
-              <div className="border border-slate-200 dark:border-slate-800 rounded-xl max-h-48 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+              <div className="border border-line rounded-xl max-h-48 overflow-y-auto divide-y divide-line">
                 {loadingProspects ? (
-                  <div className="py-8 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
+                  <div className="py-8 text-center text-xs text-muted-2 flex items-center justify-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-accent" />
                     Chargement des prospects...
                   </div>
                 ) : filteredProspects.length === 0 ? (
-                  <div className="py-8 text-center text-xs text-slate-400">
+                  <div className="py-8 text-center text-xs text-muted-2">
                     Aucun prospect trouvé.
                   </div>
                 ) : (
@@ -232,32 +210,30 @@ export const NewConversationModal: React.FC<NewConversationModalProps> = ({
                         onClick={() => setSelectedProspect(p)}
                         className={`p-3 flex items-center justify-between cursor-pointer transition-colors ${
                           isSelected
-                            ? "bg-indigo-50/80 dark:bg-indigo-950/40"
-                            : "hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                            ? "bg-accent-soft"
+                            : "hover:bg-canvas"
                         }`}
                       >
                         <div className="flex items-center gap-3 min-w-0">
                           <img
                             src={
                               p.avatarUrl ||
-                              `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                                `${p.firstName} ${p.lastName}`
-                              )}&background=592eff&color=fff`
+                              initialsDataUrl(`${p.firstName} ${p.lastName}`)
                             }
                             alt=""
-                            className="w-8 h-8 rounded-full object-cover shrink-0 border border-slate-200 dark:border-slate-700"
+                            className="w-8 h-8 rounded-full object-cover shrink-0 border border-line"
                           />
                           <div className="min-w-0">
-                            <p className="text-xs font-semibold text-slate-900 dark:text-white truncate">
+                            <p className="text-xs font-semibold text-ink truncate">
                               {p.firstName} {p.lastName}
                             </p>
-                            <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                            <p className="text-xs text-muted truncate">
                               {p.headline || p.company || "Contact LinkedIn"}
                             </p>
                           </div>
                         </div>
                         {isSelected && (
-                          <CheckCircle2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                          <CheckCircle2 className="w-4 h-4 text-accent shrink-0" />
                         )}
                       </div>
                     );
@@ -267,7 +243,7 @@ export const NewConversationModal: React.FC<NewConversationModalProps> = ({
             </div>
           ) : (
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+              <label className="text-xs font-semibold text-ink-2">
                 URL du profil LinkedIn du contact
               </label>
               <input
@@ -275,9 +251,9 @@ export const NewConversationModal: React.FC<NewConversationModalProps> = ({
                 placeholder="https://www.linkedin.com/in/nom-du-profil"
                 value={linkedinUrl}
                 onChange={(e) => setLinkedinUrl(e.target.value)}
-                className="w-full px-4 py-2.5 text-sm bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
+                className="w-full px-4 py-2.5 text-sm bg-canvas border border-line rounded-xl focus:outline-none focus:ring-2 focus:ring-accent/20 text-ink"
               />
-              <p className="text-[11px] text-slate-400">
+              <p className="text-xs text-muted-2">
                 Bleadin récupérera automatiquement la photo, le nom et le titre du profil pour synchroniser l'échange.
               </p>
             </div>
@@ -286,22 +262,22 @@ export const NewConversationModal: React.FC<NewConversationModalProps> = ({
           {/* Message Area */}
           <div className="space-y-2 pt-2">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+              <label className="text-xs font-semibold text-ink-2">
                 Premier message
               </label>
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-slate-400">Variables :</span>
+                <span className="text-xs text-muted-2">Variables :</span>
                 <button
                   type="button"
                   onClick={() => insertVariable("{{firstName}}")}
-                  className="px-1.5 py-0.5 text-[10px] bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-300 rounded font-medium hover:bg-indigo-100"
+                  className="px-1.5 py-0.5 text-xs bg-accent-soft text-accent rounded font-medium hover:bg-accent-soft"
                 >
                   Prénom
                 </button>
                 <button
                   type="button"
                   onClick={() => insertVariable("{{company}}")}
-                  className="px-1.5 py-0.5 text-[10px] bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-300 rounded font-medium hover:bg-purple-100"
+                  className="px-1.5 py-0.5 text-xs bg-purple-50 text-purple-600 rounded font-medium hover:bg-purple-100"
                 >
                   Entreprise
                 </button>
@@ -313,7 +289,7 @@ export const NewConversationModal: React.FC<NewConversationModalProps> = ({
               placeholder="Bonjour, je vous contacte pour échanger au sujet de..."
               value={initialMessage}
               onChange={(e) => setInitialMessage(e.target.value)}
-              className="w-full p-3 text-sm bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white resize-none"
+              className="w-full p-3 text-sm bg-canvas border border-line rounded-xl focus:outline-none focus:ring-2 focus:ring-accent/20 text-ink resize-none"
             />
           </div>
 
@@ -322,14 +298,14 @@ export const NewConversationModal: React.FC<NewConversationModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
+              className="px-4 py-2 text-xs font-medium text-ink-2 hover:bg-surface-2 rounded-xl transition-colors"
             >
               Annuler
             </button>
             <button
               type="submit"
               disabled={sending}
-              className="px-5 py-2.5 text-xs font-semibold text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 rounded-xl shadow-md shadow-indigo-500/25 flex items-center gap-2 disabled:opacity-50 transition-all"
+              className="px-5 py-2.5 text-xs font-semibold text-white bg-accent hover:bg-accent-hover rounded-xl flex items-center gap-2 disabled:opacity-50 transition-all"
             >
               {sending ? (
                 <>
@@ -346,6 +322,6 @@ export const NewConversationModal: React.FC<NewConversationModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
+    </Modal>
   );
 };

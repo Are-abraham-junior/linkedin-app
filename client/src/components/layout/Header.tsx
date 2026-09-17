@@ -1,54 +1,61 @@
-import React, { useState, useEffect } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import React, { useState, useEffect, useRef } from "react";
+import { useLocation } from "react-router-dom";
+import clsx from "clsx";
 import { useAuth } from "../../context/AuthContext";
 import { WorkspaceAvatar } from "../common/WorkspaceAvatar";
 import { apiRequest } from "../../services/api";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { EnrichmentTokensChip } from "./EnrichmentTokensChip";
-import {
-  Menu,
-  Users,
-  ArrowRightLeft,
-  ChevronDown,
-  Check,
-  Shield,
-  Plus,
-  Bell,
-  Sparkles,
-} from "lucide-react";
+import { Menu, ArrowRightLeft, ChevronDown, Check } from "lucide-react";
+import { Avatar } from "../ui/Avatar";
+import { Badge } from "../ui/Badge";
+import { Button } from "../ui/Button";
+import { IconButton } from "../ui/IconButton";
+import { useOnClickOutside } from "../ui/hooks";
 
 interface HeaderProps {
   onOpenMobileMenu: () => void;
   onOpenProfile: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({
-  onOpenMobileMenu,
-  onOpenProfile,
-}) => {
+const TITLES: Array<[string, string]> = [
+  ["/admin/users", "Utilisateurs"],
+  ["/admin/settings", "Paramètres plateforme"],
+  ["/admin", "Hub plateforme"],
+  ["/bleadin-ia", "Bleadin IA"],
+  ["/dashboard", "Tableau de bord"],
+  ["/prospects", "Contacts & Prospects"],
+  ["/campaigns", "Campagnes"],
+  ["/inbox", "Messagerie"],
+  ["/team", "Équipe & Rôles"],
+  ["/reports", "Rapports"],
+  ["/settings", "Paramètres"],
+];
+
+export const popoverClass = "modal-in absolute right-0 mt-2 rounded-xl border border-line bg-surface p-1.5 shadow-pop";
+export const popoverRowClass = (selected: boolean) =>
+  clsx(
+    "flex h-9 w-full items-center justify-between gap-2 rounded-lg px-2.5 text-left text-sm transition-colors",
+    selected ? "bg-accent-soft text-ink" : "text-ink-2 hover:bg-surface-2 hover:text-ink",
+  );
+
+export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
   const location = useLocation();
-  const navigate = useNavigate();
-  const {
-    user,
-    selectedMemberId,
-    setSelectedMemberId,
-    impersonatedOrg,
-  } = useAuth();
+  const { user, selectedMemberId, setSelectedMemberId, impersonatedOrg } = useAuth();
 
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
   const [memberSwitcherOpen, setMemberSwitcherOpen] = useState(false);
+  const switcherRef = useRef<HTMLDivElement>(null);
+  useOnClickOutside(switcherRef, () => setMemberSwitcherOpen(false), memberSwitcherOpen);
 
   const isSuperAdmin = user?.role === "SUPER_ADMIN";
 
-  // Charger les membres de l'équipe pour la bascule de compte collaborateur
   useEffect(() => {
     let isMounted = true;
     if (user?.orgRole === "OWNER" || isSuperAdmin) {
       apiRequest<{ members: any[] }>("/team/members")
         .then((res) => {
-          if (isMounted && res.success && Array.isArray(res.members)) {
-            setTeamMembers(res.members);
-          }
+          if (isMounted && res.success && Array.isArray(res.members)) setTeamMembers(res.members);
         })
         .catch(() => {});
     }
@@ -57,144 +64,70 @@ export const Header: React.FC<HeaderProps> = ({
     };
   }, [user?.id, user?.orgRole, impersonatedOrg]);
 
-  // Déterminer le titre de la vue active
-  const getPageTitle = () => {
-    const path = location.pathname;
-    if (path === "/admin") return "Hub Plateforme";
-    if (path.startsWith("/admin/users")) return "Gestion des Utilisateurs";
-    if (path.startsWith("/admin/settings")) return "Paramètres plateforme";
-    if (path.startsWith("/bleadin-ia")) return "Bleadin IA";
-    if (path.startsWith("/dashboard")) return "Tableau de bord";
-    if (path.startsWith("/prospects")) return "Contacts & Prospects";
-    if (path.startsWith("/campaigns")) return "Campagnes";
-    if (path.startsWith("/inbox")) return "Messagerie";
-    if (path.startsWith("/team")) return "Équipe & Collaborateurs";
-    return "Tableau de bord";
-  };
+  const pageTitle = TITLES.find(([p]) => location.pathname === p || location.pathname.startsWith(p + "/"))?.[1] ?? "Bleadin";
 
   const activeMember = teamMembers.find((m) => m.id === selectedMemberId);
-  const canSwitchAccounts =
-    (user?.orgRole === "OWNER" || isSuperAdmin) && teamMembers.length > 0;
+  const canSwitchAccounts = (user?.orgRole === "OWNER" || isSuperAdmin) && teamMembers.length > 0;
+
+  const pick = (id: string | null) => {
+    setSelectedMemberId(id);
+    setMemberSwitcherOpen(false);
+  };
 
   return (
-    <header className="h-16 bg-white/90 backdrop-blur-md border-b border-[#e0e0db] px-4 sm:px-6 flex items-center justify-between gap-3 sticky top-0 z-40 shrink-0">
-      {/* Partie Gauche : Hamburger (Mobile) + Titre de page + Badge Supervision */}
-      <div className="flex items-center gap-3 truncate">
-        <button
-          type="button"
-          onClick={onOpenMobileMenu}
-          className="lg:hidden p-2 rounded-xl text-[#5f5f69] hover:text-[#592eff] hover:bg-[#f5f5f7] transition-colors cursor-pointer"
-          title="Ouvrir le menu"
-        >
-          <Menu className="w-5 h-5" />
-        </button>
-
-        <div className="flex items-center gap-2.5 truncate">
-          <h1 className="text-base sm:text-lg font-extrabold text-[#21164c] tracking-tight truncate">
-            {getPageTitle()}
-          </h1>
-
-          {/* Badge discret si le Super Admin est en supervision d'espace */}
-          {isSuperAdmin && impersonatedOrg && (
-            <div className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#592eff]/10 text-[#592eff] border border-[#592eff]/20 text-[11px] font-bold">
-              <WorkspaceAvatar name={impersonatedOrg.name} avatarUrl={user?.organization?.avatarUrl || impersonatedOrg.avatarUrl} className="w-4 h-4 rounded-md" textClassName="text-[9px]" />
-              <span className="truncate">{impersonatedOrg.name}</span>
-            </div>
-          )}
-        </div>
+    <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-line bg-surface px-4 sm:px-6">
+      <div className="flex min-w-0 items-center gap-2">
+        <IconButton label="Ouvrir le menu" icon={Menu} size="md" onClick={onOpenMobileMenu} className="-ml-2 lg:hidden" />
+        <h1 className="truncate text-base font-semibold text-ink">{pageTitle}</h1>
+        {isSuperAdmin && impersonatedOrg && (
+          <Badge tone="accent" className="hidden sm:inline-flex">
+            <WorkspaceAvatar
+              name={impersonatedOrg.name}
+              avatarUrl={user?.organization?.avatarUrl || impersonatedOrg.avatarUrl}
+              className="h-4 w-4 rounded"
+              textClassName="text-[9px]"
+            />
+            <span className="max-w-[160px] truncate">{impersonatedOrg.name}</span>
+          </Badge>
+        )}
       </div>
 
-      {/* Partie Droite : Bascule Collaborateur + WorkspaceSwitcher + LinkedIn + CTA */}
-      <div className="flex items-center gap-2.5 sm:gap-3">
-
-        {/* Sélecteur de Collaborateur (Vue 360° / Multi-comptes équipe) */}
+      <div className="flex items-center gap-2">
         {canSwitchAccounts && (
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setMemberSwitcherOpen(!memberSwitcherOpen)}
-              className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-2xl text-xs font-bold border transition-all cursor-pointer ${
-                selectedMemberId
-                  ? "bg-[#592eff] text-white border-[#592eff] shadow-xs shadow-[#592eff]/30"
-                  : "bg-white border-[#e0e0db] hover:border-[#592eff]/40 text-[#21164c]"
-              }`}
+          <div className="relative hidden sm:block" ref={switcherRef}>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={ArrowRightLeft}
+              iconRight={ChevronDown}
+              onClick={() => setMemberSwitcherOpen((v) => !v)}
+              aria-expanded={memberSwitcherOpen}
+              aria-haspopup="listbox"
               title="Filtrer les données par collaborateur"
+              className={clsx(selectedMemberId && "border-ink")}
             >
-              <ArrowRightLeft className="w-3.5 h-3.5" />
-              <span className="max-w-[100px] truncate">
+              <span className="max-w-[120px] truncate font-medium">
                 {activeMember ? activeMember.name || activeMember.email : "Toute l'équipe"}
               </span>
-              <ChevronDown
-                className={`w-3 h-3 transition-transform ${
-                  memberSwitcherOpen ? "rotate-180" : ""
-                }`}
-              />
-            </button>
+            </Button>
 
             {memberSwitcherOpen && (
-              <div
-                className="absolute right-0 mt-2 w-64 bg-white border border-[#e0e0db] rounded-3xl shadow-2xl p-2 z-50 animate-modal-pop"
-                onMouseLeave={() => setMemberSwitcherOpen(false)}
-              >
-                <div className="p-2 border-b border-[#e0e0db]/60 mb-1">
-                  <p className="text-xs font-bold text-[#21164c]">Filtre Collaborateur</p>
-                  <p className="text-[10px] text-[#5f5f69]">Visualisez les actions d'un membre précis</p>
-                </div>
-
-                {/* Option Tous / Global */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedMemberId(null);
-                    setMemberSwitcherOpen(false);
-                  }}
-                  className={`w-full text-left px-3 py-2 rounded-xl text-xs flex items-center justify-between transition-colors cursor-pointer ${
-                    !selectedMemberId
-                      ? "bg-[#592eff]/10 text-[#592eff] font-bold"
-                      : "hover:bg-[#f8f9fc] text-[#21164c]"
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-[#592eff] text-white flex items-center justify-center text-[10px] font-bold">
-                      T
-                    </div>
-                    <span className="truncate">Toute l'équipe (Vue consolidée)</span>
-                  </div>
-                  {!selectedMemberId && <Check className="w-3.5 h-3.5 text-[#592eff]" />}
+              <div className={clsx(popoverClass, "w-64")} role="listbox">
+                <p className="px-2.5 pb-1.5 pt-1 text-xs text-muted">Afficher les données de</p>
+                <button type="button" role="option" aria-selected={!selectedMemberId} onClick={() => pick(null)} className={popoverRowClass(!selectedMemberId)}>
+                  <span className="truncate">Toute l'équipe</span>
+                  {!selectedMemberId && <Check className="h-4 w-4 text-accent" strokeWidth={1.75} />}
                 </button>
-
-                {/* Liste des collaborateurs */}
-                <div className="max-h-48 overflow-y-auto mt-1 space-y-0.5">
+                <div className="mt-1 max-h-56 space-y-0.5 overflow-y-auto border-t border-line pt-1">
                   {teamMembers.map((m) => {
                     const isSelected = selectedMemberId === m.id;
                     return (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedMemberId(m.id);
-                          setMemberSwitcherOpen(false);
-                        }}
-                        className={`w-full text-left px-3 py-2 rounded-xl text-xs flex items-center justify-between transition-colors cursor-pointer ${
-                          isSelected
-                            ? "bg-[#592eff]/10 text-[#592eff] font-bold"
-                            : "hover:bg-[#f8f9fc] text-[#21164c]"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 truncate">
-                          <img
-                            src={
-                              m.avatarUrl ||
-                              `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                                m.name || m.email
-                              )}&background=21164c&color=fff`
-                            }
-                            alt={m.name}
-                            className="w-5 h-5 rounded-full object-cover shrink-0"
-                          />
-                          <span className="truncate font-medium">{m.name || m.email}</span>
-                        </div>
-                        {isSelected && <Check className="w-3.5 h-3.5 text-[#592eff]" />}
+                      <button key={m.id} type="button" role="option" aria-selected={isSelected} onClick={() => pick(m.id)} className={popoverRowClass(isSelected)}>
+                        <span className="flex min-w-0 items-center gap-2">
+                          <Avatar name={m.name || m.email} src={m.avatarUrl} size="xs" />
+                          <span className="truncate">{m.name || m.email}</span>
+                        </span>
+                        {isSelected && <Check className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.75} />}
                       </button>
                     );
                   })}
@@ -204,10 +137,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         )}
 
-        {/* Solde de tokens d'enrichissement de l'espace courant */}
         <EnrichmentTokensChip />
-
-        {/* Bouton CHANGER D'ESPACE (Workspace Switcher) */}
         <WorkspaceSwitcher />
       </div>
     </header>

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { initialsDataUrl } from "../ui/avatarFallback";
 import { useAuth } from "../../context/AuthContext";
 import { apiRequest } from "../../services/api";
 import { User, Lock, Shield, X, Check, ArrowRight } from "lucide-react";
@@ -63,24 +64,24 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   };
 
   return (
-    <div className="fixed inset-0 bg-[#21164c]/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in">
-      <div className="adora-card bg-white w-full max-w-lg p-6 sm:p-8 shadow-2xl relative">
+    <div className="fixed inset-0 bg-ink/40 flex items-center justify-center p-4 z-50">
+      <div className="rounded-2xl border border-line bg-surface bg-white w-full max-w-lg p-6 sm:p-8 relative">
         <button
           onClick={onClose}
-          className="absolute right-5 top-5 p-2 rounded-full hover:bg-[#f5f5f7] text-[#5f5f69]"
+          className="absolute right-5 top-5 p-2 rounded-full hover:bg-surface-2 text-muted"
         >
           <X className="w-4 h-4" />
         </button>
 
-        <h2 className="text-xl font-bold text-[#21164c] mb-1">Mon Profil & Sécurité</h2>
-        <p className="text-xs text-[#5f5f69] mb-5">Gérez vos informations personnelles et identifiants.</p>
+        <h2 className="text-xl font-medium text-ink mb-1">Mon Profil & Sécurité</h2>
+        <p className="text-xs text-muted mb-5">Gérez vos informations personnelles et identifiants.</p>
 
         {msg && (
           <div
             className={`mb-4 p-3 rounded-xl text-xs font-semibold ${
               msg.type === "success"
-                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                : "bg-red-50 text-red-700 border border-red-200"
+                ? "bg-surface-2 text-ok border border-line"
+                : "bg-surface-2 text-danger border border-line"
             }`}
           >
             {msg.text}
@@ -93,20 +94,20 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               src={
                 avatarUrl ||
                 user.avatarUrl ||
-                `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || user.email)}&background=592eff&color=fff`
+                initialsDataUrl(user.name || user.email)
               }
               alt="Avatar"
-              className="w-14 h-14 rounded-full object-cover border-2 border-[#592eff]"
+              className="w-14 h-14 rounded-full object-cover border border-ink"
             />
             <div>
-              <p className="text-xs font-bold text-[#21164c]">{user.email}</p>
+              <p className="text-xs font-medium text-ink">{user.email}</p>
               <div className="flex items-center gap-2 mt-1">
-                <span className="badge-tag bg-[#592eff]/10 text-[#592eff] border border-[#592eff]/20 text-[10px]">
+                <span className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium bg-surface-2 text-ink border border-ink text-xs">
                   {user.role}
                 </span>
                 {user.organization && (
-                  <span className="text-xs text-[#5f5f69] flex items-center gap-1 font-medium">
-                    <WorkspaceAvatar name={user.organization.name} avatarUrl={user.organization.avatarUrl} className="w-4 h-4 rounded-md" textClassName="text-[9px]" /> {user.organization.name}
+                  <span className="text-xs text-muted flex items-center gap-1 font-medium">
+                    <WorkspaceAvatar name={user.organization.name} avatarUrl={user.organization.avatarUrl} className="w-4 h-4 rounded-md" textClassName="text-xs" /> {user.organization.name}
                   </span>
                 )}
               </div>
@@ -114,19 +115,19 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
           </div>
 
           <div>
-            <label className="block text-[11px] font-bold text-[#21164c] uppercase tracking-wider mb-1">
+            <label className="block text-xs font-medium text-ink mb-1">
               Nom complet
             </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-[#e0e0db] text-xs focus:outline-none focus:border-[#592eff]"
+              className="w-full px-3 py-2 rounded-xl border border-line text-xs focus:outline-none focus:border-ink"
             />
           </div>
 
           <div>
-            <label className="block text-[11px] font-bold text-[#21164c] uppercase tracking-wider mb-1">
+            <label className="block text-xs font-medium text-ink mb-1">
               URL de la photo de profil
             </label>
             <input
@@ -134,20 +135,20 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               placeholder="https://..."
               value={avatarUrl}
               onChange={(e) => setAvatarUrl(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-[#e0e0db] text-xs focus:outline-none focus:border-[#592eff]"
+              className="w-full px-3 py-2 rounded-xl border border-line text-xs focus:outline-none focus:border-ink"
             />
           </div>
 
-          <div className="p-3.5 rounded-2xl bg-[#f8f9fc] border border-[#e0e0db] space-y-2.5">
-            <p className="text-xs font-bold text-[#21164c] flex items-center gap-1.5">
-              <Lock className="w-3.5 h-3.5 text-[#592eff]" /> Changer de mot de passe
+          <div className="p-3.5 rounded-2xl bg-surface-2 border border-line space-y-2.5">
+            <p className="text-xs font-medium text-ink flex items-center gap-1.5">
+              <Lock className="w-3.5 h-3.5 text-ink" /> Changer de mot de passe
             </p>
             <input
               type="password"
               placeholder="Mot de passe actuel"
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
-              className="w-full px-3 py-1.5 rounded-lg border border-[#e0e0db] text-xs bg-white focus:outline-none focus:border-[#592eff]"
+              className="w-full px-3 py-1.5 rounded-lg border border-line text-xs bg-white focus:outline-none focus:border-ink"
             />
             <div className="grid grid-cols-2 gap-2">
               <input
@@ -155,14 +156,14 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 placeholder="Nouveau mot de passe"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full px-3 py-1.5 rounded-lg border border-[#e0e0db] text-xs bg-white focus:outline-none focus:border-[#592eff]"
+                className="w-full px-3 py-1.5 rounded-lg border border-line text-xs bg-white focus:outline-none focus:border-ink"
               />
               <input
                 type="password"
                 placeholder="Confirmer nouveau"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full px-3 py-1.5 rounded-lg border border-[#e0e0db] text-xs bg-white focus:outline-none focus:border-[#592eff]"
+                className="w-full px-3 py-1.5 rounded-lg border border-line text-xs bg-white focus:outline-none focus:border-ink"
               />
             </div>
           </div>
@@ -171,14 +172,14 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl border border-[#e0e0db] text-xs font-semibold text-[#5f5f69] hover:bg-[#f5f5f7]"
+              className="px-4 py-2 rounded-xl border border-line text-xs font-semibold text-muted hover:bg-surface-2"
             >
               Fermer
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-5 py-2 rounded-xl bg-[#592eff] hover:bg-[#4d25e0] text-white text-xs font-bold shadow-md shadow-[#592eff]/25 disabled:opacity-50"
+              className="px-5 py-2 rounded-xl bg-accent hover:bg-accent-hover text-white text-xs font-medium disabled:opacity-50"
             >
               {loading ? "Enregistrement..." : "Mettre à jour"}
             </button>

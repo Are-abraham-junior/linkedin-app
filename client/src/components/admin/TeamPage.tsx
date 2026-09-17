@@ -1,19 +1,20 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { apiRequest } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
-import {
-  UserPlus,
-  Shield,
-  User as UserIcon,
-  Mail,
-  CheckCircle2,
-  X,
-  Sparkles,
-  AlertCircle,
-  LogOut,
-  Send,
-  MessageSquare,
-} from "lucide-react";
+import { UserPlus, Shield, User as UserIcon, Mail, X, LogOut, Send } from "lucide-react";
+import { Avatar } from "../ui/Avatar";
+import { Badge, StatusDot } from "../ui/Badge";
+import { Button } from "../ui/Button";
+import { Callout } from "../ui/Callout";
+import { Card } from "../ui/Card";
+import { EmptyState } from "../ui/EmptyState";
+import { Field, Input, Select, labelClass } from "../ui/Field";
+import { IconButton } from "../ui/IconButton";
+import { Modal } from "../ui/Modal";
+import { PageHeader } from "../ui/PageHeader";
+import { SkeletonTable } from "../ui/Skeleton";
+import { Table, TableWrap, Td, TdActions, Th, Tr } from "../ui/Table";
+import { useToast } from "../ui/Toast";
 import { ConfirmModal } from "../common/ConfirmModal";
 
 interface TeamMember {
@@ -63,8 +64,7 @@ export const TeamPage: React.FC = () => {
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
 
-  // Notification Toast de succès
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toast = useToast();
 
   // États d'action sur la liste
   const [removingId, setRemovingId] = useState<string | null>(null);
@@ -93,14 +93,6 @@ export const TeamPage: React.FC = () => {
     loadTeam();
   }, [loadTeam]);
 
-  // Disparition automatique du toast
-  useEffect(() => {
-    if (toastMessage) {
-      const timer = setTimeout(() => setToastMessage(null), 4000);
-      return () => clearTimeout(timer);
-    }
-  }, [toastMessage]);
-
   // Envoi d'une invitation par email
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -124,7 +116,7 @@ export const TeamPage: React.FC = () => {
 
       if (res.success) {
         setShowAddMemberModal(false);
-        setToastMessage(res.message || `Invitation envoyée à ${email}.`);
+        toast.success(res.message || `Invitation envoyée à ${email}.`);
         // Réinitialiser le formulaire
         setEmail("");
         setOrgRole("MEMBER");
@@ -148,11 +140,11 @@ export const TeamPage: React.FC = () => {
         body: { orgRole: newRole },
       });
       if (res.success) {
-        setToastMessage("Rôle mis à jour avec succès.");
+        toast.success("Rôle mis à jour avec succès.");
         loadTeam();
       }
     } catch (err: any) {
-      alert(err.message || "Erreur lors de la modification du rôle.");
+      toast.error(err.message || "Erreur lors de la modification du rôle.");
     } finally {
       setUpdatingRoleId(null);
     }
@@ -168,11 +160,11 @@ export const TeamPage: React.FC = () => {
     setRemovingId(memberToRemove.id);
     try {
       await apiRequest(`/team/members/${memberToRemove.id}`, { method: "DELETE" });
-      setToastMessage("Membre retiré de l'espace.");
+      toast.success("Membre retiré de l'espace.");
       setMemberToRemove(null);
       loadTeam();
     } catch (err) {
-      alert("Erreur lors du retrait du membre.");
+      toast.error("Erreur lors du retrait du membre.");
     } finally {
       setRemovingId(null);
     }
@@ -185,384 +177,230 @@ export const TeamPage: React.FC = () => {
       await apiRequest(`/team/invitations/${invitationId}`, { method: "DELETE" });
       loadTeam();
     } catch {
-      alert("Erreur lors de l'annulation de l'invitation.");
+      toast.error("Erreur lors de l'annulation de l'invitation.");
     } finally {
       setCancellingId(null);
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "CONNECTED":
-        return "bg-emerald-50 text-emerald-700 border border-emerald-200";
-      case "SUSPENDED":
-        return "bg-red-50 text-red-700 border border-red-200";
-      default:
-        return "bg-amber-50 text-amber-700 border border-amber-200";
-    }
-  };
-
-  const MemberAvatar: React.FC<{ member: TeamMember; size?: "sm" | "md" }> = ({ member, size = "md" }) => {
-    const sizeClass = size === "sm" ? "w-8 h-8 text-xs" : "w-10 h-10 text-sm";
+  const memberAvatar = (member: TeamMember) => {
     const isConnected = member.linkedInAccount?.status === "CONNECTED";
     const src = (isConnected ? member.linkedInAccount?.profilePicture : null) || member.avatarUrl;
-    const name = (isConnected ? member.linkedInAccount?.accountName : null) || member.name || `${member.firstName || ""} ${member.lastName || ""}`.trim() || member.email;
+    const name =
+      (isConnected ? member.linkedInAccount?.accountName : null) ||
+      member.name ||
+      `${member.firstName || ""} ${member.lastName || ""}`.trim() ||
+      member.email;
+    return <Avatar name={name} src={src} size="md" />;
+  };
 
-    const getInitials = (n: string) => {
-      const parts = n.trim().split(/\s+/).filter(Boolean);
-      if (parts.length >= 2) {
-        return (parts[0][0] + parts[1][0]).toUpperCase();
-      }
-      return n.slice(0, 2).toUpperCase() || "?";
-    };
+  const roleBadge = (role: TeamMember["orgRole"]) =>
+    role === "OWNER" ? <Badge tone="accent">Propriétaire</Badge> : role === "ADMIN" ? <Badge>Admin d'équipe</Badge> : <Badge>Membre</Badge>;
 
-    if (src) {
-      return (
-        <img
-          src={src}
-          alt={name}
-          className={`${sizeClass} rounded-2xl object-cover border border-[#e0e0db]/60 shadow-sm`}
-        />
-      );
-    }
-    return (
-      <div
-        className={`${sizeClass} rounded-2xl flex items-center justify-center font-bold text-white shadow-sm shrink-0`}
-        style={{ background: "linear-gradient(135deg, #592eff, #7c3aed)" }}
-      >
-        {getInitials(name)}
-      </div>
-    );
+  const openAdd = () => {
+    setShowAddMemberModal(true);
+    setAddError(null);
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8 sm:py-10">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed top-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-emerald-600 text-white text-xs font-bold shadow-xl animate-fade-in">
-          <CheckCircle2 className="w-4 h-4" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
-
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-        <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#592eff]/10 text-[#592eff] text-xs font-bold mb-2 tracking-wide">
-            <Sparkles className="w-3.5 h-3.5" />
-            Espace Collaboratif
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#21164c] tracking-tight">Mon équipe</h1>
-          <p className="text-[#5f5f69] text-xs sm:text-sm mt-1">
-            {members.length} collaborateur{members.length !== 1 ? "s" : ""} dans cet espace
-            {invitations.length > 0 && ` · ${invitations.length} invitation${invitations.length !== 1 ? "s" : ""} en attente`}
-          </p>
-        </div>
-
-        {/* Bouton Ajouter un membre (Réservé au Propriétaire et Admins) */}
-        {canManageTeam && (
-          <button
-            onClick={() => {
-              setShowAddMemberModal(true);
-              setAddError(null);
-            }}
-            className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl font-bold text-white text-xs shadow-lg shadow-[#592eff]/25 hover:shadow-[#592eff]/35 active:scale-[0.99] transition-all cursor-pointer"
-            style={{ background: "linear-gradient(135deg, #592eff, #7c3aed)" }}
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>+ Ajouter un membre</span>
-          </button>
-        )}
-      </div>
+    <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6">
+      <PageHeader
+        title="Équipe"
+        description={`${members.length} collaborateur${members.length !== 1 ? "s" : ""} dans cet espace${
+          invitations.length > 0 ? ` · ${invitations.length} invitation${invitations.length !== 1 ? "s" : ""} en attente` : ""
+        }.`}
+        actions={
+          canManageTeam ? (
+            <Button icon={UserPlus} onClick={openAdd}>
+              Inviter un membre
+            </Button>
+          ) : undefined
+        }
+      />
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-20 gap-3 text-gray-400">
-          <div className="w-6 h-6 border-2 border-[#592eff] border-t-transparent rounded-full animate-spin" />
-          <span className="text-xs font-medium">Chargement de votre équipe...</span>
-        </div>
+        <SkeletonTable rows={4} cols={4} />
       ) : (
-        <>
-          {/* Members list Card */}
-          <div className="adora-card bg-white rounded-3xl shadow-xl shadow-[#592eff]/5 border border-[#e0e0db]/60 overflow-hidden mb-8">
-            <div className="px-6 py-4 border-b border-[#e0e0db]/50 flex items-center justify-between bg-[#f8f9fc]/50">
-              <h2 className="font-bold text-[#21164c] text-xs uppercase tracking-wider">Membres actifs</h2>
-              <span className="text-xs font-bold text-[#592eff] bg-[#592eff]/10 px-2.5 py-0.5 rounded-full">
-                {members.length} actif{members.length !== 1 ? "s" : ""}
-              </span>
+        <div className="space-y-6">
+          <Card padding="none" className="overflow-hidden">
+            <div className="flex items-center justify-between border-b border-line px-5 py-4">
+              <h2 className="text-base font-semibold text-ink">Membres</h2>
+              <span className="text-xs tabular-nums text-muted">{members.length}</span>
             </div>
-
             {members.length === 0 ? (
-              <div className="px-6 py-16 text-center">
-                <div className="w-12 h-12 rounded-2xl bg-purple-50 flex items-center justify-center mx-auto mb-3 text-[#592eff]">
-                  <UserPlus className="w-6 h-6" />
-                </div>
-                <p className="text-sm font-bold text-[#21164c]">Aucun membre pour l'instant.</p>
-                <p className="text-xs text-[#5f5f69] mt-1">Ajoutez vos collègues pour collaborer sur vos campagnes.</p>
-                {canManageTeam && (
-                  <button
-                    onClick={() => setShowAddMemberModal(true)}
-                    className="mt-4 inline-flex items-center gap-1 text-xs font-bold text-[#592eff] hover:underline cursor-pointer"
-                  >
-                    Ajouter votre premier membre →
-                  </button>
-                )}
-              </div>
+              <EmptyState
+                bare
+                icon={UserPlus}
+                title="Aucun membre pour l'instant"
+                description="Invitez vos collègues pour collaborer sur vos campagnes."
+                action={
+                  canManageTeam && (
+                    <Button variant="secondary" size="sm" onClick={openAdd}>
+                      Inviter un membre
+                    </Button>
+                  )
+                }
+              />
             ) : (
-              <div className="divide-y divide-[#e0e0db]/40">
-                {members.map((member) => {
-                  const displayName = member.name || `${member.firstName || ""} ${member.lastName || ""}`.trim() || member.email;
-                  const headline = member.linkedInAccount?.headline;
-                  const liStatus = member.linkedInAccount?.status || "DISCONNECTED";
-                  const isConnected = liStatus === "CONNECTED";
-
-                  return (
-                    <div key={member.id} className="px-6 py-4 flex items-center gap-4 hover:bg-[#f8f9fc]/60 transition-colors">
-                      <MemberAvatar member={member} />
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <span className="font-bold text-[#21164c] text-sm truncate">{displayName}</span>
-
-                          {/* Rôle Badge */}
-                          {member.orgRole === "OWNER" && (
-                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#592eff]/10 text-[#592eff] border border-[#592eff]/20 shrink-0">
-                              Propriétaire
-                            </span>
-                          )}
-                          {member.orgRole === "ADMIN" && (
-                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 shrink-0">
-                              Admin d'équipe
-                            </span>
-                          )}
-                          {member.orgRole === "MEMBER" && (
-                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-700 border border-gray-200 shrink-0">
-                              Membre
-                            </span>
-                          )}
-                        </div>
-
-                        {isConnected && headline && (
-                          <p className="text-xs text-[#5f5f69] truncate">{headline}</p>
-                        )}
-                        <p className="text-[11px] text-[#5f5f69]">{member.email}</p>
-                      </div>
-
-                      {/* Statut LinkedIn & Actions */}
-                      <div className="flex items-center gap-3 shrink-0">
-                        <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${getStatusColor(liStatus)}`}>
-                          {isConnected ? "LinkedIn ✓" : "LinkedIn non lié"}
-                        </span>
-
-                        {/* Quotas / Activité si connecté */}
-                        {isConnected && member.linkedInAccount && (
-                          <div className="hidden sm:flex items-center gap-3 text-xs text-[#5f5f69]">
-                            <span title="Invitations envoyées aujourd'hui" className="flex items-center gap-1">
-                              <Send className="w-3.5 h-3.5 text-[#592eff]" />
-                              {member.linkedInAccount.dailyInvitesSent}
-                            </span>
-                            <span title="Messages envoyés aujourd'hui" className="flex items-center gap-1">
-                              <MessageSquare className="w-3.5 h-3.5 text-[#592eff]" />
-                              {member.linkedInAccount.dailyMsgSent}
-                            </span>
-                          </div>
-                        )}
-
-                        {/* Sélecteur de rôle rapide (Réservé aux admins/owner et interdit sur l'owner ou soi-même) */}
-                        {canManageTeam && member.orgRole !== "OWNER" && member.id !== currentUser?.id && (
-                          <div className="hidden md:block">
-                            <select
-                              value={member.orgRole}
-                              disabled={updatingRoleId === member.id}
-                              onChange={(e) => handleUpdateRole(member.id, e.target.value as "ADMIN" | "MEMBER")}
-                              className="text-xs font-semibold px-2.5 py-1 rounded-xl bg-[#f8f9fc] border border-[#e0e0db] text-[#21164c] focus:outline-none focus:border-[#592eff] cursor-pointer"
-                            >
-                              <option value="MEMBER">Membre</option>
-                              <option value="ADMIN">Admin d'équipe</option>
-                            </select>
-                          </div>
-                        )}
-
-                        {/* Retirer le membre (Réservé aux admins/owner et interdit sur l'owner ou soi-même) */}
-                        {canManageTeam && member.orgRole !== "OWNER" && member.id !== currentUser?.id && (
-                          <button
-                            onClick={() => handleOpenRemoveMember(member.id, displayName)}
-                            disabled={removingId === member.id}
-                            className="p-2 rounded-xl text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer disabled:opacity-50"
-                            title="Retirer de l'équipe"
-                          >
-                            <LogOut className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <TableWrap className="rounded-none border-0">
+                <Table>
+                  <thead>
+                    <tr>
+                      <Th>Membre</Th>
+                      <Th>Rôle</Th>
+                      <Th>LinkedIn</Th>
+                      <Th className="text-right">Aujourd'hui</Th>
+                      <Th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {members.map((member) => {
+                      const displayName = member.name || `${member.firstName || ""} ${member.lastName || ""}`.trim() || member.email;
+                      const headline = member.linkedInAccount?.headline;
+                      const liStatus = member.linkedInAccount?.status || "DISCONNECTED";
+                      const isConnected = liStatus === "CONNECTED";
+                      const editable = canManageTeam && member.orgRole !== "OWNER" && member.id !== currentUser?.id;
+                      return (
+                        <Tr key={member.id}>
+                          <Td>
+                            <div className="flex items-center gap-3">
+                              {memberAvatar(member)}
+                              <div className="min-w-0">
+                                <p className="truncate font-medium text-ink">{displayName}</p>
+                                <p className="truncate text-xs text-muted">{isConnected && headline ? headline : member.email}</p>
+                              </div>
+                            </div>
+                          </Td>
+                          <Td>
+                            {editable ? (
+                              <Select
+                                inline
+                                size="sm"
+                                value={member.orgRole}
+                                disabled={updatingRoleId === member.id}
+                                onChange={(e) => handleUpdateRole(member.id, e.target.value as "ADMIN" | "MEMBER")}
+                                aria-label="Rôle"
+                              >
+                                <option value="MEMBER">Membre</option>
+                                <option value="ADMIN">Admin d'équipe</option>
+                              </Select>
+                            ) : (
+                              roleBadge(member.orgRole)
+                            )}
+                          </Td>
+                          <Td>
+                            <StatusDot tone={isConnected ? "ok" : liStatus === "SUSPENDED" ? "danger" : "warn"}>
+                              {isConnected ? "Connecté" : liStatus === "SUSPENDED" ? "Suspendu" : "Non lié"}
+                            </StatusDot>
+                          </Td>
+                          <Td className="whitespace-nowrap text-right tabular-nums text-muted">
+                            {isConnected && member.linkedInAccount
+                              ? `${member.linkedInAccount.dailyInvitesSent} inv. · ${member.linkedInAccount.dailyMsgSent} msg.`
+                              : "—"}
+                          </Td>
+                          <TdActions>
+                            {editable && (
+                              <IconButton
+                                label="Retirer de l'équipe"
+                                icon={LogOut}
+                                tone="danger"
+                                disabled={removingId === member.id}
+                                onClick={() => handleOpenRemoveMember(member.id, displayName)}
+                              />
+                            )}
+                          </TdActions>
+                        </Tr>
+                      );
+                    })}
+                  </tbody>
+                </Table>
+              </TableWrap>
             )}
-          </div>
+          </Card>
 
-          {/* Pending Invitations list (si existantes) */}
           {invitations.length > 0 && (
-            <div className="adora-card bg-white rounded-3xl shadow-sm border border-[#e0e0db]/60 overflow-hidden">
-              <div className="px-6 py-4 border-b border-[#e0e0db]/50 bg-[#f8f9fc]/50">
-                <h2 className="font-bold text-[#21164c] text-xs uppercase tracking-wider">Invitations en attente</h2>
+            <Card padding="none" className="overflow-hidden">
+              <div className="flex items-center justify-between border-b border-line px-5 py-4">
+                <h2 className="text-base font-semibold text-ink">Invitations en attente</h2>
+                <span className="text-xs tabular-nums text-muted">{invitations.length}</span>
               </div>
-              <div className="divide-y divide-[#e0e0db]/40">
+              <ul className="divide-y divide-line">
                 {invitations.map((inv) => (
-                  <div key={inv.id} className="px-6 py-4 flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0 text-amber-600">
-                      <Mail className="w-4 h-4" />
+                  <li key={inv.id} className="flex items-center gap-4 px-5 py-3">
+                    <Mail className="h-4 w-4 shrink-0 text-muted" strokeWidth={1.75} aria-hidden />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-ink">{inv.email}</p>
+                      <p className="text-xs text-muted">Expire le {new Date(inv.expiresAt).toLocaleDateString("fr-FR")}</p>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-bold text-[#21164c] text-xs">{inv.email}</p>
-                      <p className="text-[11px] text-[#5f5f69]">
-                        Expire le {new Date(inv.expiresAt).toLocaleDateString("fr-FR")}
-                      </p>
-                    </div>
-                    <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
+                    <Badge tone="warn" dot>
                       En attente
-                    </span>
-                    <button
-                      onClick={() => handleCancelInvitation(inv.id)}
-                      disabled={cancellingId === inv.id}
-                      className="p-2 rounded-xl text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer disabled:opacity-50"
-                      title="Annuler l'invitation"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
+                    </Badge>
+                    <IconButton label="Annuler l'invitation" icon={X} tone="danger" disabled={cancellingId === inv.id} onClick={() => handleCancelInvitation(inv.id)} />
+                  </li>
                 ))}
-              </div>
-            </div>
+              </ul>
+            </Card>
           )}
-        </>
-      )}
-
-      {/* ── MODALE AJOUTER UN MEMBRE ───────────────────────── */}
-      {showAddMemberModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: "rgba(33, 22, 76, 0.45)", backdropFilter: "blur(6px)" }}
-        >
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-[#e0e0db]/60 animate-fade-in">
-            {/* Modal Header */}
-            <div className="px-6 py-5 border-b border-[#e0e0db]/60 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-[#592eff]/10 text-[#592eff] flex items-center justify-center">
-                  <UserPlus className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-[#21164c] text-base">Inviter un membre</h3>
-                  <p className="text-[#5f5f69] text-[11px]">Une invitation sera envoyée directement par email.</p>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setShowAddMemberModal(false);
-                  setAddError(null);
-                }}
-                className="p-2 rounded-xl text-[#5f5f69] hover:text-[#21164c] hover:bg-[#f8f9fc] transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Modal Form */}
-            <form onSubmit={handleAddMember} className="p-6 space-y-4">
-              {addError && (
-                <div className="p-3 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span className="flex-1">{addError}</span>
-                </div>
-              )}
-
-              {/* Email professionnel */}
-              <div>
-                <label className="block text-xs font-bold text-[#21164c] uppercase tracking-wider mb-1.5">
-                  Email professionnel <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-[#5f5f69] absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="jean.dupont@entreprise.com"
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#f8f9fc] border border-[#e0e0db] text-[#21164c] text-xs focus:outline-none focus:border-[#592eff] focus:bg-white focus:ring-3 focus:ring-[#592eff]/10 transition-all font-medium"
-                  />
-                </div>
-              </div>
-
-              {/* Sélecteur de Rôle / Permissions (2 cartes radio) */}
-              <div>
-                <label className="block text-xs font-bold text-[#21164c] uppercase tracking-wider mb-1.5">
-                  Permissions & Rôle
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {/* Option Membre */}
-                  <div
-                    onClick={() => setOrgRole("MEMBER")}
-                    className={`p-3 rounded-2xl border-2 cursor-pointer transition-all ${
-                      orgRole === "MEMBER"
-                        ? "border-[#592eff] bg-[#592eff]/5 shadow-sm"
-                        : "border-[#e0e0db] bg-[#f8f9fc] hover:border-gray-300"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 mb-1">
-                      <UserIcon className={`w-4 h-4 ${orgRole === "MEMBER" ? "text-[#592eff]" : "text-[#5f5f69]"}`} />
-                      <span className="text-xs font-bold text-[#21164c]">Membre</span>
-                    </div>
-                    <p className="text-[11px] text-[#5f5f69] leading-snug">
-                      Gère ses prospects, ses campagnes et sa messagerie.
-                    </p>
-                  </div>
-
-                  {/* Option Admin */}
-                  <div
-                    onClick={() => setOrgRole("ADMIN")}
-                    className={`p-3 rounded-2xl border-2 cursor-pointer transition-all ${
-                      orgRole === "ADMIN"
-                        ? "border-[#592eff] bg-[#592eff]/5 shadow-sm"
-                        : "border-[#e0e0db] bg-[#f8f9fc] hover:border-gray-300"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 mb-1">
-                      <Shield className={`w-4 h-4 ${orgRole === "ADMIN" ? "text-[#592eff]" : "text-[#5f5f69]"}`} />
-                      <span className="text-xs font-bold text-[#21164c]">Admin d'équipe</span>
-                    </div>
-                    <p className="text-[11px] text-[#5f5f69] leading-snug">
-                      Peut également ajouter des membres et voir les métriques d'équipe.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Submit Button */}
-              <div className="pt-3">
-                <button
-                  type="submit"
-                  disabled={addLoading}
-                  className="w-full py-3 px-5 rounded-xl font-bold text-xs text-white shadow-lg shadow-[#592eff]/25 hover:shadow-[#592eff]/35 active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                  style={{ background: "linear-gradient(135deg, #592eff, #7c3aed)" }}
-                >
-                  {addLoading ? (
-                    <>
-                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      <span>Envoi en cours...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-4 h-4" />
-                      <span>Envoyer l'invitation</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
         </div>
       )}
+
+      <Modal
+        open={showAddMemberModal}
+        onClose={() => {
+          setShowAddMemberModal(false);
+          setAddError(null);
+        }}
+        title="Inviter un membre"
+        description="Une invitation lui sera envoyée par e-mail."
+        size="md"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowAddMemberModal(false)}>
+              Annuler
+            </Button>
+            <Button type="submit" form="invite-member-form" icon={Send} loading={addLoading}>
+              Envoyer l'invitation
+            </Button>
+          </>
+        }
+      >
+        <form id="invite-member-form" onSubmit={handleAddMember} className="space-y-4 pb-2">
+          {addError && <Callout tone="danger">{addError}</Callout>}
+          <Field label="E-mail professionnel" required>
+            <Input type="email" required autoFocus leftIcon={Mail} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="prenom.nom@entreprise.com" />
+          </Field>
+          <div>
+            <p className={labelClass}>Rôle</p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Rôle">
+              {[
+                { id: "MEMBER" as const, icon: UserIcon, label: "Membre", desc: "Gère ses prospects, ses campagnes et sa messagerie." },
+                { id: "ADMIN" as const, icon: Shield, label: "Admin d'équipe", desc: "Peut aussi inviter des membres et voir les métriques d'équipe." },
+              ].map((opt) => {
+                const Icon = opt.icon;
+                const selected = orgRole === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    onClick={() => setOrgRole(opt.id)}
+                    className={`rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                      selected ? "border-ink bg-surface-2" : "border-line hover:border-ink"
+                    }`}
+                  >
+                    <span className="mb-1 flex items-center gap-2 text-sm font-medium text-ink">
+                      <Icon className="h-4 w-4 text-muted" strokeWidth={1.75} aria-hidden />
+                      {opt.label}
+                    </span>
+                    <span className="block text-xs leading-snug text-muted">{opt.desc}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </form>
+      </Modal>
 
       {/* Modal de Confirmation de Retrait de Membre */}
       <ConfirmModal

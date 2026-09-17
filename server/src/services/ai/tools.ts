@@ -4,9 +4,9 @@ import { prisma } from "../../../../lib/prisma.js";
 import type { AuthenticatedUser } from "../../middlewares/auth.middleware.js";
 import { invokeController } from "./invokeController.js";
 import { searchProfiles } from "../../controllers/linkedin.controller.js";
-import { getLists, createList } from "../../controllers/list.controller.js";
+import { getLists, createList, updateList, deleteList } from "../../controllers/list.controller.js";
 import { bulkImportProspects } from "../../controllers/prospect.controller.js";
-import { createCampaign, getCampaigns } from "../../controllers/campaign.controller.js";
+import { createCampaign, getCampaigns, getCampaignDetails, updateCampaign } from "../../controllers/campaign.controller.js";
 import { CAMPAIGN_TEMPLATES, findCampaignTemplate } from "../../config/campaignTemplates.js";
 import { getQuotaSnapshot } from "../quota.service.js";
 import { getPlan, normalizePlanId } from "../../config/plans.js";
@@ -35,11 +35,31 @@ export interface DraftStep {
   messageText: string | null;
 }
 
+export type CampaignStatus = "DRAFT" | "ACTIVE" | "PAUSED" | "COMPLETED" | "ARCHIVED";
+
+export interface CampaignSummary {
+  id: string;
+  name: string;
+  status: CampaignStatus;
+  steps: DraftStep[];
+  prospectsCount: number;
+}
+
+/**
+ * Action sensible en attente du clic de l'utilisateur (jeton à usage unique, 10 min).
+ * `kind: "launch"` → lancement du brouillon ; `kind: "delete_list"` → suppression d'une liste.
+ */
+export type PendingConfirmation =
+  | { kind: "launch"; token: string; campaignId: string; expiresAt: string }
+  | { kind: "delete_list"; token: string; listId: string; listName: string; expiresAt: string };
+
 export interface AgentWorkspace {
   lastSearch?: { query: string; profiles: WorkspaceProfile[]; totalCount: number; excludedCount: number; at: string };
   currentList?: { id: string; name: string; prospectsCount: number };
   draft?: { campaignId: string; name: string; templateId?: string; steps: DraftStep[]; listIds: string[] };
-  pendingConfirmation?: { token: string; campaignId: string; expiresAt: string };
+  /** Campagne existante consultée ou modifiée en dernier (hors brouillon Bleadin IA). */
+  currentCampaign?: { id: string; name: string; status: CampaignStatus };
+  pendingConfirmation?: PendingConfirmation;
 }
 
 export type AgentCard =
@@ -51,6 +71,9 @@ export type AgentCard =
     }
   | { type: "confirm_launch"; token: string; campaignId: string; summary: { name: string; listName: string | null; prospectsCount: number; steps: DraftStep[] } }
   | { type: "launch_result"; campaignId: string; name: string; prospectsEnrolled: number }
+  | { type: "confirm_delete_list"; token: string; list: { id: string; name: string; prospectsCount: number } }
+  | { type: "action_result"; ok: boolean; title: string; detail?: string }
+  | { type: "campaign_steps"; campaign: CampaignSummary; changed?: number[] }
   | { type: "account_status"; connected: boolean; accountName: string | null; accountType: string | null; plan: string; quotas: Array<{ kind: string; label: string; usedToday: number; target: number; usedWeek: number; limitWeek: number; usedMonth: number; limitMonth: number }>; warmup: { active: boolean; dayIndex: number; totalDays: number } | null };
 
 export interface ToolContext {
@@ -68,6 +91,8 @@ export interface ToolOutcome {
 
 export interface AgentTool {
   name: string;
+  /** Noms approximatifs que les petits modèles inventent parfois pour cet outil. */
+  aliases?: string[];
   label: string;
   description: string;
   parameters: Record<string, unknown>;
@@ -139,6 +164,19 @@ const indexesSchema = z.preprocess((v) => {
   if (typeof v === "number") return [v];
   return "all";
 }, z.union([z.literal("all"), z.array(z.number().int())]));
+
+/** Les petits modèles envoient parfois un tableau encodé en chaîne JSON : on le décode avant validation. */
+const parseArrayIfString = (v: unknown) => {
+  if (typeof v !== "string") return v;
+  const t = v.trim();
+  if (!t.startsWith("[") && !t.startsWith("{")) return v;
+  try {
+    const parsed = JSON.parse(t);
+    return Array.isArray(parsed) ? parsed : [parsed];
+  } catch {
+    return v;
+  }
+};
 
 const stepsSchema = z
   .array(
@@ -401,7 +439,10 @@ const draftCampaign: AgentTool = {
   schema: z.object({
     name: z.preprocess((v) => String(v ?? "").trim(), z.string().min(1).max(120)),
     templateId: optionalText,
-    steps: z.preprocess((v) => (Array.isArray(v) && v.length ? v : undefined), stepsSchema.optional()),
+    steps: z.preprocess((v) => {
+      const arr = parseArrayIfString(v);
+      return Array.isArray(arr) && arr.length ? arr : undefined;
+    }, stepsSchema.optional()),
     listId: optionalText,
     listName: optionalText,
   }),
@@ -480,7 +521,7 @@ const requestLaunchConfirmation: AgentTool = {
         note: "Une carte de confirmation est affichée. Dis à l'utilisateur de cliquer sur « Confirmer le lancement » et n'appelle plus aucun outil.",
       },
       card: { type: "confirm_launch", token, campaignId: draft.campaignId, summary: { name: draft.name, listName: list.name, prospectsCount: list.prospectsCount, steps: draft.steps } },
-      workspacePatch: { pendingConfirmation: { token, campaignId: draft.campaignId, expiresAt } },
+      workspacePatch: { pendingConfirmation: { kind: "launch", token, campaignId: draft.campaignId, expiresAt } },
     };
   },
 };
@@ -578,16 +619,313 @@ const searchKnowledgeTool: AgentTool = {
   },
 };
 
+// ─── Listes : renommage et suppression ──────────────────────────────────────
+
+const listRefSchema = z.object({ listId: optionalText, listName: optionalText });
+
+/** Résout une liste par id, par nom, ou à défaut la liste courante. */
+async function resolveList(ctx: ToolContext, args: { listId?: string; listName?: string }) {
+  if (args.listId) return loadListSummary(ctx.user, args.listId);
+  if (args.listName) {
+    const byName = await findListByName(ctx.user, args.listName);
+    if (byName) return byName;
+    // Le modèle confond parfois le nom courant et le nouveau nom : on tolère la liste courante si elle correspond partiellement.
+    const wanted = args.listName.trim().toLowerCase();
+    if (ctx.workspace.currentList && ctx.workspace.currentList.name.toLowerCase().includes(wanted)) return loadListSummary(ctx.user, ctx.workspace.currentList.id);
+    return null;
+  }
+  return ctx.workspace.currentList ? loadListSummary(ctx.user, ctx.workspace.currentList.id) : null;
+}
+
+const renameProspectList: AgentTool = {
+  name: "rename_prospect_list",
+  aliases: ["update_prospect_list", "rename_list", "update_list", "edit_prospect_list"],
+  label: "Renommage d'une liste",
+  description: "Renomme une liste de prospects. listName = nom actuel (ou liste courante si omis), newName = nouveau nom.",
+  parameters: {
+    type: "object",
+    properties: {
+      listName: { type: "string", description: "Nom actuel de la liste (optionnel si liste courante)" },
+      newName: { type: "string", description: "Nouveau nom" },
+      description: { type: "string", description: "Nouvelle description (optionnel)" },
+    },
+    required: ["newName"],
+  },
+  schema: listRefSchema.extend({
+    newName: z.preprocess((v) => String(v ?? "").trim(), z.string().min(1).max(120)),
+    description: optionalText,
+  }),
+  async execute(ctx, args) {
+    const list = await resolveList(ctx, args);
+    if (!list) return fail(args.listName ? `Aucune liste nommée « ${args.listName} ».` : "Aucune liste sélectionnée : indique listName.");
+    const res = await invokeController<any>(updateList, ctx.user, { params: { id: list.id }, body: { name: args.newName, description: args.description } });
+    if (!res.body?.success) return fail(res.body?.error || "Impossible de renommer la liste.");
+    const updated = { id: list.id, name: res.body.list.name as string, prospectsCount: list.prospectsCount };
+    return {
+      ok: true,
+      result: { renamed: true, from: list.name, to: updated.name, note: "Confirme le renommage en une phrase." },
+      card: { type: "action_result", ok: true, title: `Liste renommée en « ${updated.name} »`, detail: `Ancien nom : « ${list.name} » · ${list.prospectsCount} prospect(s)` },
+      workspacePatch: { currentList: updated },
+    };
+  },
+};
+
+const deleteProspectList: AgentTool = {
+  name: "delete_prospect_list",
+  aliases: ["delete_list", "remove_prospect_list", "remove_list"],
+  label: "Demande de suppression d'une liste",
+  description:
+    "Demande la suppression d'une liste de prospects (listName = nom, ou liste courante si omis). Affiche une carte de confirmation : la suppression réelle n'a lieu qu'après le clic de l'utilisateur.",
+  parameters: {
+    type: "object",
+    properties: { listName: { type: "string", description: "Nom de la liste à supprimer" } },
+  },
+  schema: listRefSchema,
+  async execute(ctx, args) {
+    const list = await resolveList(ctx, args);
+    if (!list) return fail(args.listName ? `Aucune liste nommée « ${args.listName} ».` : "Aucune liste sélectionnée : indique listName.");
+    const token = crypto.randomBytes(16).toString("hex");
+    const expiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
+    return {
+      ok: true,
+      result: {
+        awaitingUserClick: true,
+        list,
+        note: "Une carte de confirmation est affichée. Préviens que les prospects de cette liste seront retirés avec elle et dis à l'utilisateur de cliquer sur « Supprimer ». N'appelle plus aucun outil.",
+      },
+      card: { type: "confirm_delete_list", token, list },
+      workspacePatch: { pendingConfirmation: { kind: "delete_list", token, listId: list.id, listName: list.name, expiresAt } },
+    };
+  },
+};
+
+/** Suppression réelle après clic (jeton vérifié). */
+export async function deleteListConfirmed(user: AuthenticatedUser, workspace: AgentWorkspace, token: string): Promise<ToolOutcome> {
+  const pending = workspace.pendingConfirmation;
+  if (!pending || pending.kind !== "delete_list") return fail("Aucune suppression en attente de confirmation.");
+  if (pending.token !== token) return fail("Jeton de confirmation invalide.");
+  if (new Date(pending.expiresAt).getTime() < Date.now()) return fail("La confirmation a expiré. Redemande la suppression.");
+
+  const res = await invokeController<any>(deleteList, user, { params: { id: pending.listId } });
+  if (!res.body?.success) return { ok: false, result: { error: res.body?.error || "La suppression a échoué.", actionDone: false }, workspacePatch: { pendingConfirmation: undefined } };
+
+  const patch: Partial<AgentWorkspace> = { pendingConfirmation: undefined };
+  if (workspace.currentList?.id === pending.listId) patch.currentList = undefined;
+  if (workspace.draft?.listIds?.includes(pending.listId)) patch.draft = { ...workspace.draft, listIds: workspace.draft.listIds.filter((id) => id !== pending.listId) };
+  return {
+    ok: true,
+    result: { deleted: true, listName: pending.listName, note: "Liste supprimée. Confirme-le en une phrase." },
+    card: { type: "action_result", ok: true, title: `Liste « ${pending.listName} » supprimée` },
+    workspacePatch: patch,
+  };
+}
+
+// ─── Campagnes existantes : lecture et modification des étapes/délais ───────
+
+const campaignRefSchema = z.object({ campaignId: optionalText, campaignName: optionalText });
+
+function toDraftSteps(steps: any[]): DraftStep[] {
+  return (steps || [])
+    .slice()
+    .sort((a, b) => Number(a.stepOrder) - Number(b.stepOrder))
+    .map((s, i) => ({ stepOrder: Number(s.stepOrder) || i + 1, actionType: s.actionType, delayDays: Number(s.delayDays) || 0, messageText: s.messageText ?? null }));
+}
+
+/** Résout une campagne par id, par nom (insensible à la casse, partiel toléré), sinon la campagne courante ou le brouillon. */
+async function resolveCampaign(ctx: ToolContext, args: { campaignId?: string; campaignName?: string }): Promise<{ campaign: CampaignSummary; stats: any } | { error: string }> {
+  let id = args.campaignId;
+  if (!id && args.campaignName) {
+    const res = await invokeController<any>(getCampaigns, ctx.user);
+    const all: any[] = res.body?.campaigns || [];
+    const wanted = args.campaignName.trim().toLowerCase();
+    const exact = all.find((c) => String(c.name).trim().toLowerCase() === wanted);
+    const partial = all.filter((c) => String(c.name).toLowerCase().includes(wanted));
+    if (!exact && partial.length > 1) {
+      return { error: `Plusieurs campagnes correspondent à « ${args.campaignName} » : ${partial.map((c) => c.name).join(", ")}. Précise le nom exact.` };
+    }
+    const found = exact || partial[0];
+    if (!found) return { error: `Aucune campagne nommée « ${args.campaignName} ». Campagnes existantes : ${all.slice(0, 10).map((c) => c.name).join(", ") || "aucune"}.` };
+    id = found.id;
+  }
+  if (!id) id = ctx.workspace.currentCampaign?.id || ctx.workspace.draft?.campaignId;
+  if (!id) return { error: "Indique campaignName (nom de la campagne)." };
+
+  const res = await invokeController<any>(getCampaignDetails, ctx.user, { params: { id } });
+  if (!res.body?.success) return { error: res.body?.error || "Campagne introuvable." };
+  const c = res.body.campaign;
+  return {
+    campaign: { id: c.id, name: c.name, status: c.status, steps: toDraftSteps(c.steps), prospectsCount: c.stats?.total ?? 0 },
+    stats: c.stats || {},
+  };
+}
+
+const getCampaignDetailsTool: AgentTool = {
+  name: "get_campaign_details",
+  aliases: ["get_campaign", "read_campaign", "get_campaign_steps", "get_campaign_messages"],
+  label: "Lecture d'une campagne",
+  description:
+    "Lit une campagne existante : étapes, délais, messages et statistiques. campaignName = nom de la campagne. À utiliser avant de proposer des améliorations de messages ou de délais.",
+  parameters: {
+    type: "object",
+    properties: { campaignName: { type: "string", description: "Nom de la campagne (optionnel si campagne courante)" } },
+  },
+  schema: campaignRefSchema,
+  async execute(ctx, args) {
+    const resolved = await resolveCampaign(ctx, args);
+    if ("error" in resolved) return fail(resolved.error);
+    const { campaign, stats } = resolved;
+    return {
+      ok: true,
+      result: {
+        campaign: { id: campaign.id, name: campaign.name, status: campaign.status, prospects: campaign.prospectsCount },
+        stats: { accepted: stats.accepted ?? 0, replied: stats.replied ?? 0, completed: stats.completed ?? 0, failed: stats.failed ?? 0, acceptanceRate: `${stats.acceptanceRate ?? 0}%`, replyRate: `${stats.replyRate ?? 0}%` },
+        steps: campaign.steps.map((s) => ({ step: s.stepOrder, action: s.actionType, delayDays: s.delayDays, message: s.messageText })),
+        note: "Les étapes sont affichées dans une carte. Analyse les messages et les délais, puis propose des améliorations concrètes (texte réécrit, nouveau délai) en expliquant pourquoi. Ne modifie rien sans l'accord de l'utilisateur.",
+      },
+      card: { type: "campaign_steps", campaign },
+      workspacePatch: { currentCampaign: { id: campaign.id, name: campaign.name, status: campaign.status } },
+    };
+  },
+};
+
+const stepPatchSchema = z.preprocess(
+  parseArrayIfString,
+  z
+    .array(
+      z.object({
+        stepOrder: coerceInt(1, 20, 1),
+        delayDays: z.preprocess((v) => (v === undefined || v === null || v === "" ? undefined : v), coerceInt(0, 60, 0).optional()),
+        messageText: z.preprocess((v) => (v === undefined || v === null ? undefined : String(v)), z.string().optional()),
+      })
+    )
+    .min(1)
+    .max(20)
+);
+
+type StepPatch = { stepOrder: number; delayDays?: number; messageText?: string };
+
+const updateCampaignStepsTool: AgentTool = {
+  name: "update_campaign_steps",
+  aliases: ["update_campaign", "edit_campaign", "update_campaign_step", "update_campaign_messages", "update_campaign_delays", "edit_campaign_steps"],
+  label: "Modification des étapes d'une campagne",
+  description:
+    "Modifie le message et/ou le délai d'une ou plusieurs étapes d'une campagne existante (brouillon, active ou en pause). steps = liste de {stepOrder, messageText?, delayDays?} ; seules les valeurs fournies changent. campaignName = nom de la campagne (optionnel si campagne courante).",
+  parameters: {
+    type: "object",
+    properties: {
+      campaignName: { type: "string", description: "Nom de la campagne (optionnel si campagne courante)" },
+      steps: {
+        type: "array",
+        description: "Étapes à modifier. Ex: [{\"stepOrder\": 2, \"delayDays\": 3}, {\"stepOrder\": 3, \"messageText\": \"Bonjour {{firstName}}…\"}]",
+        items: {
+          type: "object",
+          properties: {
+            stepOrder: { type: "integer", description: "Numéro de l'étape (1 = première)" },
+            delayDays: { type: "integer", description: "Nouveau délai en jours depuis l'étape précédente" },
+            messageText: { type: "string", description: "Nouveau texte du message" },
+          },
+          required: ["stepOrder"],
+        },
+      },
+    },
+    required: ["steps"],
+  },
+  schema: campaignRefSchema.extend({ steps: stepPatchSchema }),
+  async execute(ctx, args) {
+    const resolved = await resolveCampaign(ctx, args);
+    if ("error" in resolved) return fail(resolved.error);
+    return applyCampaignStepPatches(ctx.user, ctx.workspace, resolved.campaign, args.steps as StepPatch[]);
+  },
+};
+
+/**
+ * Applique des modifications partielles d'étapes à une campagne (partagé entre l'outil et l'édition inline).
+ * Brouillon Bleadin IA → re-soumission complète via createCampaign (même chemin que le wizard) ;
+ * autre campagne → updateCampaign, qui resynchronise aussi les actions déjà en file d'attente.
+ */
+export async function applyCampaignStepPatches(user: AuthenticatedUser, workspace: AgentWorkspace, campaign: CampaignSummary, patches: StepPatch[]): Promise<ToolOutcome> {
+  const steps = campaign.steps.map((s) => ({ ...s }));
+  const changed: number[] = [];
+  for (const patch of patches) {
+    const step = steps.find((s) => s.stepOrder === patch.stepOrder);
+    if (!step) return fail(`L'étape ${patch.stepOrder} n'existe pas : la campagne « ${campaign.name} » compte ${steps.length} étape(s).`);
+    if (patch.messageText !== undefined) {
+      if (!["INVITATION", "MESSAGE"].includes(step.actionType)) return fail(`L'étape ${patch.stepOrder} (${step.actionType}) n'a pas de message.`);
+      step.messageText = patch.messageText;
+    }
+    if (patch.delayDays !== undefined) step.delayDays = patch.delayDays;
+    changed.push(step.stepOrder);
+  }
+  if (changed.length === 0) return fail("Aucune modification fournie.");
+  const validationError = validateStepMessages(steps);
+  if (validationError) return fail(validationError);
+
+  const isOwnDraft = workspace.draft?.campaignId === campaign.id;
+  if (isOwnDraft && workspace.draft) {
+    const res = await invokeController<any>(createCampaign, user, {
+      body: { id: campaign.id, name: workspace.draft.name, type: workspace.draft.templateId || "CUSTOM", listIds: [], steps, startImmediately: false },
+    });
+    if (!res.body?.success) return fail(res.body?.error || "Impossible de mettre à jour le brouillon.");
+  } else {
+    const res = await invokeController<any>(updateCampaign, user, {
+      params: { id: campaign.id },
+      body: { steps: steps.map((s) => ({ stepOrder: s.stepOrder, actionType: s.actionType, delayDays: s.delayDays, messageText: s.messageText })) },
+    });
+    if (!res.body?.success) return fail(res.body?.error || "Impossible de modifier la campagne.");
+  }
+
+  const updated: CampaignSummary = { ...campaign, steps };
+  const patch: Partial<AgentWorkspace> = { currentCampaign: { id: campaign.id, name: campaign.name, status: campaign.status } };
+  if (isOwnDraft && workspace.draft) patch.draft = { ...workspace.draft, steps };
+  return {
+    ok: true,
+    result: {
+      updated: true,
+      campaign: campaign.name,
+      changedSteps: changed,
+      steps: steps.map((s) => ({ step: s.stepOrder, action: s.actionType, delayDays: s.delayDays, message: s.messageText })),
+      note:
+        campaign.status === "ACTIVE"
+          ? "Modifications appliquées ; les actions déjà planifiées sont resynchronisées. Résume ce qui a changé."
+          : "Modifications enregistrées. Résume ce qui a changé.",
+    },
+    card: { type: "campaign_steps", campaign: updated, changed },
+    workspacePatch: patch,
+  };
+}
+
+/** Édition inline depuis la carte d'une campagne existante (clic utilisateur, hors modèle). */
+export async function updateCampaignStepsFromUi(user: AuthenticatedUser, workspace: AgentWorkspace, campaignId: string, rawSteps: unknown): Promise<ToolOutcome> {
+  const parsed = stepPatchSchema.safeParse(rawSteps);
+  if (!parsed.success) return fail("Étapes invalides.");
+  const resolved = await resolveCampaign({ user, workspace }, { campaignId });
+  if ("error" in resolved) return fail(resolved.error);
+  return applyCampaignStepPatches(user, workspace, resolved.campaign, parsed.data as StepPatch[]);
+}
+
+/** Dispatch d'un clic de confirmation selon l'action en attente. */
+export async function executeConfirmedAction(user: AuthenticatedUser, workspace: AgentWorkspace, token: string): Promise<{ name: string; label: string; userText: string; outcome: ToolOutcome }> {
+  const pending = workspace.pendingConfirmation;
+  if (pending?.kind === "delete_list") {
+    return { name: "delete_list", label: "Suppression de la liste", userText: "J'ai cliqué sur « Supprimer la liste ».", outcome: await deleteListConfirmed(user, workspace, token) };
+  }
+  return { name: "launch_campaign", label: "Lancement de la campagne", userText: "J'ai cliqué sur « Confirmer le lancement ».", outcome: await launchDraftCampaign(user, workspace, token) };
+}
+
 export const AGENT_TOOLS: AgentTool[] = [
   searchLinkedinProfiles,
   getProspectLists,
   createProspectList,
   addSearchResultsToList,
+  renameProspectList,
+  deleteProspectList,
   getCampaignTemplates,
   draftCampaign,
   requestLaunchConfirmation,
-  getAccountStatus,
   getCampaignsOverview,
+  getCampaignDetailsTool,
+  updateCampaignStepsTool,
+  getAccountStatus,
   searchKnowledgeTool,
 ];
 
@@ -595,7 +933,7 @@ export const TOOL_DEFINITIONS: ChatToolDefinition[] = AGENT_TOOLS.map((t) => ({ 
 
 export function findTool(name: string): AgentTool | undefined {
   const wanted = name.trim().toLowerCase();
-  return AGENT_TOOLS.find((t) => t.name === wanted);
+  return AGENT_TOOLS.find((t) => t.name === wanted) || AGENT_TOOLS.find((t) => t.aliases?.includes(wanted));
 }
 
 // ─── Actions hors modèle (clics utilisateur) ────────────────────────────────
@@ -604,7 +942,7 @@ export function findTool(name: string): AgentTool | undefined {
 export async function launchDraftCampaign(user: AuthenticatedUser, workspace: AgentWorkspace, token: string): Promise<ToolOutcome> {
   const pending = workspace.pendingConfirmation;
   const draft = workspace.draft;
-  if (!pending || !draft || pending.campaignId !== draft.campaignId) return fail("Aucun lancement en attente de confirmation.");
+  if (!pending || pending.kind !== "launch" || !draft || pending.campaignId !== draft.campaignId) return fail("Aucun lancement en attente de confirmation.");
   if (pending.token !== token) return fail("Jeton de confirmation invalide.");
   if (new Date(pending.expiresAt).getTime() < Date.now()) return fail("La confirmation a expiré. Redemande le lancement.");
 

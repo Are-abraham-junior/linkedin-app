@@ -20,7 +20,7 @@ export const BLEADIN_APP_DOC = {
 
 Bleadin est une plateforme SaaS de prospection LinkedIn automatisée. Elle se connecte au compte LinkedIn de l'utilisateur (via un partenaire technique, Unipile) pour rechercher des profils, gérer des listes de prospects, lancer des séquences d'actions (visites de profil, follows, invitations, messages) et centraliser la messagerie LinkedIn.
 
-Bleadin IA est l'assistant intégré : il agit comme un expert en prospection LinkedIn. Il peut chercher des profils, créer des listes, y ajouter des profils, proposer une séquence de campagne, rédiger les messages et préparer le lancement. **Le lancement réel d'une campagne exige toujours une confirmation explicite de l'utilisateur (clic sur le bouton de confirmation).**
+Bleadin IA est l'assistant intégré : il agit comme un expert en prospection LinkedIn. Il peut chercher des profils, créer, renommer et supprimer des listes, y ajouter des profils, proposer une séquence de campagne, rédiger les messages, lire une campagne existante (étapes, messages, délais, statistiques), modifier ses messages et ses délais (brouillon, active ou en pause), conseiller une stratégie de prospection et préparer le lancement. **Le lancement d'une campagne et la suppression d'une liste exigent toujours une confirmation explicite de l'utilisateur (clic sur le bouton de la carte).** Il ne peut pas : supprimer une campagne, envoyer un message immédiat hors campagne, connecter le compte LinkedIn, ni modifier l'offre ou la facturation.
 
 ## Menus de l'application
 - **Tableau de bord** : indicateurs (invitations envoyées, acceptées, messages, réponses), activité récente.
@@ -31,6 +31,20 @@ Bleadin IA est l'assistant intégré : il agit comme un expert en prospection Li
 - **Équipe** : membres de l'organisation (OWNER / ADMIN / MEMBER).
 - **Paramètres** : compte, connexion LinkedIn, heures et jours de travail, fuseau horaire, imports, intégrations (Brevo, HubSpot, Google Sheets), clés API, facturation.
 - **Bleadin IA** : le chat avec l'assistant (réservé aux offres Pro et Business).
+
+## Chemins dans l'application (pour guider l'utilisateur pas à pas)
+Quand l'utilisateur veut faire quelque chose lui-même, décrire ces clics (jamais des noms techniques) :
+- Chercher des prospects sur LinkedIn : **Contacts & Prospects → bouton « Importer des prospects » → onglet « Recherche LinkedIn »** → saisir le poste, le lieu, les mots-clés → « Rechercher » → cocher les profils → bouton « Importer (N profils) » en choisissant la liste (nouvelle ou existante).
+- Importer un fichier : **Contacts & Prospects → « Importer des prospects » → onglet « Fichier CSV / Excel »**.
+- Créer, renommer ou supprimer une liste : **Contacts & Prospects → panneau des listes** (menu de la liste : « Renommer la liste » / « Supprimer »).
+- Créer une campagne : **Campagnes → « Nouvelle campagne »** → 1) choisir un modèle de séquence → 2) choisir la ou les listes → 3) relire et personnaliser les messages et les délais → 4) « Sauvegarder » (brouillon, retrouvable dans l'onglet « Brouillons ») ou « Lancer la campagne ».
+- Modifier les messages ou les délais d'une campagne existante : **Campagnes → ouvrir la campagne → « Éditer la séquence »**.
+- Mettre en pause / reprendre : **Campagnes → bouton pause/lecture sur la campagne**.
+- Connecter LinkedIn : **Paramètres → onglet « LinkedIn & Connexions » → « Connecter mon compte »**.
+- Heures et jours d'envoi, fuseau horaire : **Paramètres → onglet « Mon Compte »** (section heures et jours de travail).
+- Voir les quotas : **Tableau de bord** (jauges) ou demander à Bleadin IA.
+- Répondre à un prospect : **Messagerie (Inbox)**.
+Alternative toujours proposée : Bleadin IA peut faire lui-même la recherche, la liste, la séquence et la préparation du lancement ; l'utilisateur n'a plus qu'à valider.
 
 ## Prospects et listes
 - Un prospect = une personne LinkedIn (prénom, nom, titre, entreprise, localisation, URL LinkedIn, statut de connexion NOT_CONNECTED / PENDING / CONNECTED).

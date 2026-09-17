@@ -1,5 +1,6 @@
 import React from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { NavLink, Link } from "react-router-dom";
+import clsx from "clsx";
 import { useAuth } from "../../context/AuthContext";
 import {
   LayoutDashboard,
@@ -8,18 +9,21 @@ import {
   Contact,
   MessageSquare,
   Send,
-  UserCheck,
   LogOut,
   ChevronLeft,
   ChevronRight,
   Sparkles,
   X,
-  Layers,
   Settings,
   FileBarChart,
   SlidersHorizontal,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { normalizePlanId } from "../../marketing/content/plans";
+import { Avatar } from "../ui/Avatar";
+import { Badge } from "../ui/Badge";
+import { IconButton } from "../ui/IconButton";
+import { Tooltip } from "../ui/Tooltip";
 
 interface SidebarProps {
   isCollapsed: boolean;
@@ -33,7 +37,7 @@ interface NavItem {
   id: string;
   label: string;
   path: string;
-  icon: React.FC<{ className?: string }>;
+  icon: LucideIcon;
   badge?: string;
   exact?: boolean;
 }
@@ -43,15 +47,17 @@ interface NavSection {
   items: NavItem[];
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({
-  isCollapsed,
-  onToggle,
-  isMobileOpen,
-  onMobileClose,
-  onOpenProfile,
-}) => {
-  const location = useLocation();
-  const navigate = useNavigate();
+const LogoMark: React.FC = () => (
+  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent text-white" aria-hidden>
+    <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2a10 10 0 1 0 10 10" />
+      <path d="M12 6a6 6 0 1 0 6 6" />
+      <path d="M12 10a2 2 0 1 0 2 2" />
+    </svg>
+  </span>
+);
+
+export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle, isMobileOpen, onMobileClose }) => {
   const { user, logout, impersonatedOrg } = useAuth();
 
   if (!user) return null;
@@ -59,368 +65,172 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const isSuperAdmin = user.role === "SUPER_ADMIN";
   const aiPlanAllowed = isSuperAdmin || ["PRO", "BUSINESS"].includes(normalizePlanId(user.organization?.plan));
 
-  // Construction des menus BLEADIN par catégories
   const navSections: NavSection[] = [
     {
       category: "Pilotage",
       items: [
         ...(isSuperAdmin
           ? [
-              {
-                id: "admin-hub",
-                label: "Plateforme Hub",
-                path: "/admin",
-                icon: ShieldAlert,
-                exact: true,
-              },
-              {
-                id: "admin-users",
-                label: "Utilisateurs",
-                path: "/admin/users",
-                icon: Users,
-              },
-              {
-                id: "admin-settings",
-                label: "Paramètres plateforme",
-                path: "/admin/settings",
-                icon: SlidersHorizontal,
-              },
+              { id: "admin-hub", label: "Plateforme Hub", path: "/admin", icon: ShieldAlert, exact: true },
+              { id: "admin-users", label: "Utilisateurs", path: "/admin/users", icon: Users },
+              { id: "admin-settings", label: "Paramètres plateforme", path: "/admin/settings", icon: SlidersHorizontal },
             ]
           : []),
-        {
-          id: "dashboard",
-          label: "Tableau de bord",
-          path: "/dashboard",
-          icon: LayoutDashboard,
-        },
+        { id: "dashboard", label: "Tableau de bord", path: "/dashboard", icon: LayoutDashboard },
       ],
     },
     {
       category: "Assistant",
-      items: [
-        {
-          id: "bleadin-ia",
-          label: "Bleadin IA",
-          path: "/bleadin-ia",
-          icon: Sparkles,
-          badge: aiPlanAllowed ? undefined : "Pro",
-        },
-      ],
+      items: [{ id: "bleadin-ia", label: "Bleadin IA", path: "/bleadin-ia", icon: Sparkles, badge: aiPlanAllowed ? undefined : "Pro" }],
     },
     {
       category: "Contacts",
       items: [
-        {
-          id: "prospects",
-          label: "Contacts & Prospects",
-          path: "/prospects",
-          icon: Contact,
-        },
-        {
-          id: "inbox",
-          label: "Messagerie (Inbox)",
-          path: "/inbox",
-          icon: MessageSquare,
-        },
+        { id: "prospects", label: "Contacts & Prospects", path: "/prospects", icon: Contact },
+        { id: "inbox", label: "Messagerie", path: "/inbox", icon: MessageSquare },
       ],
     },
     {
       category: "Campagnes",
       items: [
-        {
-          id: "campaigns",
-          label: "Campagnes",
-          path: "/campaigns",
-          icon: Send,
-        },
-        {
-          id: "reports",
-          label: "Rapports",
-          path: "/reports",
-          icon: FileBarChart,
-        },
+        { id: "campaigns", label: "Campagnes", path: "/campaigns", icon: Send },
+        { id: "reports", label: "Rapports", path: "/reports", icon: FileBarChart },
       ],
     },
-    // Section Organisation (visible pour tous les membres ou en supervision)
     ...(isSuperAdmin && !impersonatedOrg
       ? []
-      : [
-          {
-            category: "Organisation",
-            items: [
-              {
-                id: "team",
-                label: "Équipe & Rôles",
-                path: "/team",
-                icon: Users,
-              },
-            ],
-          },
-        ]),
+      : [{ category: "Organisation", items: [{ id: "team", label: "Équipe & Rôles", path: "/team", icon: Users }] }]),
     {
       category: "Configuration",
-      items: [
-        {
-          id: "settings",
-          label: "Paramètres",
-          path: "/settings",
-          icon: Settings,
-        },
-      ],
+      items: [{ id: "settings", label: "Paramètres", path: "/settings", icon: Settings }],
     },
   ];
 
-  const handleNavigate = (path: string) => {
-    navigate(path);
-    if (isMobileOpen) {
-      onMobileClose();
-    }
+  const closeMobile = () => {
+    if (isMobileOpen) onMobileClose();
   };
 
-  const isItemActive = (item: NavItem) => {
-    if (item.exact) {
-      return location.pathname === item.path;
-    }
-    return location.pathname.startsWith(item.path);
-  };
+  const orgLabel = isSuperAdmin
+    ? impersonatedOrg
+      ? `Super Admin · ${impersonatedOrg.name}`
+      : "Super Admin"
+    : user.organization?.name || "Membre";
 
   const sidebarContent = (
     <aside
-      className={`flex flex-col h-full bg-white border-r border-[#e0e0db] transition-all duration-300 select-none overflow-hidden ${
-        isCollapsed ? "w-[76px]" : "w-[260px]"
-      }`}
+      className={clsx(
+        "flex h-full select-none flex-col overflow-hidden border-r border-line bg-surface transition-[width] duration-200",
+        isCollapsed ? "w-[72px]" : "w-[260px]",
+      )}
     >
-      {/* Header de la Sidebar : Logo + Titre + Bouton Rétractable */}
-      <div
-        className={`flex items-center justify-between px-4 py-4 border-b border-[#e0e0db]/70 shrink-0 ${
-          isCollapsed ? "flex-col gap-3 px-2 py-3" : ""
-        }`}
-      >
-        <div
-          onClick={() => handleNavigate(isSuperAdmin ? "/admin" : "/dashboard")}
-          className={`flex items-center gap-2.5 cursor-pointer group ${
-            isCollapsed ? "justify-center" : ""
-          }`}
+      {/* Marque + bascule */}
+      <div className={clsx("flex h-14 shrink-0 items-center border-b border-line", isCollapsed ? "justify-center px-2" : "justify-between px-4")}>
+        <Link
+          to={isSuperAdmin ? "/admin" : "/dashboard"}
+          onClick={closeMobile}
+          className="flex min-w-0 items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           title="Bleadin"
         >
-          {/* Logo BLEADIN */}
-          <div className="w-9 h-9 rounded-2xl bg-[#592eff] flex items-center justify-center text-white shadow-md shadow-[#592eff]/30 group-hover:scale-105 transition-transform shrink-0">
-            <svg
-              className="w-5 h-5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 2a10 10 0 1 0 10 10" />
-              <path d="M12 6a6 6 0 1 0 6 6" />
-              <path d="M12 10a2 2 0 1 0 2 2" />
-            </svg>
-          </div>
-
-          {/* Titre si non rétracté */}
+          <LogoMark />
           {!isCollapsed && (
-            <div className="flex items-center gap-1.5 overflow-hidden">
-              <span className="font-extrabold text-base text-[#21164c] tracking-wider truncate">
-                Bleadin
-              </span>
-              {isSuperAdmin && (
-                <span className="bg-[#592eff]/10 text-[#592eff] border border-[#592eff]/20 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full uppercase tracking-wider">
-                  Super Admin
-                </span>
-              )}
-            </div>
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="truncate text-base font-semibold text-ink">Bleadin</span>
+              {isSuperAdmin && <Badge size="sm">Super Admin</Badge>}
+            </span>
           )}
-        </div>
-
-        {/* Bouton de bascule compact/développé (Desktop) */}
-        <button
-          type="button"
-          onClick={onToggle}
-          className="hidden lg:flex w-7 h-7 rounded-xl items-center justify-center text-[#5f5f69] hover:text-[#592eff] hover:bg-[#f5f5f7] border border-transparent hover:border-[#e0e0db] transition-all cursor-pointer"
-          title={isCollapsed ? "Agrandir le menu" : "Réduire le menu"}
-        >
-          {isCollapsed ? (
-            <ChevronRight className="w-4 h-4" />
-          ) : (
-            <ChevronLeft className="w-4 h-4" />
-          )}
-        </button>
-
-        {/* Bouton Fermer sur Mobile */}
-        <button
-          type="button"
-          onClick={onMobileClose}
-          className="lg:hidden w-8 h-8 rounded-xl flex items-center justify-center text-[#5f5f69] hover:bg-[#f5f5f7] cursor-pointer"
-        >
-          <X className="w-5 h-5" />
-        </button>
+        </Link>
+        {!isCollapsed && (
+          <IconButton
+            label={isCollapsed ? "Agrandir le menu" : "Réduire le menu"}
+            icon={ChevronLeft}
+            onClick={onToggle}
+            className="hidden lg:inline-flex"
+          />
+        )}
+        <IconButton label="Fermer le menu" icon={X} onClick={onMobileClose} className="lg:hidden" />
       </div>
 
-      {/* Navigation principale par catégories */}
-      <nav
-        className={`flex-1 overflow-y-auto overflow-x-hidden no-scrollbar ${
-          isCollapsed ? "px-2 py-2.5 space-y-2" : "px-3 py-4 space-y-4"
-        }`}
-      >
+      {isCollapsed && (
+        <div className="hidden justify-center py-2 lg:flex">
+          <IconButton label="Agrandir le menu" icon={ChevronRight} onClick={onToggle} />
+        </div>
+      )}
+
+      {/* Navigation */}
+      <nav className={clsx("no-scrollbar flex-1 overflow-y-auto overflow-x-hidden", isCollapsed ? "space-y-3 px-3 py-2" : "space-y-5 px-3 py-4")}>
         {navSections.map((section) => (
-          <div key={section.category} className="space-y-1">
-            {/* Titre de catégorie */}
+          <div key={section.category} className="space-y-0.5">
             {!isCollapsed ? (
-              <p className="px-3 text-[10px] font-extrabold uppercase tracking-widest text-[#5f5f69]/80 mb-1.5">
-                {section.category}
-              </p>
+              <p className="mb-1.5 px-3 text-xs font-medium text-muted">{section.category}</p>
             ) : (
-              <div className="w-full flex justify-center py-0.5">
-                <div className="w-5 h-[1px] bg-[#e0e0db]" />
-              </div>
+              <div className="mx-auto mb-1.5 h-px w-6 bg-line" />
             )}
 
-            {/* Liens de la catégorie */}
-            <div className={`space-y-1 ${isCollapsed ? "flex flex-col items-center" : ""}`}>
-              {section.items.map((item) => {
-                const active = isItemActive(item);
-                const IconComponent = item.icon;
-
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => handleNavigate(item.path)}
-                    title={isCollapsed ? item.label : undefined}
-                    className={`group relative flex items-center transition-all duration-150 cursor-pointer ${
-                      isCollapsed
-                        ? "justify-center w-11 h-11 p-0 rounded-2xl mx-auto shrink-0"
-                        : "w-full gap-3 px-3.5 py-2.5 rounded-2xl text-left"
-                    } ${
-                      active
-                        ? "bg-[#592eff] text-white font-bold shadow-md shadow-[#592eff]/25"
-                        : "text-[#353241] hover:text-[#592eff] hover:bg-[#f5f5f7] font-semibold"
-                    }`}
-                  >
-                    <IconComponent
-                      className={`w-4 h-4 shrink-0 transition-transform group-hover:scale-110 ${
-                        active ? "text-white" : "text-[#5f5f69] group-hover:text-[#592eff]"
-                      }`}
-                    />
-
-                    {!isCollapsed && (
-                      <span className="text-xs truncate flex-1">{item.label}</span>
-                    )}
-                    {!isCollapsed && item.badge && (
-                      <span
-                        className={`text-[9px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded-full border ${
-                          active ? "bg-white/15 border-white/30 text-white" : "bg-[#592eff]/10 border-[#592eff]/20 text-[#592eff]"
-                        }`}
-                      >
-                        {item.badge}
-                      </span>
-                    )}
-
-                    {/* Tooltip flottant en mode compact */}
-                    {isCollapsed && (
-                      <div className="absolute left-full ml-3 px-2.5 py-1 bg-[#21164c] text-white text-xs font-semibold rounded-lg shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap">
-                        {item.label}
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+            {section.items.map((item) => {
+              const Icon = item.icon;
+              const link = (
+                <NavLink
+                  key={item.id}
+                  to={item.path}
+                  end={item.exact}
+                  onClick={closeMobile}
+                  className={({ isActive }) =>
+                    clsx(
+                      "group flex items-center rounded-lg text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                      isCollapsed ? "h-9 w-9 justify-center" : "h-9 w-full gap-3 px-3",
+                      isActive
+                        ? "bg-accent-soft font-medium text-ink [&>svg]:text-accent"
+                        : "text-ink-2 hover:bg-surface-2 hover:text-ink [&>svg]:text-muted",
+                    )
+                  }
+                >
+                  <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+                  {!isCollapsed && <span className="flex-1 truncate">{item.label}</span>}
+                  {!isCollapsed && item.badge && (
+                    <Badge tone="accent" size="sm">
+                      {item.badge}
+                    </Badge>
+                  )}
+                </NavLink>
+              );
+              return isCollapsed ? (
+                <Tooltip key={item.id} label={item.label} className="w-full justify-center">
+                  {link}
+                </Tooltip>
+              ) : (
+                link
+              );
+            })}
           </div>
         ))}
       </nav>
 
-      {/* Carte Profil Utilisateur ancrée en bas */}
-      <div className={`border-t border-[#e0e0db]/70 shrink-0 bg-white ${isCollapsed ? "p-2" : "p-3"}`}>
+      {/* Profil */}
+      <div className={clsx("shrink-0 border-t border-line", isCollapsed ? "p-2" : "p-3")}>
         {!isCollapsed ? (
-          <div className="p-2.5 rounded-2xl bg-[#f8f9fc] border border-[#e0e0db]/80 flex items-center justify-between gap-2">
-            {/* Utilisateur connecté & profil */}
-            <div
-              onClick={() => handleNavigate("/settings")}
-              className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer group"
-              title="Accéder aux Paramètres"
+          <div className="flex items-center gap-1">
+            <Link
+              to="/settings"
+              onClick={closeMobile}
+              className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg p-1.5 transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              title="Paramètres & profil"
             >
-              {/* Photo de profil */}
-              <img
-                src={
-                  user.avatarUrl ||
-                  `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                    user.name || user.email
-                  )}&background=592eff&color=fff`
-                }
-                alt={user.name || user.email}
-                className="w-8 h-8 rounded-full object-cover border border-[#592eff]/30 shrink-0 group-hover:ring-2 group-hover:ring-[#592eff]/40 transition-all"
-              />
-              {/* Infos */}
-              <div className="truncate text-left">
-                <p className="text-xs font-bold text-[#21164c] group-hover:text-[#592eff] transition-colors truncate">
-                  {user.name || user.email.split("@")[0]}
-                </p>
-                <p className="text-[10px] text-[#5f5f69] font-medium truncate">
-                  {isSuperAdmin
-                    ? impersonatedOrg
-                      ? `Super Admin · ${impersonatedOrg.name}`
-                      : "Super Admin"
-                    : user.organization?.name || "Membre"}
-                </p>
-              </div>
-            </div>
-
-            {/* Actions rapides profil & déconnexion */}
-            <div className="flex items-center gap-1 shrink-0">
-              <button
-                type="button"
-                onClick={() => handleNavigate("/settings")}
-                className="p-1.5 rounded-lg text-[#5f5f69] hover:text-[#592eff] hover:bg-white transition-colors cursor-pointer"
-                title="Paramètres & Profil"
-              >
-                <Settings className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={logout}
-                className="p-1.5 rounded-lg text-[#5f5f69] hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                title="Se déconnecter"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-              </button>
-            </div>
+              <Avatar name={user.name || user.email} src={user.avatarUrl} size="md" />
+              <span className="min-w-0 text-left">
+                <span className="block truncate text-sm font-medium text-ink">{user.name || user.email.split("@")[0]}</span>
+                <span className="block truncate text-xs text-muted">{orgLabel}</span>
+              </span>
+            </Link>
+            <IconButton label="Se déconnecter" icon={LogOut} tone="danger" onClick={logout} />
           </div>
         ) : (
-          /* Mode compact : icône avatar avec actions au survol */
-          <div className="flex flex-col items-center gap-2">
-            <button
-              type="button"
-              onClick={() => handleNavigate("/settings")}
-              className="relative group p-1 rounded-2xl hover:ring-2 hover:ring-[#592eff]/30 transition-all cursor-pointer"
-              title="Paramètres"
-            >
-              <img
-                src={
-                  user.avatarUrl ||
-                  `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                    user.name || user.email
-                  )}&background=592eff&color=fff`
-                }
-                alt={user.name || user.email}
-                className="w-8 h-8 rounded-full object-cover border border-[#592eff]/30"
-              />
-              <div className="absolute left-full ml-3 px-2.5 py-1 bg-[#21164c] text-white text-xs font-semibold rounded-lg shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap">
-                {user.name || user.email}
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={logout}
-              className="w-8 h-8 rounded-xl flex items-center justify-center text-[#5f5f69] hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-              title="Se déconnecter"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
+          <div className="flex flex-col items-center gap-1">
+            <Tooltip label={user.name || user.email}>
+              <Link to="/settings" onClick={closeMobile} className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+                <Avatar name={user.name || user.email} src={user.avatarUrl} size="md" />
+              </Link>
+            </Tooltip>
+            <IconButton label="Se déconnecter" icon={LogOut} tone="danger" onClick={logout} />
           </div>
         )}
       </div>
@@ -429,23 +239,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      {/* Affichage Desktop fixe */}
-      <div className="hidden lg:block shrink-0 h-screen sticky top-0 z-30 overflow-hidden">
-        {sidebarContent}
-      </div>
+      <div className="sticky top-0 z-30 hidden h-screen shrink-0 overflow-hidden lg:block">{sidebarContent}</div>
 
-      {/* Affichage Mobile Drawer */}
       {isMobileOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 flex">
-          {/* Backdrop sombre */}
-          <div
-            className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity animate-in fade-in"
-            onClick={onMobileClose}
-          />
-          {/* Panneau drawer */}
-          <div className="relative z-10 w-72 h-full shadow-2xl animate-in slide-in-from-left duration-200">
-            {sidebarContent}
-          </div>
+        <div className="fixed inset-0 z-50 flex lg:hidden">
+          <div className="fixed inset-0 bg-ink/40" onClick={onMobileClose} aria-hidden />
+          <div className="modal-in relative z-10 h-full w-[260px] shadow-pop">{sidebarContent}</div>
         </div>
       )}
     </>

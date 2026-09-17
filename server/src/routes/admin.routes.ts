@@ -23,6 +23,7 @@ import {
   updateAiProvider,
   deleteAiProvider,
   activateAiProvider,
+  deactivateAiProvider,
   testAiProviderConfig,
   testAiProviderById,
   listKnowledgeDocs,
@@ -64,6 +65,7 @@ router.post("/ai-providers/test", testAiProviderConfig);
 router.put("/ai-providers/:id", updateAiProvider);
 router.delete("/ai-providers/:id", deleteAiProvider);
 router.post("/ai-providers/:id/activate", activateAiProvider);
+router.post("/ai-providers/:id/deactivate", deactivateAiProvider);
 router.post("/ai-providers/:id/test", testAiProviderById);
 
 router.get("/ai-knowledge", listKnowledgeDocs);

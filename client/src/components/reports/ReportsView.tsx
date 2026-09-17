@@ -56,11 +56,11 @@ type Preset = "7" | "30" | "90" | "custom";
 type ExportKind = "pdf" | "xlsx" | "contacts";
 
 const STATUS_BADGE: Record<string, string> = {
-  ACTIVE: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  PAUSED: "bg-amber-50 text-amber-700 border-amber-200",
-  COMPLETED: "bg-sky-50 text-sky-700 border-sky-200",
-  ARCHIVED: "bg-slate-100 text-slate-600 border-slate-200",
-  DRAFT: "bg-slate-50 text-slate-500 border-slate-200",
+  ACTIVE: "bg-surface-2 text-ok border-line",
+  PAUSED: "bg-surface-2 text-warn border-line",
+  COMPLETED: "bg-surface-2 text-muted border-line",
+  ARCHIVED: "bg-surface-2 text-muted border-line",
+  DRAFT: "bg-surface-2 text-muted border-line",
 };
 
 const REPORT_DAYS: { id: ReportDay; label: string; long: string }[] = [
@@ -98,15 +98,15 @@ function fmtDateTime(value?: string | null): string {
 const ChartTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-[#21164c] text-white p-3.5 rounded-2xl shadow-xl text-xs space-y-1.5 border border-white/20">
-      <div className="font-extrabold text-[12px] text-[#a2ea13] border-b border-white/15 pb-1.5">{label}</div>
+    <div className="bg-ink text-white p-3.5 rounded-2xl text-xs space-y-1.5 border border-white/20">
+      <div className="font-semibold text-[12px] text-[#a2ea13] border-b border-white/15 pb-1.5">{label}</div>
       {payload.map((entry: any, i: number) => (
         <div key={i} className="flex items-center justify-between gap-4">
           <span className="flex items-center gap-1.5 text-white/80">
             <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: entry.color }} />
             {entry.name} :
           </span>
-          <span className="font-bold">{entry.value}</span>
+          <span className="font-medium">{entry.value}</span>
         </div>
       ))}
     </div>
@@ -116,17 +116,17 @@ const ChartTooltip = ({ active, payload, label }: any) => {
 const DeltaBadge: React.FC<{ value: number | null | undefined; label: string }> = ({ value, label }) => {
   if (value === null || value === undefined) {
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#9a9aa5]" title={label}>
+      <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#9a9aa5]" title={label}>
         <Minus className="w-3 h-3" /> —
       </span>
     );
   }
   const up = value > 0;
   const flat = value === 0;
-  const cls = flat ? "text-[#5f5f69] bg-[#f5f5f7]" : up ? "text-emerald-700 bg-emerald-50" : "text-red-700 bg-red-50";
+  const cls = flat ? "text-muted bg-surface-2" : up ? "text-ok bg-surface-2" : "text-danger bg-surface-2";
   const Icon = flat ? Minus : up ? TrendingUp : TrendingDown;
   return (
-    <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${cls}`} title={label}>
+    <span className={`inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded-full ${cls}`} title={label}>
       <Icon className="w-3 h-3" />
       {up ? "+" : ""}
       {value} %
@@ -436,21 +436,18 @@ export const ReportsView: React.FC = () => {
     exporting === key ? <Loader2 className="w-4 h-4 animate-spin" /> : exportDone === key ? <Check className={`w-4 h-4 ${idleCls}`} /> : <Idle className={`w-4 h-4 ${idleCls}`} />;
 
   return (
-    <div className="max-w-[1640px] mx-auto px-4 sm:px-6 py-6 space-y-6 animate-fade-in font-sans">
+    <div className="mx-auto w-full max-w-[1440px] space-y-6 px-4 py-6 sm:px-6">
       {/* En-tête */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#21164c] tracking-tight flex items-center gap-2.5">
-            <FileBarChart className="w-7 h-7 text-[#592eff]" />
-            Rapports
-          </h1>
-          <p className="text-xs text-[#5f5f69] mt-1">
+          <h1 className="display text-2xl leading-tight">Rapports</h1>
+          <p className="mt-1 text-base text-muted">
             Statistiques consolidées de vos campagnes, exportables en PDF et Excel.
           </p>
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
-          <label className="flex items-center gap-2 text-xs font-semibold text-[#353241] px-3 py-2 rounded-xl bg-white border border-[#e0e0db] cursor-pointer select-none">
+          <label className="flex items-center gap-2 text-xs font-semibold text-ink-2 px-3 py-2 rounded-xl bg-white border border-line cursor-pointer select-none">
             <input type="checkbox" checked={includeProspects} onChange={(e) => setIncludeProspects(e.target.checked)} className="accent-[#592eff]" />
             Inclure le détail des prospects
           </label>
@@ -458,7 +455,7 @@ export const ReportsView: React.FC = () => {
             type="button"
             onClick={() => fetchReport()}
             disabled={loading}
-            className="p-2.5 rounded-xl bg-white hover:bg-[#f5f5f7] border border-[#e0e0db] text-[#5f5f69] hover:text-[#21164c] shadow-xs transition-all cursor-pointer disabled:opacity-50"
+            className="p-2.5 rounded-xl bg-white hover:bg-surface-2 border border-line text-muted hover:text-ink transition-all cursor-pointer disabled:opacity-50"
             title="Actualiser"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
@@ -467,7 +464,7 @@ export const ReportsView: React.FC = () => {
             type="button"
             onClick={() => handleExport("pdf")}
             disabled={exportDisabled}
-            className="py-2.5 px-5 rounded-xl bg-[#592eff] hover:bg-[#4d25e0] text-white text-xs font-bold shadow-md shadow-[#592eff]/25 flex items-center gap-2 active:scale-95 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className="py-2.5 px-5 rounded-xl bg-accent hover:bg-accent-hover text-white text-xs font-medium flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {btnIcon("pdf", FileText)}
             Télécharger PDF
@@ -476,9 +473,9 @@ export const ReportsView: React.FC = () => {
             type="button"
             onClick={() => handleExport("xlsx")}
             disabled={exportDisabled}
-            className="py-2.5 px-5 rounded-xl bg-white hover:bg-[#f5f5f7] border border-[#e0e0db] text-[#21164c] text-xs font-bold shadow-xs flex items-center gap-2 active:scale-95 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className="py-2.5 px-5 rounded-xl bg-white hover:bg-surface-2 border border-line text-ink text-xs font-medium flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {btnIcon("xlsx", FileSpreadsheet, "text-emerald-600")}
+            {btnIcon("xlsx", FileSpreadsheet, "text-ok")}
             Télécharger Excel
           </button>
           <button
@@ -486,27 +483,27 @@ export const ReportsView: React.FC = () => {
             onClick={() => handleExport("contacts")}
             disabled={exportDisabled}
             title="Exporter les prospects ayant un e-mail ou un téléphone (toutes les campagnes affichées)"
-            className="py-2.5 px-5 rounded-xl bg-white hover:bg-[#f5f5f7] border border-[#e0e0db] text-[#21164c] text-xs font-bold shadow-xs flex items-center gap-2 active:scale-95 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className="py-2.5 px-5 rounded-xl bg-white hover:bg-surface-2 border border-line text-ink text-xs font-medium flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {btnIcon("contacts", Contact, "text-[#592eff]")}
+            {btnIcon("contacts", Contact, "text-ink")}
             Exporter les contacts
           </button>
         </div>
       </div>
 
       {/* Filtres */}
-      <div className="adora-card p-5 space-y-4">
+      <div className="rounded-2xl border border-line bg-surface p-5 space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center gap-4 flex-wrap">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-bold text-[#5f5f69] uppercase">Période</span>
-            <div className="bg-[#f5f5f7] p-1 rounded-xl flex items-center border border-[#e0e0db] text-xs">
+            <span className="text-xs font-medium text-muted">Période</span>
+            <div className="bg-surface-2 p-1 rounded-xl flex items-center border border-line text-xs">
               {(["7", "30", "90", "custom"] as Preset[]).map((p) => (
                 <button
                   key={p}
                   type="button"
                   onClick={() => applyPreset(p)}
-                  className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
-                    preset === p ? "bg-white text-[#21164c] shadow-xs" : "text-[#5f5f69] hover:text-[#21164c]"
+                  className={`px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer ${
+                    preset === p ? "bg-white text-ink" : "text-muted hover:text-ink"
                   }`}
                 >
                   {p === "custom" ? "Personnalisée" : `${p} jours`}
@@ -518,26 +515,26 @@ export const ReportsView: React.FC = () => {
               value={from}
               max={to}
               onChange={(e) => { setPreset("custom"); setFrom(e.target.value); }}
-              className="px-3 py-1.5 rounded-xl border border-[#e0e0db] bg-white text-xs font-semibold text-[#21164c] focus:outline-none focus:ring-2 focus:ring-[#592eff]/30"
+              className="px-3 py-1.5 rounded-xl border border-line bg-white text-xs font-semibold text-ink focus:outline-none focus:ring-2 focus:ring-accent/30"
             />
-            <span className="text-xs text-[#5f5f69]">→</span>
+            <span className="text-xs text-muted">→</span>
             <input
               type="date"
               value={to}
               min={from}
               max={isoDay(new Date())}
               onChange={(e) => { setPreset("custom"); setTo(e.target.value); }}
-              className="px-3 py-1.5 rounded-xl border border-[#e0e0db] bg-white text-xs font-semibold text-[#21164c] focus:outline-none focus:ring-2 focus:ring-[#592eff]/30"
+              className="px-3 py-1.5 rounded-xl border border-line bg-white text-xs font-semibold text-ink focus:outline-none focus:ring-2 focus:ring-accent/30"
             />
           </div>
 
           {canPickMember && teamMembers.length > 0 && (
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-[#5f5f69] uppercase">Membre</span>
+              <span className="text-xs font-medium text-muted">Membre</span>
               <select
                 value={selectedMemberId}
                 onChange={(e) => { setSelectedMemberId(e.target.value); setSelectedIds([]); }}
-                className="px-3 py-1.5 rounded-xl border border-[#e0e0db] bg-white text-xs font-semibold text-[#21164c] focus:outline-none focus:ring-2 focus:ring-[#592eff]/30"
+                className="px-3 py-1.5 rounded-xl border border-line bg-white text-xs font-semibold text-ink focus:outline-none focus:ring-2 focus:ring-accent/30"
               >
                 <option value="ALL">Toute l'équipe</option>
                 {teamMembers.map((m) => (
@@ -547,19 +544,19 @@ export const ReportsView: React.FC = () => {
             </div>
           )}
 
-          <label className="flex items-center gap-2 text-xs font-semibold text-[#353241] cursor-pointer select-none lg:ml-auto">
+          <label className="flex items-center gap-2 text-xs font-semibold text-ink-2 cursor-pointer select-none lg:ml-auto">
             <input type="checkbox" checked={includeArchived} onChange={(e) => setIncludeArchived(e.target.checked)} className="accent-[#592eff]" />
             Inclure les campagnes archivées
           </label>
         </div>
 
         <div className="flex items-start gap-2 flex-wrap">
-          <span className="text-xs font-bold text-[#5f5f69] uppercase pt-1.5">Campagnes</span>
+          <span className="text-xs font-medium text-muted pt-1.5">Campagnes</span>
           <button
             type="button"
             onClick={() => setSelectedIds([])}
-            className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all cursor-pointer ${
-              selectedIds.length === 0 ? "bg-[#592eff] text-white border-[#592eff]" : "bg-white text-[#353241] border-[#e0e0db] hover:border-[#592eff]"
+            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all cursor-pointer ${
+              selectedIds.length === 0 ? "bg-accent text-white border-ink" : "bg-white text-ink-2 border-line hover:border-ink"
             }`}
           >
             Toutes
@@ -572,7 +569,7 @@ export const ReportsView: React.FC = () => {
                 type="button"
                 onClick={() => toggleCampaign(c.id)}
                 className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all cursor-pointer max-w-[260px] truncate ${
-                  active ? "bg-[#592eff] text-white border-[#592eff]" : "bg-white text-[#353241] border-[#e0e0db] hover:border-[#592eff]"
+                  active ? "bg-accent text-white border-ink" : "bg-white text-ink-2 border-line hover:border-ink"
                 }`}
                 title={c.name}
               >
@@ -581,19 +578,19 @@ export const ReportsView: React.FC = () => {
             );
           })}
           {selectableCampaigns.length === 0 && !loading && (
-            <span className="text-xs text-[#5f5f69] pt-1.5">Aucune campagne sur ce périmètre.</span>
+            <span className="text-xs text-muted pt-1.5">Aucune campagne sur ce périmètre.</span>
           )}
         </div>
       </div>
 
       {error && (
-        <div className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold">
+        <div className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-surface-2 border border-line text-danger text-xs font-semibold">
           <AlertCircle className="w-4 h-4 shrink-0" />
           {error}
         </div>
       )}
       {notice && !error && (
-        <div className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
+        <div className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-surface-2 border border-line text-ok text-xs font-semibold">
           <Check className="w-4 h-4 shrink-0" />
           {notice}
         </div>
@@ -602,41 +599,41 @@ export const ReportsView: React.FC = () => {
       {/* KPI */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         {cards.map((c) => (
-          <div key={c.label} className="adora-card p-5">
+          <div key={c.label} className="rounded-2xl border border-line bg-surface p-5">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-[#5f5f69] uppercase">{c.label}</span>
-              <c.icon className="w-4 h-4 text-[#592eff]" />
+              <span className="text-xs font-medium text-muted">{c.label}</span>
+              <c.icon className="w-4 h-4 text-ink" />
             </div>
             <div className="flex items-end justify-between gap-2 mt-2">
-              <div className="text-2xl font-extrabold text-[#21164c]">{loading && !report ? "…" : c.value}</div>
+              <div className="text-2xl font-semibold text-ink">{loading && !report ? "…" : c.value}</div>
               {c.delta !== undefined && <DeltaBadge value={c.delta} label={prevLabel} />}
             </div>
-            <div className="text-[11px] text-[#5f5f69] font-semibold mt-1">{c.sub}</div>
+            <div className="text-xs text-muted font-semibold mt-1">{c.sub}</div>
           </div>
         ))}
         {cards.length === 0 && loading && (
-          <div className="col-span-full flex items-center justify-center py-10 text-xs text-[#5f5f69] gap-2">
+          <div className="col-span-full flex items-center justify-center py-10 text-xs text-muted gap-2">
             <Loader2 className="w-4 h-4 animate-spin" /> Chargement du rapport…
           </div>
         )}
       </div>
       {vs?.prevPeriod && (
-        <p className="text-[11px] text-[#5f5f69] -mt-3 px-1">
+        <p className="text-xs text-muted -mt-3 px-1">
           Variations calculées par rapport à la période précédente de même durée ({fmtDate(vs.prevPeriod.from)} → {fmtDate(vs.prevPeriod.to)}).
         </p>
       )}
 
       {/* Graphe */}
-      <div className="adora-card p-6 sm:p-7 space-y-5">
+      <div className="rounded-2xl border border-line bg-surface p-6 sm:p-7 space-y-5">
         <div>
-          <h3 className="text-lg font-extrabold text-[#21164c]">Activité sur la période</h3>
-          <p className="text-xs text-[#5f5f69] mt-0.5">
+          <h3 className="text-lg font-semibold text-ink">Activité sur la période</h3>
+          <p className="text-xs text-muted mt-0.5">
             Invitations, messages envoyés et réponses reçues, du {fmtDate(from)} au {fmtDate(to)}
           </p>
         </div>
         <div className="w-full h-64 sm:h-72">
           {chartData.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-xs text-[#5f5f69]">Aucune activité sur la période.</div>
+            <div className="h-full flex items-center justify-center text-xs text-muted">Aucune activité sur la période.</div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData} margin={{ top: 10, right: 15, left: -20, bottom: 0 }}>
@@ -668,17 +665,17 @@ export const ReportsView: React.FC = () => {
       </div>
 
       {/* Tableau des campagnes */}
-      <div className="adora-card overflow-hidden">
+      <div className="rounded-2xl border border-line bg-surface overflow-hidden">
         <div className="px-6 pt-6 pb-4">
-          <h3 className="text-lg font-extrabold text-[#21164c]">Détail par campagne</h3>
-          <p className="text-xs text-[#5f5f69] mt-0.5">
+          <h3 className="text-lg font-semibold text-ink">Détail par campagne</h3>
+          <p className="text-xs text-muted mt-0.5">
             Les colonnes « période » sont filtrées sur les dates choisies ; les taux sont cumulés depuis le lancement.
           </p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
-              <tr className="bg-[#f8f9fc] text-[#5f5f69] uppercase text-[10px] font-bold tracking-wider">
+              <tr className="bg-surface-2 text-muted text-xs font-medium">
                 <th className="text-left px-6 py-3">Campagne</th>
                 <th className="text-left px-3 py-3">Statut</th>
                 <th className="text-right px-3 py-3">Prospects</th>
@@ -697,46 +694,46 @@ export const ReportsView: React.FC = () => {
               {visibleReport?.campaigns.map((c) => {
                 const key = `contacts:${c.id}`;
                 return (
-                  <tr key={c.id} className="border-t border-[#f0f0ed] hover:bg-[#fbfbfe] transition-colors">
+                  <tr key={c.id} className="border-t border-[#f0f0ed] hover:bg-surface-2 transition-colors">
                     <td className="px-6 py-3">
-                      <div className="font-bold text-[#21164c] truncate max-w-[280px]" title={c.name}>{c.name}</div>
-                      <div className="text-[10px] text-[#5f5f69]">
+                      <div className="font-medium text-ink truncate max-w-[280px]" title={c.name}>{c.name}</div>
+                      <div className="text-xs text-muted">
                         {c.steps.length} étape{c.steps.length > 1 ? "s" : ""} · créée le {fmtDate(c.createdAt)}
                         {c.author?.name ? ` · ${c.author.name}` : ""}
                       </div>
                     </td>
                     <td className="px-3 py-3">
-                      <span className={`badge-tag text-[10px] font-bold border ${STATUS_BADGE[c.status] || STATUS_BADGE.DRAFT}`}>
+                      <span className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium text-xs font-medium border ${STATUS_BADGE[c.status] || STATUS_BADGE.DRAFT}`}>
                         {CAMPAIGN_STATUS_LABELS[c.status] || c.status}
                       </span>
                     </td>
-                    <td className="px-3 py-3 text-right font-semibold text-[#21164c]">{c.stats.totalProspects}</td>
+                    <td className="px-3 py-3 text-right font-semibold text-ink">{c.stats.totalProspects}</td>
                     <td className="px-3 py-3 text-right">
                       {c.stats.invitesSent}
-                      {c.previousStats && <span className="text-[10px] text-[#9a9aa5] ml-1">({c.previousStats.invitesSent})</span>}
+                      {c.previousStats && <span className="text-xs text-[#9a9aa5] ml-1">({c.previousStats.invitesSent})</span>}
                     </td>
                     <td className="px-3 py-3 text-right">{c.stats.acceptedCount}</td>
-                    <td className="px-3 py-3 text-right font-bold text-emerald-600">{c.stats.acceptanceRate} %</td>
+                    <td className="px-3 py-3 text-right font-medium text-ok">{c.stats.acceptanceRate} %</td>
                     <td className="px-3 py-3 text-right">
                       {c.stats.messagesSent}
-                      {c.previousStats && <span className="text-[10px] text-[#9a9aa5] ml-1">({c.previousStats.messagesSent})</span>}
+                      {c.previousStats && <span className="text-xs text-[#9a9aa5] ml-1">({c.previousStats.messagesSent})</span>}
                     </td>
                     <td className="px-3 py-3 text-right">
                       {c.stats.repliesReceived}
-                      {c.previousStats && <span className="text-[10px] text-[#9a9aa5] ml-1">({c.previousStats.repliesReceived})</span>}
+                      {c.previousStats && <span className="text-xs text-[#9a9aa5] ml-1">({c.previousStats.repliesReceived})</span>}
                     </td>
-                    <td className="px-3 py-3 text-right font-bold text-[#592eff]">{c.stats.replyRate} %</td>
+                    <td className="px-3 py-3 text-right font-medium text-ink">{c.stats.replyRate} %</td>
                     <td className="px-3 py-3 text-right">{c.stats.completedCount}</td>
-                    <td className="px-3 py-3 text-right text-red-600">{c.stats.failed + c.stats.failedActions}</td>
+                    <td className="px-3 py-3 text-right text-danger">{c.stats.failed + c.stats.failedActions}</td>
                     <td className="px-6 py-3 text-right">
                       <button
                         type="button"
                         onClick={() => handleExport("contacts", c.id)}
                         disabled={!!exporting || c.stats.totalProspects === 0}
                         title="Exporter les prospects de cette campagne ayant un e-mail ou un téléphone"
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[#e0e0db] bg-white hover:border-[#592eff] hover:text-[#592eff] text-[#353241] font-bold text-[11px] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-line bg-white hover:border-ink hover:text-ink text-ink-2 font-medium text-xs transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                       >
-                        {exporting === key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : exportDone === key ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Contact className="w-3.5 h-3.5" />}
+                        {exporting === key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : exportDone === key ? <Check className="w-3.5 h-3.5 text-ok" /> : <Contact className="w-3.5 h-3.5" />}
                         Excel
                       </button>
                     </td>
@@ -745,25 +742,25 @@ export const ReportsView: React.FC = () => {
               })}
               {visibleReport && visibleReport.campaigns.length === 0 && (
                 <tr>
-                  <td colSpan={12} className="px-6 py-10 text-center text-[#5f5f69]">Aucune campagne à afficher.</td>
+                  <td colSpan={12} className="px-6 py-10 text-center text-muted">Aucune campagne à afficher.</td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
         {visibleReport?.comparison && (
-          <p className="px-6 pb-5 text-[10px] text-[#9a9aa5]">Entre parenthèses : valeur de la période précédente.</p>
+          <p className="px-6 pb-5 text-xs text-[#9a9aa5]">Entre parenthèses : valeur de la période précédente.</p>
         )}
       </div>
 
       {/* Paramètres + Historique */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="adora-card p-6 space-y-5 xl:col-span-1">
+        <div className="rounded-2xl border border-line bg-surface p-6 space-y-5 xl:col-span-1">
           <div className="flex items-center gap-2">
-            <Mail className="w-5 h-5 text-[#592eff]" />
-            <h3 className="text-lg font-extrabold text-[#21164c]">Rapport automatique par e-mail</h3>
+            <Mail className="w-5 h-5 text-ink" />
+            <h3 className="text-lg font-semibold text-ink">Rapport automatique par e-mail</h3>
           </div>
-          <p className="text-xs text-[#5f5f69]">
+          <p className="text-xs text-muted">
             Recevez un résumé de vos campagnes (KPIs, variation vs période précédente, tableau) par e-mail.{" "}
             {scheduleSummary ? (
               <>
@@ -774,18 +771,18 @@ export const ReportsView: React.FC = () => {
             )}
           </p>
           {settings && !settings.available ? (
-            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">Aucun espace de travail associé à ce compte : option indisponible.</p>
+            <p className="text-xs text-warn bg-surface-2 border border-line rounded-xl px-3 py-2">Aucun espace de travail associé à ce compte : option indisponible.</p>
           ) : (
             <>
-              <div className="bg-[#f5f5f7] p-1 rounded-xl flex items-center border border-[#e0e0db] text-xs">
+              <div className="bg-surface-2 p-1 rounded-xl flex items-center border border-line text-xs">
                 {(["NONE", "DAILY", "WEEKLY"] as ReportEmailFrequency[]).map((f) => (
                   <button
                     key={f}
                     type="button"
                     disabled={savingSettings || !settings}
                     onClick={() => updateSettings({ emailFrequency: f })}
-                    className={`flex-1 px-3 py-2 rounded-lg font-bold transition-all cursor-pointer disabled:opacity-60 ${
-                      settings?.emailFrequency === f ? "bg-[#592eff] text-white shadow-xs" : "text-[#5f5f69] hover:text-[#21164c]"
+                    className={`flex-1 px-3 py-2 rounded-lg font-medium transition-all cursor-pointer disabled:opacity-60 ${
+                      settings?.emailFrequency === f ? "bg-accent text-white" : "text-muted hover:text-ink"
                     }`}
                   >
                     {f === "NONE" ? "Désactivé" : f === "DAILY" ? "Quotidien" : "Hebdomadaire"}
@@ -797,20 +794,20 @@ export const ReportsView: React.FC = () => {
                 <div className="space-y-4 border-t border-[#ececf1] pt-4">
                   {/* Destinataires */}
                   <div className="space-y-2">
-                    <label className="block text-[11px] font-bold uppercase tracking-wide text-[#7c7c88]">Destinataires</label>
+                    <label className="block text-xs font-medium text-muted-2">Destinataires</label>
                     {draftEmails.length > 0 ? (
                       <div className="flex flex-wrap gap-1.5">
                         {draftEmails.map((e) => (
                           <span
                             key={e}
-                            className="inline-flex items-center gap-1 max-w-full pl-2.5 pr-1 py-1 rounded-full bg-[#f0f0f4] text-[11px] font-semibold text-[#21164c]"
+                            className="inline-flex items-center gap-1 max-w-full pl-2.5 pr-1 py-1 rounded-full bg-[#f0f0f4] text-xs font-semibold text-ink"
                           >
                             <span className="truncate">{e}</span>
                             <button
                               type="button"
                               aria-label={`Retirer ${e}`}
                               onClick={() => setDraftEmails(draftEmails.filter((x) => x !== e))}
-                              className="w-4 h-4 rounded-full flex items-center justify-center text-[#7c7c88] hover:bg-[#e0e0db] hover:text-[#21164c] cursor-pointer"
+                              className="w-4 h-4 rounded-full flex items-center justify-center text-muted-2 hover:bg-line hover:text-ink cursor-pointer"
                             >
                               <X className="w-3 h-3" />
                             </button>
@@ -818,7 +815,7 @@ export const ReportsView: React.FC = () => {
                         ))}
                       </div>
                     ) : (
-                      <p className="text-[11px] text-[#5f5f69]">
+                      <p className="text-xs text-muted">
                         Aucune adresse : le rapport sera envoyé à <strong>{settings.accountEmail}</strong>.
                       </p>
                     )}
@@ -838,24 +835,24 @@ export const ReportsView: React.FC = () => {
                         }}
                         onBlur={() => emailInput.trim() && addDraftEmail()}
                         placeholder={draftEmails.length ? "Ajouter une adresse…" : settings.accountEmail}
-                        className="flex-1 min-w-0 bg-[#f8f9fc] border border-[#e0e0db] rounded-xl px-3 py-2 text-xs font-semibold text-[#21164c] placeholder:font-normal placeholder:text-[#9a9aa5] focus:outline-none focus:border-[#592eff]"
+                        className="flex-1 min-w-0 bg-surface-2 border border-line rounded-xl px-3 py-2 text-xs font-semibold text-ink placeholder:font-normal placeholder:text-[#9a9aa5] focus:outline-none focus:border-ink"
                       />
                       <button
                         type="button"
                         onClick={addDraftEmail}
                         disabled={!emailInput.trim()}
                         aria-label="Ajouter l'adresse"
-                        className="px-3 rounded-xl bg-white hover:bg-[#f5f5f7] border border-[#e0e0db] text-[#592eff] flex items-center cursor-pointer disabled:opacity-40"
+                        className="px-3 rounded-xl bg-white hover:bg-surface-2 border border-line text-ink flex items-center cursor-pointer disabled:opacity-40"
                       >
                         <Plus className="w-4 h-4" />
                       </button>
                     </div>
-                    {emailInputError && <p className="text-[11px] text-red-600">{emailInputError}</p>}
+                    {emailInputError && <p className="text-xs text-danger">{emailInputError}</p>}
                     {draftEmails.length === 0 && (
                       <button
                         type="button"
                         onClick={() => setDraftEmails([settings.accountEmail])}
-                        className="text-[11px] font-semibold text-[#592eff] hover:underline cursor-pointer"
+                        className="text-xs font-semibold text-ink hover:underline cursor-pointer"
                       >
                         Utiliser mon e-mail ({settings.accountEmail})
                       </button>
@@ -865,11 +862,11 @@ export const ReportsView: React.FC = () => {
                   {/* Heure + jour */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1.5">
-                      <label className="block text-[11px] font-bold uppercase tracking-wide text-[#7c7c88]">Heure d'envoi</label>
+                      <label className="block text-xs font-medium text-muted-2">Heure d'envoi</label>
                       <select
                         value={draftHour}
                         onChange={(e) => setDraftHour(Number(e.target.value))}
-                        className="w-full bg-[#f8f9fc] border border-[#e0e0db] rounded-xl px-3 py-2 text-xs font-semibold text-[#21164c] focus:outline-none focus:border-[#592eff] cursor-pointer"
+                        className="w-full bg-surface-2 border border-line rounded-xl px-3 py-2 text-xs font-semibold text-ink focus:outline-none focus:border-ink cursor-pointer"
                       >
                         {Array.from({ length: 24 }, (_, h) => (
                           <option key={h} value={h}>
@@ -877,19 +874,19 @@ export const ReportsView: React.FC = () => {
                           </option>
                         ))}
                       </select>
-                      <p className="text-[10px] text-[#9a9aa5]">Heure locale · {settings.timezone}</p>
+                      <p className="text-xs text-[#9a9aa5]">Heure locale · {settings.timezone}</p>
                     </div>
                     {settings.emailFrequency === "WEEKLY" && (
                       <div className="space-y-1.5">
-                        <label className="block text-[11px] font-bold uppercase tracking-wide text-[#7c7c88]">Jour d'envoi</label>
+                        <label className="block text-xs font-medium text-muted-2">Jour d'envoi</label>
                         <div className="flex flex-wrap gap-1">
                           {REPORT_DAYS.map((d) => (
                             <button
                               key={d.id}
                               type="button"
                               onClick={() => setDraftDay(d.id)}
-                              className={`px-2 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                                draftDay === d.id ? "bg-[#592eff] text-white" : "bg-[#f0f0f4] text-[#7c7c88] hover:text-[#21164c]"
+                              className={`px-2 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                                draftDay === d.id ? "bg-accent text-white" : "bg-[#f0f0f4] text-muted-2 hover:text-ink"
                               }`}
                             >
                               {d.label}
@@ -906,7 +903,7 @@ export const ReportsView: React.FC = () => {
                         type="button"
                         onClick={() => applySettings(settings)}
                         disabled={savingSettings}
-                        className="py-2 px-3 rounded-xl text-xs font-bold text-[#5f5f69] hover:text-[#21164c] cursor-pointer disabled:opacity-50"
+                        className="py-2 px-3 rounded-xl text-xs font-medium text-muted hover:text-ink cursor-pointer disabled:opacity-50"
                       >
                         Annuler
                       </button>
@@ -915,7 +912,7 @@ export const ReportsView: React.FC = () => {
                       type="button"
                       onClick={handleSaveDelivery}
                       disabled={savingSettings || (!deliveryDirty && !emailInput.trim())}
-                      className="py-2 px-4 rounded-xl bg-[#592eff] hover:bg-[#4a22e0] text-white text-xs font-bold shadow-xs flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                      className="py-2 px-4 rounded-xl bg-accent hover:bg-accent-hover text-white text-xs font-medium flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
                     >
                       {savingSettings ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                       Enregistrer
@@ -925,16 +922,16 @@ export const ReportsView: React.FC = () => {
               )}
 
               <div className="flex items-center justify-between gap-3 flex-wrap">
-                <span className="text-[11px] text-[#5f5f69]">
+                <span className="text-xs text-muted">
                   {settings?.lastSentAt ? `Dernier envoi : ${fmtDateTime(settings.lastSentAt)}` : "Aucun envoi pour le moment."}
                 </span>
                 <button
                   type="button"
                   onClick={handleSendNow}
                   disabled={sendingNow || !settings?.available}
-                  className="py-2 px-4 rounded-xl bg-white hover:bg-[#f5f5f7] border border-[#e0e0db] text-[#21164c] text-xs font-bold shadow-xs flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                  className="py-2 px-4 rounded-xl bg-white hover:bg-surface-2 border border-line text-ink text-xs font-medium flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
                 >
-                  {sendingNow ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 text-[#592eff]" />}
+                  {sendingNow ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 text-ink" />}
                   Envoyer maintenant
                 </button>
               </div>
@@ -942,18 +939,18 @@ export const ReportsView: React.FC = () => {
           )}
         </div>
 
-        <div className="adora-card p-6 space-y-4 xl:col-span-2">
+        <div className="rounded-2xl border border-line bg-surface p-6 space-y-4 xl:col-span-2">
           <div className="flex items-center gap-2">
-            <History className="w-5 h-5 text-[#592eff]" />
-            <h3 className="text-lg font-extrabold text-[#21164c]">Historique des rapports générés</h3>
+            <History className="w-5 h-5 text-ink" />
+            <h3 className="text-lg font-semibold text-ink">Historique des rapports générés</h3>
           </div>
           {history.length === 0 ? (
-            <p className="text-xs text-[#5f5f69] py-6 text-center">Aucun rapport généré pour le moment.</p>
+            <p className="text-xs text-muted py-6 text-center">Aucun rapport généré pour le moment.</p>
           ) : (
             <div className="overflow-x-auto -mx-2">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="text-[#5f5f69] uppercase text-[10px] font-bold tracking-wider">
+                  <tr className="text-muted text-xs font-medium">
                     <th className="text-left px-2 py-2">Date</th>
                     <th className="text-left px-2 py-2">Type</th>
                     <th className="text-left px-2 py-2">Fichier</th>
@@ -965,26 +962,26 @@ export const ReportsView: React.FC = () => {
                 <tbody>
                   {history.slice(0, 30).map((h) => (
                     <tr key={h.id} className="border-t border-[#f0f0ed]">
-                      <td className="px-2 py-2 whitespace-nowrap text-[#21164c] font-semibold">{fmtDateTime(h.createdAt)}</td>
+                      <td className="px-2 py-2 whitespace-nowrap text-ink font-semibold">{fmtDateTime(h.createdAt)}</td>
                       <td className="px-2 py-2 whitespace-nowrap">
-                        <span className={`badge-tag text-[10px] font-bold border ${h.kind === "PDF" ? "bg-[#592eff]/10 text-[#592eff] border-[#592eff]/20" : h.kind === "XLSX" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-sky-50 text-sky-700 border-sky-200"}`}>
+                        <span className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium text-xs font-medium border ${h.kind === "PDF" ? "bg-surface-2 text-ink border-ink" : h.kind === "XLSX" ? "bg-surface-2 text-ok border-line" : "bg-surface-2 text-muted border-line"}`}>
                           {HISTORY_KIND_LABELS[h.kind]}
                         </span>
                       </td>
-                      <td className="px-2 py-2 font-mono text-[11px] text-[#353241] truncate max-w-[240px]" title={h.filename}>{h.filename}</td>
-                      <td className="px-2 py-2 whitespace-nowrap text-[#5f5f69]">{fmtDate(h.periodFrom)} → {fmtDate(h.periodTo)}</td>
-                      <td className="px-2 py-2 text-right text-[#353241]">
+                      <td className="px-2 py-2 font-mono text-xs text-ink-2 truncate max-w-[240px]" title={h.filename}>{h.filename}</td>
+                      <td className="px-2 py-2 whitespace-nowrap text-muted">{fmtDate(h.periodFrom)} → {fmtDate(h.periodTo)}</td>
+                      <td className="px-2 py-2 text-right text-ink-2">
                         {h.campaignsCount}
                         {h.prospectsCount !== undefined && <span className="text-[#9a9aa5]"> · {h.prospectsCount} contacts</span>}
                       </td>
-                      <td className="px-2 py-2 text-[#5f5f69] truncate max-w-[160px]">{h.userName}</td>
+                      <td className="px-2 py-2 text-muted truncate max-w-[160px]">{h.userName}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           )}
-          <p className="text-[10px] text-[#9a9aa5]">Les fichiers sont générés dans votre navigateur et ne sont pas conservés sur le serveur ; l'historique garde la trace des exports (100 derniers).</p>
+          <p className="text-xs text-[#9a9aa5]">Les fichiers sont générés dans votre navigateur et ne sont pas conservés sur le serveur ; l'historique garde la trace des exports (100 derniers).</p>
         </div>
       </div>
     </div>

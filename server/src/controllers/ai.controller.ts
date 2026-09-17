@@ -4,7 +4,7 @@ import type { AuthenticatedRequest } from "../middlewares/auth.middleware.js";
 import { hasAiAccess } from "../middlewares/aiAccess.middleware.js";
 import { getActiveProvider } from "../services/ai/provider.service.js";
 import { runTurn, type AgentEvent } from "../services/ai/agent.service.js";
-import { updateDraftSteps, type AgentWorkspace } from "../services/ai/tools.js";
+import { updateDraftSteps, updateCampaignStepsFromUi, type AgentWorkspace } from "../services/ai/tools.js";
 
 const HEARTBEAT_MS = 15_000;
 
@@ -92,7 +92,17 @@ export async function getConversation(req: AuthenticatedRequest, res: Response) 
         workspace: {
           currentList: ws.currentList || null,
           draft: ws.draft ? { campaignId: ws.draft.campaignId, name: ws.draft.name, steps: ws.draft.steps } : null,
-          pendingConfirmation: ws.pendingConfirmation ? { campaignId: ws.pendingConfirmation.campaignId, expiresAt: ws.pendingConfirmation.expiresAt } : null,
+          currentCampaign: ws.currentCampaign || null,
+          pendingConfirmation: ws.pendingConfirmation
+            ? {
+                kind: ws.pendingConfirmation.kind,
+                // Le jeton figure déjà dans la carte persistée ; le renvoyer permet au client de savoir quelle carte est encore active.
+                token: ws.pendingConfirmation.token,
+                campaignId: ws.pendingConfirmation.kind === "launch" ? ws.pendingConfirmation.campaignId : null,
+                listId: ws.pendingConfirmation.kind === "delete_list" ? ws.pendingConfirmation.listId : null,
+                expiresAt: ws.pendingConfirmation.expiresAt,
+              }
+            : null,
           lastSearchCount: ws.lastSearch?.profiles.length || 0,
         },
       },
@@ -174,6 +184,7 @@ export async function postMessage(req: AuthenticatedRequest, res: Response) {
       signal: abort.signal,
       emit: (e) => {
         if (e.type === "delta") text += e.text;
+        else if (e.type === "replace") text = e.text;
         else events.push(e);
       },
     });
@@ -240,6 +251,44 @@ export async function updateDraft(req: AuthenticatedRequest, res: Response) {
     res.json({ success: true, card: outcome.card, messageId: row.id });
   } catch (err) {
     console.error("[ai.controller:updateDraft]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue." });
+  }
+}
+
+/** Édition inline (messages et délais) d'une campagne existante depuis sa carte. */
+export async function updateCampaignSteps(req: AuthenticatedRequest, res: Response) {
+  try {
+    const id = req.params.id as string;
+    const conversation = await prisma.aiConversation.findFirst({ where: ownedConversationWhere(req, id) });
+    if (!conversation) {
+      res.status(404).json({ success: false, error: "Conversation introuvable." });
+      return;
+    }
+    const campaignId = typeof req.body?.campaignId === "string" ? req.body.campaignId : "";
+    if (!campaignId) {
+      res.status(400).json({ success: false, error: "Campagne manquante." });
+      return;
+    }
+    const workspace = (conversation.workspace || {}) as AgentWorkspace;
+    const outcome = await updateCampaignStepsFromUi(req.user!, workspace, campaignId, req.body?.steps);
+    if (!outcome.ok) {
+      res.status(400).json({ success: false, error: (outcome.result as any)?.error || "Mise à jour impossible." });
+      return;
+    }
+    const next = { ...workspace, ...outcome.workspacePatch };
+    await prisma.aiConversation.update({ where: { id }, data: { workspace: next as any } });
+
+    const row = await prisma.aiMessage.create({
+      data: {
+        conversationId: id,
+        role: "user",
+        content: "J'ai modifié les étapes de la campagne depuis l'interface.",
+        cards: outcome.card ? ([outcome.card] as any) : undefined,
+      },
+    });
+    res.json({ success: true, card: outcome.card, messageId: row.id });
+  } catch (err) {
+    console.error("[ai.controller:updateCampaignSteps]", err);
     res.status(500).json({ success: false, error: "Une erreur inattendue est survenue." });
   }
 }

@@ -1,21 +1,14 @@
 import React, { useState } from "react";
 import { apiRequest } from "../../services/api";
-import {
-  X,
-  User,
-  Building,
-  MapPin,
-  Mail,
-  Phone,
-  Tag,
-  ExternalLink,
-  Save,
-  CheckCircle2,
-  Send,
-  Sparkles,
-  Trash2,
-} from "lucide-react";
+import { ExternalLink, Save, Trash2, X } from "lucide-react";
 import { extractCompanyFromHeadline } from "../../utils/companyExtractor";
+import { Avatar } from "../ui/Avatar";
+import { Badge, StatusDot } from "../ui/Badge";
+import { Button } from "../ui/Button";
+import { Callout } from "../ui/Callout";
+import { Checkbox, Field, Input, labelClass } from "../ui/Field";
+import { IconButton } from "../ui/IconButton";
+import { Modal } from "../ui/Modal";
 
 interface ProspectDetailDrawerProps {
   prospect: any;
@@ -25,15 +18,46 @@ interface ProspectDetailDrawerProps {
   onDelete?: (prospect: any) => void;
 }
 
-export const ProspectDetailDrawer: React.FC<ProspectDetailDrawerProps> = ({
-  prospect,
-  isOpen,
-  onClose,
-  onUpdate,
-  onDelete,
-}) => {
-  if (!isOpen || !prospect) return null;
+/** Fiche prospect en panneau latéral : identité, coordonnées, tags, exclusion. */
+export const ProspectDetailDrawer: React.FC<ProspectDetailDrawerProps> = ({ prospect, isOpen, onClose, onUpdate, onDelete }) => (
+  <Modal
+    open={isOpen && Boolean(prospect)}
+    onClose={onClose}
+    side="right"
+    hideClose
+    bodyClassName="px-6 pb-6"
+    title={
+      prospect && (
+        <span className="flex items-center gap-3">
+          <Avatar name={`${prospect.firstName || ""} ${prospect.lastName || ""}`} src={prospect.avatarUrl} size="lg" />
+          <span className="min-w-0">
+            <span className="flex items-center gap-1.5">
+              <span className="truncate">
+                {prospect.firstName} {prospect.lastName}
+              </span>
+              {prospect.linkedinUrl && (
+                <a href={prospect.linkedinUrl} target="_blank" rel="noopener noreferrer" className="text-muted hover:text-ink" title="Voir le profil LinkedIn">
+                  <ExternalLink className="h-4 w-4" strokeWidth={1.75} />
+                </a>
+              )}
+            </span>
+            <span className="mt-0.5 block truncate text-sm font-normal text-muted">{prospect.headline || "Sans titre"}</span>
+          </span>
+        </span>
+      )
+    }
+    headerActions={
+      <>
+        {onDelete && prospect && <IconButton label="Supprimer ce prospect" icon={Trash2} tone="danger" onClick={() => onDelete(prospect)} />}
+        <IconButton label="Fermer" icon={X} onClick={onClose} />
+      </>
+    }
+  >
+    {prospect && <DrawerBody key={prospect.id} prospect={prospect} onUpdate={onUpdate} />}
+  </Modal>
+);
 
+const DrawerBody: React.FC<{ prospect: any; onUpdate: () => void }> = ({ prospect, onUpdate }) => {
   const [formData, setFormData] = useState({
     firstName: prospect.firstName || "",
     lastName: prospect.lastName || "",
@@ -46,297 +70,122 @@ export const ProspectDetailDrawer: React.FC<ProspectDetailDrawerProps> = ({
     doNotContact: prospect.doNotContact || false,
     tags: prospect.tags || [],
   });
-
   const [newTag, setNewTag] = useState("");
   const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ tone: "ok" | "danger"; text: string } | null>(null);
+
+  const set = (patch: Partial<typeof formData>) => setFormData((f) => ({ ...f, ...patch }));
 
   const handleAddTag = () => {
-    if (newTag.trim() && !formData.tags.includes(newTag.trim())) {
-      setFormData({
-        ...formData,
-        tags: [...formData.tags, newTag.trim()],
-      });
-      setNewTag("");
-    }
-  };
-
-  const handleRemoveTag = (tagToRemove: string) => {
-    setFormData({
-      ...formData,
-      tags: formData.tags.filter((t: string) => t !== tagToRemove),
-    });
+    const t = newTag.trim();
+    if (t && !formData.tags.includes(t)) set({ tags: [...formData.tags, t] });
+    setNewTag("");
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setMsg(null);
-
     try {
-      const res = await apiRequest(`/prospects/${prospect.id}`, {
-        method: "PUT",
-        body: JSON.stringify(formData),
-      });
-
+      const res = await apiRequest(`/prospects/${prospect.id}`, { method: "PUT", body: JSON.stringify(formData) });
       if (res.success) {
-        setMsg("Prospect mis à jour !");
+        setMsg({ tone: "ok", text: "Prospect mis à jour." });
         onUpdate();
       }
     } catch (err: any) {
-      setMsg("Erreur : " + err.message);
+      setMsg({ tone: "danger", text: err.message || "Erreur inattendue." });
     } finally {
       setLoading(false);
     }
   };
 
+  const status = formData.connectionStatus;
+
   return (
-    <div className="fixed inset-0 bg-[#21164c]/30 backdrop-blur-sm z-50 flex justify-end animate-in fade-in">
-      <div className="w-full max-w-lg bg-white h-full shadow-2xl p-6 sm:p-8 flex flex-col justify-between overflow-y-auto animate-in slide-in-from-right duration-300">
-        <div>
-          {/* Header */}
-          <div className="flex items-center justify-between pb-4 border-b border-[#e0e0db]">
-            <span className="text-xs font-bold uppercase tracking-wider text-[#5f5f69]">
-              Fiche Prospect CRM
-            </span>
-            <div className="flex items-center gap-1.5">
-              {onDelete && (
-                <button
-                  type="button"
-                  onClick={() => onDelete(prospect)}
-                  className="p-1.5 rounded-xl border border-transparent hover:border-rose-200 hover:bg-rose-50 text-[#8a8a93] hover:text-rose-600 transition-colors cursor-pointer"
-                  title="Supprimer ce prospect"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={onClose}
-                className="p-1.5 rounded-xl hover:bg-[#f5f5f7] text-[#5f5f69] transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
+    <form onSubmit={handleSave} className="space-y-5">
+      <div className="flex flex-wrap items-center gap-2 border-b border-line pb-4">
+        <Badge>{prospect.list?.name || "Sans liste"}</Badge>
+        <StatusDot tone={status === "CONNECTED" ? "ok" : status === "PENDING" ? "warn" : "neutral"} className="text-xs">
+          {status === "CONNECTED" ? "Connecté" : status === "PENDING" ? "Invitation en attente" : "Non connecté"}
+        </StatusDot>
+      </div>
 
-          {/* Profile overview card */}
-          <div className="flex items-center gap-4 my-5 p-4 rounded-2xl bg-[#f8f9fc] border border-[#e0e0db]">
-            <img
-              src={
-                prospect.avatarUrl ||
-                `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                  prospect.firstName + " " + prospect.lastName
-                )}&background=592eff&color=fff`
+      {msg && <Callout tone={msg.tone}>{msg.text}</Callout>}
+
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Prénom">
+          <Input value={formData.firstName} onChange={(e) => set({ firstName: e.target.value })} />
+        </Field>
+        <Field label="Nom">
+          <Input value={formData.lastName} onChange={(e) => set({ lastName: e.target.value })} />
+        </Field>
+      </div>
+      <Field label="Poste">
+        <Input value={formData.headline} onChange={(e) => set({ headline: e.target.value })} />
+      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Entreprise">
+          <Input value={formData.company} onChange={(e) => set({ company: e.target.value })} />
+        </Field>
+        <Field label="Localisation">
+          <Input value={formData.location} onChange={(e) => set({ location: e.target.value })} />
+        </Field>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="E-mail">
+          <Input type="email" value={formData.email} placeholder="contact@entreprise.com" onChange={(e) => set({ email: e.target.value })} />
+        </Field>
+        <Field label="Téléphone">
+          <Input type="tel" value={formData.phone} placeholder="+225 07…" onChange={(e) => set({ phone: e.target.value })} />
+        </Field>
+      </div>
+
+      <div>
+        <p className={labelClass}>Tags</p>
+        {formData.tags.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {formData.tags.map((t: string) => (
+              <Badge key={t} className="pr-1">
+                {t}
+                <button type="button" onClick={() => set({ tags: formData.tags.filter((x: string) => x !== t) })} className="ml-0.5 rounded px-0.5 hover:text-danger" aria-label={`Retirer ${t}`}>
+                  ×
+                </button>
+              </Badge>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-2">
+          <Input
+            size="sm"
+            placeholder="Ajouter un tag…"
+            value={newTag}
+            onChange={(e) => setNewTag(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleAddTag();
               }
-              alt={prospect.firstName}
-              className="w-14 h-14 rounded-full object-cover border-2 border-[#592eff]"
-            />
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-extrabold text-[#21164c]">
-                  {formData.firstName} {formData.lastName}
-                </h3>
-                {prospect.linkedinUrl && (
-                  <a
-                    href={prospect.linkedinUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[#592eff] hover:text-[#4d25e0]"
-                    title="Voir le profil LinkedIn"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                )}
-              </div>
-              <p className="text-xs text-[#5f5f69] line-clamp-1">{formData.headline || "Sans titre"}</p>
-              <div className="flex items-center gap-2 mt-1.5">
-                <span className="badge-tag bg-[#592eff]/10 text-[#592eff] text-[10px]">
-                  {prospect.list?.name || "Liste"}
-                </span>
-                <span
-                  className={`badge-tag text-[10px] ${
-                    formData.connectionStatus === "CONNECTED"
-                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                      : "bg-[#f5f5f7] text-[#5f5f69] border border-[#e0e0db]"
-                  }`}
-                >
-                  {formData.connectionStatus === "CONNECTED"
-                    ? "Connecté"
-                    : formData.connectionStatus === "PENDING"
-                    ? "En attente"
-                    : "Non connecté"}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {msg && (
-            <div className="mb-4 p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
-              {msg}
-            </div>
-          )}
-
-          {/* Form */}
-          <form onSubmit={handleSave} className="space-y-4 text-xs">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[10px] font-bold text-[#21164c] uppercase mb-1">
-                  Prénom
-                </label>
-                <input
-                  type="text"
-                  value={formData.firstName}
-                  onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-[#e0e0db] focus:outline-none focus:border-[#592eff]"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-[#21164c] uppercase mb-1">
-                  Nom
-                </label>
-                <input
-                  type="text"
-                  value={formData.lastName}
-                  onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-[#e0e0db] focus:outline-none focus:border-[#592eff]"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-[10px] font-bold text-[#21164c] uppercase mb-1">
-                Titre / Poste
-              </label>
-              <input
-                type="text"
-                value={formData.headline}
-                onChange={(e) => setFormData({ ...formData, headline: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl border border-[#e0e0db] focus:outline-none focus:border-[#592eff]"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[10px] font-bold text-[#21164c] uppercase mb-1">
-                  Entreprise
-                </label>
-                <input
-                  type="text"
-                  value={formData.company}
-                  onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-[#e0e0db] focus:outline-none focus:border-[#592eff]"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-[#21164c] uppercase mb-1">
-                  Localisation
-                </label>
-                <input
-                  type="text"
-                  value={formData.location}
-                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-[#e0e0db] focus:outline-none focus:border-[#592eff]"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[10px] font-bold text-[#21164c] uppercase mb-1">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  placeholder="contact@entreprise.com"
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-[#e0e0db] focus:outline-none focus:border-[#592eff]"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-[#21164c] uppercase mb-1">
-                  Téléphone
-                </label>
-                <input
-                  type="tel"
-                  value={formData.phone}
-                  placeholder="+225 07..."
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-[#e0e0db] focus:outline-none focus:border-[#592eff]"
-                />
-              </div>
-            </div>
-
-            {/* Tags section */}
-            <div>
-              <label className="block text-[10px] font-bold text-[#21164c] uppercase mb-1.5">
-                Tags & Segments
-              </label>
-              <div className="flex flex-wrap gap-1.5 mb-2">
-                {formData.tags.map((t: string) => (
-                  <span
-                    key={t}
-                    className="inline-flex items-center gap-1 bg-[#592eff]/10 text-[#592eff] px-2 py-0.5 rounded-full font-semibold text-[11px]"
-                  >
-                    {t}
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveTag(t)}
-                      className="hover:text-red-500"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Ajouter un tag..."
-                  value={newTag}
-                  onChange={(e) => setNewTag(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      handleAddTag();
-                    }
-                  }}
-                  className="flex-1 px-3 py-1.5 rounded-xl border border-[#e0e0db] text-xs focus:outline-none focus:border-[#592eff]"
-                />
-                <button
-                  type="button"
-                  onClick={handleAddTag}
-                  className="px-3 py-1.5 rounded-xl bg-[#f5f5f7] hover:bg-[#e0e0db] text-[#353241] font-bold text-xs"
-                >
-                  Ajouter
-                </button>
-              </div>
-            </div>
-
-            {/* Do not contact checkbox */}
-            <label className="flex items-center gap-2 pt-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.doNotContact}
-                onChange={(e) => setFormData({ ...formData, doNotContact: e.target.checked })}
-                className="w-4 h-4 text-[#592eff] rounded focus:ring-0"
-              />
-              <span className="text-xs font-semibold text-[#21164c]">
-                Ne pas contacter (Blacklist / Exclure des campagnes)
-              </span>
-            </label>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-2.5 px-4 rounded-xl bg-[#592eff] hover:bg-[#4d25e0] text-white font-bold text-xs shadow-md shadow-[#592eff]/25 flex items-center justify-center gap-2 transition-all mt-4 disabled:opacity-50"
-            >
-              <Save className="w-3.5 h-3.5" /> {loading ? "Enregistrement..." : "Enregistrer les modifications"}
-            </button>
-          </form>
+            }}
+          />
+          <Button type="button" variant="secondary" size="sm" onClick={handleAddTag}>
+            Ajouter
+          </Button>
         </div>
       </div>
-    </div>
+
+      <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-line p-3">
+        <Checkbox checked={formData.doNotContact} onChange={(e) => set({ doNotContact: e.target.checked })} className="mt-0.5" />
+        <span>
+          <span className="block text-sm font-medium text-ink">Ne pas contacter</span>
+          <span className="block text-xs text-muted">Exclu de toutes les campagnes et de tout envoi.</span>
+        </span>
+      </label>
+
+      <div className="flex justify-end border-t border-line pt-4">
+        <Button type="submit" icon={Save} loading={loading}>
+          Enregistrer
+        </Button>
+      </div>
+    </form>
   );
 };

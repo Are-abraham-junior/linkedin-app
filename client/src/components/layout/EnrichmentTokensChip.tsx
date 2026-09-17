@@ -40,17 +40,17 @@ export const EnrichmentTokensChip: React.FC = () => {
   const total = balance ? balance.allowance + balance.granted : 0;
   const tone =
     !balance
-      ? "text-[#7c7c88]"
+      ? "text-muted-2"
       : balance.remaining === 0
-        ? "text-red-600"
+        ? "text-danger"
         : balance.remaining <= Math.ceil(total * 0.2)
-          ? "text-amber-700"
-          : "text-[#21164c]";
+          ? "text-warn"
+          : "text-ink";
 
   return (
     <Link
       to="/settings?tab=billing"
-      className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-2xl border border-[#e0e0db] bg-white text-xs font-bold shadow-xs transition-colors hover:bg-[#fafafc] hover:border-[#592eff]/40 ${tone}`}
+      className={`hidden sm:flex h-8 items-center gap-1.5 rounded-lg border border-line-2 bg-surface px-2.5 text-sm font-medium transition-colors hover:border-ink ${tone}`}
       title={
         balance
           ? `Tokens d'enrichissement · ${balance.debited} débités, ${balance.refunded} restitués ce mois-ci. 1 = 1 e-mail, 5 = 1 téléphone.`
@@ -61,13 +61,13 @@ export const EnrichmentTokensChip: React.FC = () => {
       {balance ? (
         <span className="tabular-nums leading-none">
           {balance.remaining}
-          <span className="font-medium text-[#7c7c88]">
+          <span className="font-medium text-muted-2">
             {" "}/ {total}
             <span className="hidden md:inline"> tokens</span>
           </span>
         </span>
       ) : (
-        <span className="inline-block w-14 h-2.5 rounded bg-[#e0e0db]/70 animate-pulse" />
+        <span className="inline-block w-14 h-2.5 rounded bg-line/70 animate-pulse" />
       )}
     </Link>
   );

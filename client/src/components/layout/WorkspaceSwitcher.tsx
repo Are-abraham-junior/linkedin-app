@@ -1,9 +1,14 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import clsx from "clsx";
 import { useAuth } from "../../context/AuthContext";
 import { apiRequest } from "../../services/api";
-import { Building2, Globe, Check, ChevronDown, Shield, Search } from "lucide-react";
+import { Globe, Check, ChevronDown, Search } from "lucide-react";
 import { WorkspaceAvatar } from "../common/WorkspaceAvatar";
+import { Input } from "../ui/Field";
+import { Spinner } from "../ui/Button";
+import { useOnClickOutside } from "../ui/hooks";
+import { popoverClass, popoverRowClass } from "./Header";
 
 interface OrganizationItem {
   id: string;
@@ -11,9 +16,7 @@ interface OrganizationItem {
   slug: string;
   plan?: string;
   avatarUrl?: string | null;
-  _count?: {
-    users?: number;
-  };
+  _count?: { users?: number };
 }
 
 export const WorkspaceSwitcher: React.FC = () => {
@@ -24,59 +27,29 @@ export const WorkspaceSwitcher: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [searchFilter, setSearchFilter] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
+  useOnClickOutside(dropdownRef, () => setIsOpen(false), isOpen);
 
   const isSuperAdmin = user?.role === "SUPER_ADMIN";
 
-  // Charger la liste des organisations si Super Admin
   useEffect(() => {
     let isMounted = true;
     if (isSuperAdmin) {
       setIsLoading(true);
       apiRequest<{ organizations: OrganizationItem[] }>("/admin/organizations")
         .then((res) => {
-          if (isMounted && res.success && Array.isArray(res.organizations)) {
-            setOrganizations(res.organizations);
-          }
+          if (isMounted && res.success && Array.isArray(res.organizations)) setOrganizations(res.organizations);
         })
-        .catch((err) => {
-          console.error("Erreur chargement organisations pour switcher:", err);
-        })
-        .finally(() => {
-          if (isMounted) setIsLoading(false);
-        });
+        .catch((err) => console.error("Erreur chargement organisations pour switcher:", err))
+        .finally(() => isMounted && setIsLoading(false));
     } else if (user?.organization) {
       setOrganizations([user.organization as OrganizationItem]);
     }
-
     return () => {
       isMounted = false;
     };
   }, [isSuperAdmin, user?.organization?.id]);
 
-  // Fermer le dropdown lors d'un clic extérieur
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [isOpen]);
-
-  // Déterminer le libellé et l'initiale de l'espace actuel
-  const currentSpaceName = isSuperAdmin
-    ? impersonatedOrg
-      ? impersonatedOrg.name
-      : "Hub Global"
-    : user?.organization?.name || "Mon Espace";
-
-  // /auth/me renvoie l'organisation effective (impersonée ou non) avec sa photo
+  const currentSpaceName = isSuperAdmin ? (impersonatedOrg ? impersonatedOrg.name : "Hub global") : user?.organization?.name || "Mon espace";
   const currentAvatar = isSuperAdmin && !impersonatedOrg ? null : user?.organization?.avatarUrl || impersonatedOrg?.avatarUrl || null;
 
   const handleSelectGlobalHub = () => {
@@ -86,183 +59,97 @@ export const WorkspaceSwitcher: React.FC = () => {
   };
 
   const handleSelectOrg = (org: OrganizationItem) => {
-    setImpersonatedOrg({
-      id: org.id,
-      name: org.name,
-      slug: org.slug,
-      avatarUrl: org.avatarUrl || null,
-    });
+    setImpersonatedOrg({ id: org.id, name: org.name, slug: org.slug, avatarUrl: org.avatarUrl || null });
     setIsOpen(false);
     navigate("/dashboard");
   };
 
-  const filteredOrgs = organizations.filter((org) =>
-    org.name.toLowerCase().includes(searchFilter.toLowerCase())
-  );
+  const filteredOrgs = organizations.filter((org) => org.name.toLowerCase().includes(searchFilter.toLowerCase()));
+
+  // Un seul espace et pas super admin : simple étiquette, rien à basculer.
+  const switchable = isSuperAdmin || organizations.length > 1;
 
   return (
     <div className="relative" ref={dropdownRef}>
-      {/* Bouton sélecteur dans le Header */}
       <button
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center gap-2.5 px-3 py-1.5 rounded-2xl border transition-all cursor-pointer select-none text-xs font-semibold ${
-          isOpen
-            ? "border-[#592eff] bg-white shadow-md shadow-[#592eff]/10 ring-2 ring-[#592eff]/20"
-            : "border-[#e0e0db] bg-white hover:border-[#592eff]/50 hover:bg-[#fafafc] shadow-xs"
-        }`}
-        title="Changer d'espace de travail"
-      >
-        {/* Photo de l'espace / Initiale */}
-        {isSuperAdmin && !impersonatedOrg ? (
-          <div className="w-6 h-6 rounded-xl flex items-center justify-center text-[11px] font-bold shrink-0 bg-[#592eff] text-white shadow-xs">
-            B
-          </div>
-        ) : (
-          <WorkspaceAvatar name={currentSpaceName} avatarUrl={currentAvatar} className="w-6 h-6 rounded-xl" />
+        onClick={() => switchable && setIsOpen((v) => !v)}
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        className={clsx(
+          "flex h-8 items-center gap-2 rounded-lg border px-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+          switchable ? "cursor-pointer border-line-2 bg-surface hover:border-ink" : "cursor-default border-transparent",
+          isOpen && "border-ink",
         )}
-
-        {/* Nom de l'espace */}
-        <div className="text-left flex flex-col">
-          <span className="text-[#21164c] font-bold truncate max-w-[120px] sm:max-w-[160px] leading-tight">
-            {currentSpaceName}
+        title={switchable ? "Changer d'espace de travail" : currentSpaceName}
+      >
+        {isSuperAdmin && !impersonatedOrg ? (
+          <span className="flex h-5 w-5 items-center justify-center rounded bg-ink text-white" aria-hidden>
+            <Globe className="h-3 w-3" strokeWidth={2} />
           </span>
-          {isSuperAdmin && (
-            <span className="text-[10px] text-[#5f5f69] font-medium leading-none">
-              {impersonatedOrg ? "Supervision 360°" : "Plateforme Super Admin"}
-            </span>
-          )}
-        </div>
-
-        <ChevronDown
-          className={`w-3.5 h-3.5 text-[#5f5f69] transition-transform duration-200 shrink-0 ${
-            isOpen ? "rotate-180 text-[#592eff]" : ""
-          }`}
-        />
+        ) : (
+          <WorkspaceAvatar name={currentSpaceName} avatarUrl={currentAvatar} className="h-5 w-5 rounded" textClassName="text-[9px]" />
+        )}
+        <span className="max-w-[120px] truncate font-medium text-ink sm:max-w-[180px]">{currentSpaceName}</span>
+        {switchable && <ChevronDown className={clsx("h-4 w-4 shrink-0 text-muted transition-transform", isOpen && "rotate-180")} strokeWidth={1.75} aria-hidden />}
       </button>
 
-      {/* Menu déroulant CHANGER D'ESPACE */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-white border border-[#e0e0db] rounded-3xl shadow-2xl p-2.5 z-[100] animate-modal-pop">
-          {/* Header du popup */}
-          <div className="px-3 py-2 flex items-center justify-between border-b border-[#e0e0db]/60 mb-2">
-            <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#5f5f69]">
-              Changer d'espace
-            </span>
-            {isSuperAdmin && (
-              <span className="text-[10px] font-bold text-[#592eff] bg-[#592eff]/10 px-2 py-0.5 rounded-full">
-                {organizations.length} {organizations.length > 1 ? "espaces" : "espace"}
-              </span>
-            )}
+        <div className={clsx(popoverClass, "z-[100] w-72 sm:w-80")} role="listbox">
+          <div className="flex items-center justify-between px-2.5 pb-1.5 pt-1">
+            <span className="text-xs text-muted">Changer d'espace</span>
+            {isSuperAdmin && <span className="text-xs tabular-nums text-muted">{organizations.length}</span>}
           </div>
 
-          {/* Option 1 pour le Super Admin : Vue Hub Global */}
           {isSuperAdmin && (
             <>
-              <button
-                type="button"
-                onClick={handleSelectGlobalHub}
-                className={`w-full text-left px-3 py-2.5 rounded-2xl text-xs flex items-center justify-between transition-all cursor-pointer mb-1 ${
-                  !impersonatedOrg
-                    ? "bg-[#592eff]/10 text-[#592eff] font-bold border border-[#592eff]/20"
-                    : "hover:bg-[#f8f9fc] text-[#21164c]"
-                }`}
-              >
-                <div className="flex items-center gap-2.5 truncate">
-                  <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#592eff] to-[#7c3aed] text-white flex items-center justify-center shrink-0 shadow-sm shadow-[#592eff]/25">
-                    <Globe className="w-4 h-4" />
-                  </div>
-                  <div className="truncate">
-                    <p className="font-bold text-xs text-[#21164c] truncate">Hub global plateforme</p>
-                    <p className="text-[10px] text-[#5f5f69] truncate">Vue macro supervision & organisations</p>
-                  </div>
-                </div>
-                {!impersonatedOrg && (
-                  <div className="w-5 h-5 rounded-full bg-[#592eff] text-white flex items-center justify-center shrink-0 ml-2">
-                    <Check className="w-3 h-3 stroke-[3]" />
-                  </div>
-                )}
+              <button type="button" role="option" aria-selected={!impersonatedOrg} onClick={handleSelectGlobalHub} className={clsx(popoverRowClass(!impersonatedOrg), "h-auto py-2")}>
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-ink text-white" aria-hidden>
+                    <Globe className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium text-ink">Hub global plateforme</span>
+                    <span className="block truncate text-xs text-muted">Toutes les organisations</span>
+                  </span>
+                </span>
+                {!impersonatedOrg && <Check className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.75} />}
               </button>
-
-              <div className="border-t border-[#e0e0db]/60 my-1.5 mx-1" />
+              <div className="my-1.5 border-t border-line" />
             </>
           )}
 
-          {/* Champ de recherche si plusieurs organisations */}
           {organizations.length > 4 && (
-            <div className="relative mb-2 px-1">
-              <Search className="w-3.5 h-3.5 text-[#5f5f69] absolute left-3.5 top-2.5" />
-              <input
-                type="text"
-                value={searchFilter}
-                onChange={(e) => setSearchFilter(e.target.value)}
-                placeholder="Rechercher un espace..."
-                className="w-full pl-8 pr-3 py-1.5 text-xs bg-[#f8f9fc] border border-[#e0e0db] rounded-xl focus:outline-none focus:border-[#592eff] focus:bg-white text-[#21164c] placeholder:text-[#5f5f69]/60"
-              />
+            <div className="mb-1.5 px-0.5">
+              <Input size="sm" leftIcon={Search} value={searchFilter} onChange={(e) => setSearchFilter(e.target.value)} placeholder="Rechercher un espace…" autoFocus />
             </div>
           )}
 
-          {/* Liste des organisations */}
-          <div className="max-h-60 overflow-y-auto space-y-1 px-0.5">
+          <div className="max-h-60 space-y-0.5 overflow-y-auto">
             {isLoading ? (
-              <div className="py-6 text-center text-xs text-[#5f5f69] flex items-center justify-center gap-2">
-                <div className="w-4 h-4 border-2 border-[#592eff] border-t-transparent rounded-full animate-spin" />
-                <span>Chargement des espaces...</span>
+              <div className="flex items-center justify-center gap-2 py-6 text-xs text-muted">
+                <Spinner className="text-muted" />
+                Chargement…
               </div>
             ) : filteredOrgs.length === 0 ? (
-              <div className="py-6 text-center text-xs text-[#5f5f69]">
-                Aucun espace trouvé
-              </div>
+              <div className="py-6 text-center text-xs text-muted">Aucun espace trouvé</div>
             ) : (
-              filteredOrgs.map((org, index) => {
+              filteredOrgs.map((org) => {
                 const isSelected = impersonatedOrg?.id === org.id;
-                const avatarColors = [
-                  "bg-violet-100 text-violet-700 border-violet-200",
-                  "bg-sky-100 text-sky-700 border-sky-200",
-                  "bg-emerald-100 text-emerald-700 border-emerald-200",
-                  "bg-amber-100 text-amber-700 border-amber-200",
-                  "bg-rose-100 text-rose-700 border-rose-200",
-                ];
-                const colorClass = avatarColors[index % avatarColors.length];
-
                 return (
-                  <button
-                    key={org.id}
-                    type="button"
-                    onClick={() => handleSelectOrg(org)}
-                    className={`w-full text-left px-3 py-2.5 rounded-2xl text-xs flex items-center justify-between transition-all cursor-pointer ${
-                      isSelected
-                        ? "bg-[#592eff]/10 text-[#592eff] font-bold border border-[#592eff]/20"
-                        : "hover:bg-[#f8f9fc] text-[#21164c] border border-transparent"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5 truncate">
-                      <WorkspaceAvatar
-                        name={org.name}
-                        avatarUrl={org.avatarUrl}
-                        className="w-8 h-8 rounded-xl"
-                        fallbackClassName={`border ${colorClass}`}
-                        textClassName="text-xs"
-                      />
-                      <div className="truncate text-left">
-                        <p className="font-bold text-xs text-[#21164c] truncate">{org.name}</p>
-                        <p className="text-[10px] text-[#5f5f69] truncate flex items-center gap-1.5">
-                          <span>{isSuperAdmin ? "Supervision 360°" : "Membre"}</span>
-                          {org._count?.users !== undefined && (
-                            <>
-                              <span>•</span>
-                              <span>{org._count.users} {org._count.users > 1 ? "membres" : "membre"}</span>
-                            </>
-                          )}
-                        </p>
-                      </div>
-                    </div>
-
-                    {isSelected && (
-                      <div className="w-5 h-5 rounded-full bg-[#592eff] text-white flex items-center justify-center shrink-0 ml-2">
-                        <Check className="w-3 h-3 stroke-[3]" />
-                      </div>
-                    )}
+                  <button key={org.id} type="button" role="option" aria-selected={isSelected} onClick={() => handleSelectOrg(org)} className={clsx(popoverRowClass(isSelected), "h-auto py-2")}>
+                    <span className="flex min-w-0 items-center gap-2.5">
+                      <WorkspaceAvatar name={org.name} avatarUrl={org.avatarUrl} className="h-7 w-7 rounded-md" textClassName="text-[10px]" />
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium text-ink">{org.name}</span>
+                        {org._count?.users !== undefined && (
+                          <span className="block truncate text-xs text-muted">
+                            {org._count.users} {org._count.users > 1 ? "membres" : "membre"}
+                          </span>
+                        )}
+                      </span>
+                    </span>
+                    {isSelected && <Check className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.75} />}
                   </button>
                 );
               })

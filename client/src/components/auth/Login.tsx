@@ -47,7 +47,7 @@ export const Login: React.FC = () => {
       footer={
         <p>
           Pas encore d'espace ?{" "}
-          <button type="button" onClick={() => setAuthMode("register")} className="font-semibold text-[#21164c] hover:text-[#592eff]">
+          <button type="button" onClick={() => setAuthMode("register")} className="font-semibold text-ink hover:text-accent">
             Créer un espace
           </button>
         </p>
@@ -72,7 +72,7 @@ export const Login: React.FC = () => {
         <AuthField
           label="Mot de passe"
           action={
-            <Link to="/forgot-password" className="text-[13px] text-[#5f5f69] hover:text-[#21164c]">
+            <Link to="/forgot-password" className="text-sm text-muted hover:text-ink">
               Mot de passe oublié ?
             </Link>
           }

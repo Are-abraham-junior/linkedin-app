@@ -4,6 +4,18 @@ interface ApiOptions extends Omit<RequestInit, "body"> {
   body?: Record<string, any> | FormData | string;
 }
 
+let sessionLostHandled = false;
+
+function handleSessionLost() {
+  if (sessionLostHandled) return;
+  const hadToken = Boolean(localStorage.getItem("bleadin_token") || localStorage.getItem("bime_token"));
+  sessionLostHandled = true;
+  for (const key of ["bleadin_token", "bleadin_user", "bleadin_impersonated_org", "bime_token", "bime_user", "bime_impersonated_org"]) localStorage.removeItem(key);
+  if (!window.location.pathname.startsWith("/connexion")) {
+    window.location.assign(`/connexion?expired=1${hadToken ? "" : "&reason=missing"}`);
+  }
+}
+
 export async function apiRequest<T = any>(
   endpoint: string,
   options: ApiOptions = {}
@@ -59,6 +71,11 @@ export async function apiRequest<T = any>(
       } catch {
         data = { error: rawText };
       }
+    }
+
+    if (res.status === 401 && !endpoint.startsWith("/auth/")) {
+      // Session absente ou invalide : on ne laisse pas l'interface paraître connectée avec des requêtes qui échouent en silence.
+      handleSessionLost();
     }
 
     if (!res.ok) {

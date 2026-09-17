@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
+import { initialsDataUrl } from "../ui/avatarFallback";
 import {
   X,
-  Sparkles,
   Layers,
   Users,
   Send,
@@ -39,6 +39,10 @@ interface CampaignWizardModalProps {
   onCampaignCreated: () => void;
 }
 
+import { Button } from "../ui/Button";
+import { Callout } from "../ui/Callout";
+import { Modal } from "../ui/Modal";
+import { StatusDot } from "../ui/Badge";
 import { TemplateDetailModal, SequenceTemplate } from "./TemplateDetailModal";
 
 // Modèles servis par l'API (source unique : server/src/config/campaignTemplates.ts)
@@ -54,12 +58,12 @@ async function loadTemplates(): Promise<SequenceTemplate[]> {
 }
 
 const PRESET_COLORS = [
-  "#592eff",
-  "#2ed6ff",
-  "#a2ea13",
-  "#ffaae6",
-  "#f843c2",
-  "#ff9f43",
+ "#592eff",
+ "#2ed6ff",
+ "#a2ea13",
+ "#ffaae6",
+ "#f843c2",
+ "#ff9f43",
 ];
 
 export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
@@ -317,7 +321,7 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
       const restored =
         savedInviteNotes[activeStepTab]?.trim() ||
         defaultNote ||
-        "Bonjour {{firstName}}, j'ai découvert votre profil chez {{company}} et vos réalisations ont retenu mon attention. Au plaisir d'échanger avec vous !";
+       "Bonjour {{firstName}}, j'ai découvert votre profil chez {{company}} et vos réalisations ont retenu mon attention. Au plaisir d'échanger avec vous !";
       currentStepObj.messageText = restored;
     }
     setConfiguredSteps(updated);
@@ -498,82 +502,97 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="bg-white w-full max-w-5xl rounded-[32px] shadow-2xl border border-[#e0e0db] overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-200">
-        {/* Header & Stepper */}
-        <div className="px-8 pt-7 pb-5 border-b border-[#f0f0ed] bg-gradient-to-b from-[#fafafd] to-white shrink-0">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-[#592eff]/10 text-[#592eff] flex items-center justify-center border border-[#592eff]/20">
-                <Sparkles className="w-5 h-5" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-[#21164c] tracking-tight">
-                  Créer une nouvelle campagne
-                </h2>
-                <p className="text-xs text-[#5f5f69]">
-                  Configurez votre séquence automatisée de prospection LinkedIn
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={onClose}
-              className="p-2 rounded-full text-[#5f5f69] hover:text-[#21164c] hover:bg-[#f0f0ed] transition-colors cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
+  const goBack = () => {
+    if (currentStep === 3) {
+      if (activeStepTab > 0) setActiveStepTab((prev) => prev - 1);
+      else setCurrentStep(2);
+    } else if (currentStep === 4) {
+      setCurrentStep(3);
+      setActiveStepTab(configuredSteps.length - 1);
+    } else {
+      setCurrentStep((prev) => prev - 1);
+    }
+  };
 
-          {/* Stepper horizontal */}
-          <div className="grid grid-cols-4 gap-2 sm:gap-4 relative">
-            {[
-              { num: 1, label: "Modèle de séquence" },
-              { num: 2, label: "Audience cible" },
-              { num: 3, label: "Contenu & Délais" },
-              { num: 4, label: "Validation & Lancement" },
-            ].map((step) => {
-              const isDone = currentStep > step.num;
-              const isCurrent = currentStep === step.num;
-              return (
-                <div
-                  key={step.num}
-                  className={`flex items-center gap-2.5 p-2 rounded-xl transition-all ${
-                    isCurrent
-                      ? "bg-white shadow-sm border border-[#592eff]/30"
-                      : isDone
-                      ? "opacity-90"
-                      : "opacity-40"
+  const goNext = () => {
+    if (currentStep === 3) handleValidateCurrentStepTab();
+    else setCurrentStep((prev) => prev + 1);
+  };
+
+  const nextLabel =
+    currentStep === 3 ? (activeStepTab < configuredSteps.length - 1 ? "Valider, étape suivante" : "Valider la séquence") : "Suivant";
+
+  const WIZARD_STEPS = [
+    { num: 1, label: "Modèle" },
+    { num: 2, label: "Audience" },
+    { num: 3, label: "Contenu & délais" },
+    { num: 4, label: "Validation" },
+  ];
+
+  const footer = (
+    <div className="flex w-full flex-col items-center justify-between gap-3 sm:flex-row">
+      <div className="flex items-center gap-3">
+        {currentStep > 1 && (
+          <Button variant="ghost" icon={ChevronLeft} onClick={goBack}>
+            Précédent
+          </Button>
+        )}
+        {savedSuccessMsg && <StatusDot tone="ok">{savedSuccessMsg}</StatusDot>}
+      </div>
+      <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
+        <Button variant="secondary" icon={BookmarkCheck} onClick={handleSaveDraft} loading={savingDraft} disabled={loading} title="Sauvegarder dans les brouillons">
+          Sauvegarder
+        </Button>
+        {currentStep < 4 ? (
+          <Button iconRight={ChevronRight} onClick={goNext}>
+            {nextLabel}
+          </Button>
+        ) : (
+          <Button icon={Send} onClick={handleSubmitCampaign} loading={loading} disabled={savingDraft}>
+            Lancer la campagne
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <Modal
+      open={isOpen}
+      onClose={onClose}
+      size="xl"
+      title="Nouvelle campagne"
+      description="Une séquence automatisée d'invitations, de messages et de visites sur LinkedIn."
+      bodyClassName="px-6 pb-6"
+      footer={footer}
+    >
+      <ol className="mb-6 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm" aria-label="Étapes">
+        {WIZARD_STEPS.map((step, i) => {
+          const isDone = currentStep > step.num;
+          const isCurrent = currentStep === step.num;
+          return (
+            <React.Fragment key={step.num}>
+              {i > 0 && <span className="h-px w-5 bg-line" aria-hidden />}
+              <li className={`flex items-center gap-2 ${isCurrent ? "text-ink" : "text-muted"}`} aria-current={isCurrent ? "step" : undefined}>
+                <span
+                  className={`flex h-6 w-6 items-center justify-center rounded-full border text-xs tabular-nums ${
+                    isCurrent ? "border-ink bg-ink text-white" : isDone ? "border-line bg-surface-2 text-muted" : "border-line text-muted"
                   }`}
                 >
-                  <div
-                    className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
-                      isDone
-                        ? "bg-[#592eff] text-white"
-                        : isCurrent
-                        ? "bg-[#592eff] text-white"
-                        : "bg-[#e0e0db] text-[#5f5f69]"
-                    }`}
-                  >
-                    {isDone ? <Check className="w-3.5 h-3.5" /> : step.num}
-                  </div>
-                  <span className="text-xs font-semibold text-[#21164c] truncate">
-                    {step.label}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+                  {isDone ? <Check className="h-3.5 w-3.5" strokeWidth={2} /> : step.num}
+                </span>
+                <span className={isCurrent ? "font-medium" : undefined}>{step.label}</span>
+              </li>
+            </React.Fragment>
+          );
+        })}
+      </ol>
 
-        {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-          {error && (
-            <div className="mb-6 p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
+      {error && (
+        <Callout tone="danger" className="mb-6">
+          {error}
+        </Callout>
+      )}
 
           {/* STEP 1: Modèle de Séquence */}
           {currentStep === 1 && (
@@ -581,16 +600,14 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <div>
-                    <label className="block text-xs font-bold text-[#21164c] uppercase tracking-wider">
+                    <label className="block text-xs font-medium text-ink">
                       Choisissez une séquence pré-paramétrée
                     </label>
-                    <p className="text-xs text-[#5f5f69] mt-0.5">
+                    <p className="text-xs text-muted mt-0.5">
                       Sélectionnez un modèle adapté à votre stratégie. Vous pourrez nommer et personnaliser la campagne à l'étape suivante.
                     </p>
                   </div>
-                  <span className="text-[11px] text-[#592eff] font-bold flex items-center gap-1 shrink-0">
-                    <Zap className="w-3.5 h-3.5" /> Prêts à l'emploi
-                  </span>
+                  
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -600,26 +617,20 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                       <div
                         key={tmpl.id}
                         onClick={() => setViewingTemplate(tmpl)}
-                        className={`group rounded-2xl border-2 cursor-pointer transition-all duration-300 flex flex-col justify-between overflow-hidden bg-white hover:-translate-y-0.5 hover:shadow-lg ${
-                          isSelected
-                            ? "border-[#592eff] shadow-md shadow-[#592eff]/15 ring-2 ring-[#592eff]/20"
-                            : "border-[#e0e0db] hover:border-[#592eff]/50 shadow-2xs"
+                        role="radio"
+                        aria-checked={isSelected}
+                        className={`group flex cursor-pointer flex-col justify-between overflow-hidden rounded-xl border bg-surface transition-colors ${
+                          isSelected ? "border-ink" : "border-line hover:border-ink"
                         }`}
                       >
                         {/* Illustration 3D Waalaxy Header Compact */}
-                        <div className="relative h-28 sm:h-32 bg-gradient-to-b from-[#f0f4fe] via-[#f7f9fe] to-white flex items-center justify-center p-2 border-b border-[#e0e0db]/60 overflow-hidden">
+                        <div className="relative flex h-28 items-center justify-center overflow-hidden border-b border-line bg-surface-2 p-2 sm:h-32">
                           <img
                             src={tmpl.image}
                             alt={tmpl.title}
-                            className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105"
+                            className="w-full h-full object-contain transition-transform duration-300"
                             loading="lazy"
                           />
-
-                          {/* LinkedIn Badge (top-left) */}
-                          <div className="absolute top-2.5 left-2.5 px-1.5 py-0.5 rounded-md bg-[#0077b5] text-white text-[9px] font-bold flex items-center gap-1 shadow-2xs">
-                            <span className="font-extrabold text-[8px]">in</span>
-                            <span>LinkedIn</span>
-                          </div>
 
                           {/* Quick selection checkmark (top-right) */}
                           <button
@@ -628,23 +639,13 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                               e.stopPropagation();
                               setSelectedTemplateId(tmpl.id);
                             }}
-                            className={`absolute top-2.5 right-2.5 w-6 h-6 rounded-full flex items-center justify-center transition-all cursor-pointer shadow-2xs ${
-                              isSelected
-                                ? "bg-[#592eff] text-white ring-2 ring-white scale-110"
-                                : "bg-white/90 hover:bg-white text-[#5f5f69] hover:text-[#592eff] border border-[#e0e0db]"
+                            className={`absolute right-2.5 top-2.5 flex h-6 w-6 items-center justify-center rounded-full border transition-colors ${
+                              isSelected ? "border-ink bg-ink text-white" : "border-line bg-surface text-muted hover:border-ink hover:text-ink"
                             }`}
                             title={isSelected ? "Modèle sélectionné" : "Sélectionner ce modèle"}
                           >
                             <Check className="w-3.5 h-3.5 stroke-[3]" />
                           </button>
-
-                          {/* Hover Overlay Hint */}
-                          <div className="absolute inset-0 bg-[#21164c]/10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
-                            <span className="px-2.5 py-1 rounded-full bg-white/95 text-[#21164c] text-[10px] font-extrabold shadow-md flex items-center gap-1 backdrop-blur-xs">
-                              <Eye className="w-3 h-3 text-[#592eff]" />
-                              Voir détails
-                            </span>
-                          </div>
                         </div>
 
                         {/* Card Content Compact - Titre uniquement */}
@@ -655,8 +656,8 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                               <div className={`flex items-center gap-2 mb-1.5 ${tmpl.badge ? "justify-between" : "justify-end"}`}>
                                 {tmpl.badge && (
                                   <span
-                                    className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                                      tmpl.badgeColor || "bg-[#592eff]/10 text-[#592eff]"
+                                    className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                                      tmpl.badgeColor || "bg-surface-2 text-ink"
                                     }`}
                                   >
                                     {tmpl.badge}
@@ -664,8 +665,8 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                                 )}
 
                                 {tmpl.popularity && (
-                                  <span className="text-[10px] font-semibold text-[#5f5f69] flex items-center gap-1">
-                                    <Users className="w-3 h-3 text-[#592eff]" />
+                                  <span className="text-xs font-semibold text-muted flex items-center gap-1">
+                                    <Users className="w-3 h-3" strokeWidth={1.75} />
                                     <span>{tmpl.popularity}</span>
                                   </span>
                                 )}
@@ -673,19 +674,19 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                             )}
 
                             {/* Title - Sans description */}
-                            <h3 className="font-extrabold text-[#21164c] text-xs sm:text-sm group-hover:text-[#592eff] transition-colors leading-snug line-clamp-2">
+                            <h3 className="line-clamp-2 text-sm font-medium leading-snug text-ink">
                               {tmpl.title}
                             </h3>
                           </div>
 
                           {/* Bottom Row */}
-                          <div className="pt-2 border-t border-[#f0f0ed] flex items-center justify-between text-[11px]">
-                            <div className="flex items-center gap-1.5 text-[#592eff] font-bold">
-                              <Layers className="w-3.5 h-3.5" />
+                          <div className="pt-2 border-t border-[#f0f0ed] flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-1.5 text-muted">
+                              <Layers className="w-3.5 h-3.5" strokeWidth={1.75} />
                               <span>{tmpl.steps.length} étapes</span>
                             </div>
 
-                            <div className="flex items-center gap-1 text-[#5f5f69] group-hover:text-[#592eff] font-bold transition-colors">
+                            <div className="flex items-center gap-1 text-muted transition-colors group-hover:text-ink">
                               <span>Détails</span>
                               <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
                             </div>
@@ -705,13 +706,13 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
               {/* Colonne Principale (Sélecteur & Choix de prospects) */}
               <div className="lg:col-span-2 space-y-6">
                 {/* 1. Nom de la campagne (Défini après avoir choisi le modèle) */}
-                <div className="p-4 sm:p-5 rounded-2xl bg-white border border-[#e0e0db] shadow-2xs space-y-2">
+                <div className="p-4 sm:p-5 rounded-2xl bg-white border border-line space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="block text-xs font-bold text-[#21164c] uppercase tracking-wider">
+                    <label className="block text-xs font-medium text-ink">
                       Nom de votre campagne
                     </label>
-                    <span className="text-[11px] text-[#5f5f69]">
-                      Modèle choisi : <strong className="text-[#592eff]">{currentTemplate.title}</strong>
+                    <span className="text-xs text-muted">
+                      Modèle choisi : <strong className="text-ink">{currentTemplate.title}</strong>
                     </span>
                   </div>
                   <input
@@ -719,17 +720,17 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                     value={campaignName}
                     onChange={(e) => setCampaignName(e.target.value)}
                     placeholder="ex: Directeurs Commerciaux Paris - Mars 2026"
-                    className="w-full px-4 py-2.5 rounded-xl border border-[#e0e0db] text-sm text-[#21164c] focus:outline-none focus:border-[#592eff] focus:ring-2 focus:ring-[#592eff]/10 font-medium"
+                    className="w-full px-4 py-2.5 rounded-xl border border-line text-sm text-ink focus:outline-none focus:border-ink focus:ring-2 focus:ring-accent/10 font-medium"
                   />
                 </div>
 
                 {/* En-tête de sélection de liste avec CTA de création */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
-                    <h3 className="text-sm font-bold text-[#21164c] mb-1">
+                    <h3 className="text-sm font-medium text-ink mb-1">
                       Sélectionnez votre liste de prospects
                     </h3>
-                    <p className="text-xs text-[#5f5f69]">
+                    <p className="text-xs text-muted">
                       Choisissez une liste existante ou créez-en une nouvelle pour cette campagne.
                     </p>
                   </div>
@@ -737,7 +738,7 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setShowCreateListForm(!showCreateListForm)}
-                    className="px-3.5 py-2 rounded-xl bg-[#592eff]/10 hover:bg-[#592eff]/20 text-[#592eff] text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 border border-[#592eff]/20 cursor-pointer"
+                    className="px-3.5 py-2 rounded-xl bg-surface-2 hover:bg-accent/20 text-ink text-xs font-medium transition-all flex items-center gap-1.5 shrink-0 border border-ink cursor-pointer"
                   >
                     <Plus className="w-4 h-4" />
                     <span>{showCreateListForm ? "Masquer formulaire" : "Créer une nouvelle liste"}</span>
@@ -746,18 +747,18 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
 
                 {/* Formulaire de création rapide de liste (Inline) */}
                 {showCreateListForm && (
-                  <div className="p-5 rounded-2xl bg-gradient-to-br from-[#fafafd] to-[#f4f3fe] border-2 border-[#592eff]/30 shadow-sm space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="space-y-4 rounded-xl border border-line bg-surface-2 p-5">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <FolderPlus className="w-4 h-4 text-[#592eff]" />
-                        <span className="text-xs font-bold text-[#21164c] uppercase tracking-wider">
+                        <FolderPlus className="w-4 h-4 text-ink" />
+                        <span className="text-xs font-medium text-ink">
                           Nouvelle liste de prospects
                         </span>
                       </div>
                       <button
                         type="button"
                         onClick={() => setShowCreateListForm(false)}
-                        className="text-xs text-[#5f5f69] hover:text-[#21164c] cursor-pointer"
+                        className="text-xs text-muted hover:text-ink cursor-pointer"
                       >
                         Annuler
                       </button>
@@ -770,18 +771,18 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                           value={newListName}
                           onChange={(e) => setNewListName(e.target.value)}
                           placeholder="Nom de la liste (ex: Directeurs Commerciaux Paris)"
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-[#e0e0db] text-xs text-[#21164c] focus:outline-none focus:border-[#592eff] bg-white font-medium"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-line text-xs text-ink focus:outline-none focus:border-ink bg-white font-medium"
                         />
                       </div>
                       <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-1.5 p-1.5 bg-white border border-[#e0e0db] rounded-xl flex-1 justify-around">
+                        <div className="flex items-center gap-1.5 p-1.5 bg-white border border-line rounded-xl flex-1 justify-around">
                           {PRESET_COLORS.map((col) => (
                             <button
                               key={col}
                               type="button"
                               onClick={() => setNewListColor(col)}
                               className={`w-5 h-5 rounded-full transition-transform cursor-pointer ${
-                                newListColor === col ? "scale-125 ring-2 ring-[#21164c]/20" : "opacity-80"
+                                newListColor === col ? "scale-125 ring-2 ring-ink/20" : "opacity-80"
                               }`}
                               style={{ backgroundColor: col }}
                             />
@@ -791,7 +792,7 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                           type="button"
                           disabled={creatingList}
                           onClick={handleCreateListSubmit}
-                          className="px-4 py-2.5 rounded-xl bg-[#592eff] hover:bg-[#4d25e0] text-white text-xs font-bold transition-all shadow-sm disabled:opacity-50 shrink-0 cursor-pointer"
+                          className="px-4 py-2.5 rounded-xl bg-accent hover:bg-ink/90 text-white text-xs font-medium transition-all disabled:opacity-50 shrink-0 cursor-pointer"
                         >
                           {creatingList ? "Création..." : "Ajouter"}
                         </button>
@@ -802,30 +803,30 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
 
                 {/* Cas A : Aucune liste trouvée */}
                 {availableLists.length === 0 && !showCreateListForm ? (
-                  <div className="text-center py-10 px-6 border-2 border-dashed border-[#592eff]/30 rounded-3xl bg-[#fafafd]">
-                    <div className="w-12 h-12 rounded-2xl bg-[#592eff]/10 text-[#592eff] flex items-center justify-center mx-auto mb-3">
+                  <div className="text-center py-10 px-6 border-2 border-dashed border-ink rounded-2xl bg-surface-2">
+                    <div className="w-12 h-12 rounded-2xl bg-surface-2 text-ink flex items-center justify-center mx-auto mb-3">
                       <FolderPlus className="w-6 h-6" />
                     </div>
-                    <h4 className="text-sm font-bold text-[#21164c] mb-1">
+                    <h4 className="text-sm font-medium text-ink mb-1">
                       Vous n'avez pas encore de liste de prospects
                     </h4>
-                    <p className="text-xs text-[#5f5f69] max-w-md mx-auto mb-5 leading-relaxed">
+                    <p className="text-xs text-muted max-w-md mx-auto mb-5 leading-relaxed">
                       Créez votre première liste directement ici pour cette campagne.
                     </p>
 
-                    <div className="max-w-md mx-auto flex items-center gap-2 p-2 bg-white rounded-2xl border border-[#e0e0db] shadow-sm">
+                    <div className="max-w-md mx-auto flex items-center gap-2 p-2 bg-white rounded-2xl border border-line">
                       <input
                         type="text"
                         value={newListName}
                         onChange={(e) => setNewListName(e.target.value)}
                         placeholder="Nom de votre liste (ex: Prospects LinkedIn 2026)"
-                        className="flex-1 px-3 py-2 text-xs text-[#21164c] focus:outline-none font-medium"
+                        className="flex-1 px-3 py-2 text-xs text-ink focus:outline-none font-medium"
                       />
                       <button
                         type="button"
                         disabled={creatingList}
                         onClick={handleCreateListSubmit}
-                        className="px-4 py-2 rounded-xl bg-[#592eff] hover:bg-[#4d25e0] text-white text-xs font-bold transition-all shadow-sm disabled:opacity-50 shrink-0 cursor-pointer"
+                        className="px-4 py-2 rounded-xl bg-accent hover:bg-ink/90 text-white text-xs font-medium transition-all disabled:opacity-50 shrink-0 cursor-pointer"
                       >
                         {creatingList ? "Création..." : "Créer la liste"}
                       </button>
@@ -836,13 +837,13 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                   <div className="space-y-4">
                     {availableLists.length > 4 && (
                       <div className="relative">
-                        <Search className="w-3.5 h-3.5 text-[#5f5f69] absolute left-3 top-1/2 -translate-y-1/2" />
+                        <Search className="w-3.5 h-3.5 text-muted absolute left-3 top-1/2 -translate-y-1/2" />
                         <input
                           type="text"
                           value={listSearchFilter}
                           onChange={(e) => setListSearchFilter(e.target.value)}
                           placeholder="Rechercher une liste..."
-                          className="w-full pl-8 pr-3 py-2 rounded-xl border border-[#e0e0db] text-xs text-[#21164c] focus:outline-none focus:border-[#592eff]"
+                          className="w-full pl-8 pr-3 py-2 rounded-xl border border-line text-xs text-ink focus:outline-none focus:border-ink"
                         />
                       </div>
                     )}
@@ -856,25 +857,25 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                             onClick={() => toggleListSelection(list.id)}
                             className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex items-center justify-between ${
                               isChecked
-                                ? "border-[#592eff] bg-[#592eff]/[0.03] shadow-sm"
-                                : "border-[#e0e0db] hover:border-[#592eff]/30 bg-white"
+                                ? "border-ink bg-accent/[0.03]"
+                                : "border-line hover:border-ink bg-white"
                             }`}
                           >
                             <div className="flex items-center gap-3">
                               <div
-                                className="w-3 h-3 rounded-full shrink-0 shadow-xs"
+                                className="w-3 h-3 rounded-full shrink-0"
                                 style={{ backgroundColor: list.color || "#592eff" }}
                               />
                               <div>
-                                <p className="text-xs font-bold text-[#21164c]">{list.name}</p>
-                                <p className="text-[11px] text-[#5f5f69]">
+                                <p className="text-xs font-medium text-ink">{list.name}</p>
+                                <p className="text-xs text-muted">
                                   {list.prospectsCount || 0} prospect(s) au total
                                 </p>
                               </div>
                             </div>
                             <div
                               className={`w-5 h-5 rounded-md flex items-center justify-center transition-colors ${
-                                isChecked ? "bg-[#592eff] text-white" : "border border-[#e0e0db]"
+                                isChecked ? "bg-ink text-white" : "border border-line"
                               }`}
                             >
                               {isChecked && <Check className="w-3.5 h-3.5" />}
@@ -888,16 +889,16 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
 
                 {/* Section Question Waalaxy & Choix des Prospects */}
                 {selectedListIds.length > 0 && (
-                  <div className="p-6 rounded-3xl bg-white border border-[#e0e0db] shadow-xs space-y-5 animate-in fade-in duration-200">
+                  <div className="p-6 rounded-2xl bg-white border border-line space-y-5 duration-200">
                     <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold shrink-0">
+                      <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-muted flex items-center justify-center font-medium shrink-0">
                         <Users className="w-5 h-5" />
                       </div>
                       <div>
-                        <h4 className="text-sm font-extrabold text-[#21164c]">
+                        <h4 className="text-sm font-semibold text-ink">
                           Voulez-vous ajouter tous les prospects de cette liste ?
                         </h4>
-                        <p className="text-xs text-[#5f5f69] mt-0.5 leading-relaxed">
+                        <p className="text-xs text-muted mt-0.5 leading-relaxed">
                           Vous pouvez choisir de sélectionner tous les prospects de votre liste qui remplissent les conditions pour cette campagne ou certains d'entre eux.
                         </p>
                       </div>
@@ -910,20 +911,20 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                         onClick={() => setSelectionMode("ALL")}
                         className={`p-4 rounded-2xl border-2 transition-all text-left flex items-center justify-between cursor-pointer ${
                           selectionMode === "ALL"
-                            ? "border-[#592eff] bg-[#592eff]/[0.04] shadow-sm ring-2 ring-[#592eff]/20"
-                            : "border-[#e0e0db] hover:border-[#592eff]/30 bg-white"
+                            ? "border-ink bg-accent/[0.04] "
+                            : "border-line hover:border-ink bg-white"
                         }`}
                       >
                         <div>
-                          <p className="text-xs font-extrabold text-[#21164c]">
+                          <p className="text-xs font-semibold text-ink">
                             Oui, ajouter tous les prospects ({eligibleCount})
                           </p>
-                          <p className="text-[11px] text-[#5f5f69] mt-0.5">
+                          <p className="text-xs text-muted mt-0.5">
                             Engage tous les contacts qualifiés
                           </p>
                         </div>
                         {selectionMode === "ALL" && (
-                          <CheckCircle2 className="w-5 h-5 text-[#592eff] shrink-0" />
+                          <CheckCircle2 className="w-5 h-5 text-ink shrink-0" />
                         )}
                       </button>
 
@@ -937,50 +938,50 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                         }}
                         className={`p-4 rounded-2xl border-2 transition-all text-left flex items-center justify-between cursor-pointer ${
                           selectionMode === "CUSTOM"
-                            ? "border-[#592eff] bg-[#592eff]/[0.04] shadow-sm ring-2 ring-[#592eff]/20"
-                            : "border-[#e0e0db] hover:border-[#592eff]/30 bg-white"
+                            ? "border-ink bg-accent/[0.04] "
+                            : "border-line hover:border-ink bg-white"
                         }`}
                       >
                         <div>
-                          <p className="text-xs font-extrabold text-[#21164c]">
+                          <p className="text-xs font-semibold text-ink">
                             Non, je sélectionne ({customSelectedIds.length})
                           </p>
-                          <p className="text-[11px] text-[#5f5f69] mt-0.5">
+                          <p className="text-xs text-muted mt-0.5">
                             Choisissez au cas par cas
                           </p>
                         </div>
                         {selectionMode === "CUSTOM" && (
-                          <CheckCircle2 className="w-5 h-5 text-[#592eff] shrink-0" />
+                          <CheckCircle2 className="w-5 h-5 text-ink shrink-0" />
                         )}
                       </button>
                     </div>
 
                     {/* Mode Sélecteur Personnalisé ("Non, je sélectionne") */}
                     {selectionMode === "CUSTOM" && (
-                      <div className="pt-4 border-t border-[#f0f0ed] space-y-3 animate-in fade-in duration-200">
+                      <div className="pt-4 border-t border-[#f0f0ed] space-y-3 duration-200">
                         <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
                           <div className="relative flex-1 w-full">
-                            <Search className="w-3.5 h-3.5 text-[#5f5f69] absolute left-3 top-1/2 -translate-y-1/2" />
+                            <Search className="w-3.5 h-3.5 text-muted absolute left-3 top-1/2 -translate-y-1/2" />
                             <input
                               type="text"
                               value={prospectSearchTerm}
                               onChange={(e) => setProspectSearchTerm(e.target.value)}
                               placeholder="Rechercher un prospect par nom, poste..."
-                              className="w-full pl-8 pr-3 py-2 rounded-xl border border-[#e0e0db] text-xs text-[#21164c] focus:outline-none focus:border-[#592eff]"
+                              className="w-full pl-8 pr-3 py-2 rounded-xl border border-line text-xs text-ink focus:outline-none focus:border-ink"
                             />
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
                             <button
                               type="button"
                               onClick={() => setCustomSelectedIds(eligibleProspects.map((p) => p.id))}
-                              className="px-3 py-1.5 rounded-xl border border-[#e0e0db] hover:border-[#592eff] text-[11px] font-bold text-[#592eff] bg-white transition-colors cursor-pointer"
+                              className="px-3 py-1.5 rounded-xl border border-line hover:border-ink text-xs font-medium text-ink bg-white transition-colors cursor-pointer"
                             >
                               Tout cocher éligibles
                             </button>
                             <button
                               type="button"
                               onClick={() => setCustomSelectedIds([])}
-                              className="px-3 py-1.5 rounded-xl border border-[#e0e0db] hover:bg-slate-50 text-[11px] font-semibold text-[#5f5f69] bg-white transition-colors cursor-pointer"
+                              className="px-3 py-1.5 rounded-xl border border-line hover:bg-slate-50 text-xs font-semibold text-muted bg-white transition-colors cursor-pointer"
                             >
                               Décocher tout
                             </button>
@@ -988,13 +989,13 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                         </div>
 
                         {/* Liste des prospects éligibles avec filtres et cases à cocher */}
-                        <div className="max-h-[260px] overflow-y-auto custom-scrollbar border border-[#e0e0db] rounded-2xl divide-y divide-[#e0e0db]/60 bg-white">
+                        <div className="max-h-[260px] overflow-y-auto custom-scrollbar border border-line rounded-2xl divide-y divide-line/60 bg-white">
                           {loadingProspects ? (
-                            <div className="p-6 text-center text-xs text-[#5f5f69]">
+                            <div className="p-6 text-center text-xs text-muted">
                               Chargement des prospects de la liste...
                             </div>
                           ) : filteredCustomProspects.length === 0 ? (
-                            <div className="p-6 text-center text-xs text-[#5f5f69]">
+                            <div className="p-6 text-center text-xs text-muted">
                               Aucun prospect trouvé.
                             </div>
                           ) : (
@@ -1015,7 +1016,7 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                                     !p.isEligible
                                       ? "bg-slate-50/70 opacity-60 cursor-not-allowed"
                                       : isChecked
-                                      ? "bg-[#592eff]/[0.03] cursor-pointer"
+                                      ? "bg-accent/[0.03] cursor-pointer"
                                       : "hover:bg-slate-50 cursor-pointer"
                                   }`}
                                 >
@@ -1025,23 +1026,21 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                                       checked={isChecked}
                                       disabled={!p.isEligible}
                                       onChange={() => {}}
-                                      className="w-4 h-4 rounded text-[#592eff] border-[#e0e0db] focus:ring-[#592eff]"
+                                      className="w-4 h-4 rounded text-ink border-line focus:ring-accent"
                                     />
                                     <img
                                       src={
                                         p.avatarUrl ||
-                                        `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                                          p.firstName + " " + p.lastName
-                                        )}&background=592eff&color=fff`
+                                        initialsDataUrl(p.firstName + " " + p.lastName)
                                       }
                                       alt={p.firstName}
                                       className="w-7 h-7 rounded-full object-cover shrink-0"
                                     />
                                     <div className="min-w-0">
-                                      <p className="font-bold text-xs text-[#21164c] truncate">
+                                      <p className="font-medium text-xs text-ink truncate">
                                         {p.firstName} {p.lastName}
                                       </p>
-                                      <p className="text-[10px] text-[#5f5f69] truncate">
+                                      <p className="text-xs text-muted truncate">
                                         {p.headline || p.company || "Prospect LinkedIn"}
                                       </p>
                                     </div>
@@ -1049,11 +1048,11 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
 
                                   <div className="shrink-0 flex items-center gap-2">
                                     <span
-                                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                      className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                                         p.connectionStatus === "CONNECTED"
-                                          ? "bg-emerald-100 text-emerald-700"
+                                          ? "bg-emerald-100 text-muted"
                                           : p.connectionStatus === "PENDING"
-                                          ? "bg-amber-100 text-amber-700"
+                                          ? "bg-amber-100 text-muted"
                                           : "bg-slate-100 text-slate-600"
                                       }`}
                                     >
@@ -1065,12 +1064,12 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                                     </span>
 
                                     {p.isEligible ? (
-                                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 text-[10px] font-extrabold">
+                                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-muted text-xs font-semibold">
                                         Éligible ✓
                                       </span>
                                     ) : (
                                       <span
-                                        className="px-2 py-0.5 rounded-full bg-red-500/10 text-red-600 text-[10px] font-semibold"
+                                        className="px-2 py-0.5 rounded-full bg-red-500/10 text-red-600 text-xs font-semibold"
                                         title={p.exclusionReason}
                                       >
                                         {p.exclusionReason}
@@ -1088,12 +1087,12 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                 )}
 
                 {/* Résumé du total retenu */}
-                <div className="p-4 rounded-2xl bg-[#fafafd] border border-[#e0e0db] flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-xs text-[#21164c] font-bold">
-                    <Users className="w-4 h-4 text-[#592eff]" />
+                <div className="p-4 rounded-2xl bg-surface-2 border border-line flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs text-ink font-medium">
+                    <Users className="w-4 h-4 text-ink" />
                     <span>Total prospects engagés dans cette campagne :</span>
                   </div>
-                  <span className="text-sm font-extrabold text-[#592eff] px-3.5 py-1 bg-[#592eff]/10 rounded-full">
+                  <span className="text-sm font-semibold text-ink px-3.5 py-1 bg-surface-2 rounded-full">
                     {totalEligibleProspects} prospect(s)
                   </span>
                 </div>
@@ -1101,32 +1100,27 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
 
               {/* Colonne Latérale Droite (Carte "ASTUCE" - Style Waalaxy) */}
               <div className="lg:col-span-1 space-y-4 self-start">
-                <div className="p-6 rounded-3xl bg-amber-500/[0.06] border border-amber-500/20 space-y-4 shadow-2xs">
-                  <div className="flex items-center justify-between">
-                    <span className="px-2.5 py-1 rounded-lg bg-amber-500 text-white font-extrabold text-[10px] uppercase tracking-wider">
-                      ASTUCE
-                    </span>
-                    <Sparkles className="w-4 h-4 text-amber-600" />
-                  </div>
+                <div className="space-y-4 rounded-xl border border-line bg-surface-2 p-5">
+                  <span className="text-xs font-medium text-muted">Bon à savoir</span>
 
                   <div>
-                    <h4 className="text-sm font-extrabold text-[#21164c] leading-snug">
+                    <h4 className="text-sm font-semibold text-ink leading-snug">
                       Quels prospects peuvent entrer dans ma campagne ?
                     </h4>
-                    <p className="text-xs text-[#5f5f69] mt-1.5 leading-relaxed">
-                      Vous utilisez la séquence <strong className="text-[#21164c]">"{currentTemplate.title}"</strong>. Vous ne pourrez sélectionner que les prospects répondant aux conditions suivantes :
+                    <p className="text-xs text-muted mt-1.5 leading-relaxed">
+                      Vous utilisez la séquence <strong className="text-ink">"{currentTemplate.title}"</strong>. Vous ne pourrez sélectionner que les prospects répondant aux conditions suivantes :
                     </p>
                   </div>
 
                   {/* Conditions de la séquence */}
                   <div className="space-y-2.5 pt-3 border-t border-amber-500/15 text-xs">
-                    <div className="flex items-start gap-2 text-[#21164c]">
-                      <span className="shrink-0 text-amber-600 font-bold" aria-hidden>—</span>
+                    <div className="flex items-start gap-2 text-ink">
+                      <span className="shrink-0 text-muted font-medium" aria-hidden>—</span>
                       <span className="leading-snug">Ne pas être déjà engagé dans une autre campagne active</span>
                     </div>
 
-                    <div className="flex items-start gap-2 text-[#21164c]">
-                      <span className="shrink-0 text-amber-600 font-bold" aria-hidden>—</span>
+                    <div className="flex items-start gap-2 text-ink">
+                      <span className="shrink-0 text-muted font-medium" aria-hidden>—</span>
                       <span className="leading-snug">
                         {firstActionType === "MESSAGE"
                           ? "Être déjà connecté avec vous sur LinkedIn"
@@ -1134,42 +1128,42 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                       </span>
                     </div>
 
-                    <div className="flex items-start gap-2 text-[#21164c]">
-                      <span className="shrink-0 text-amber-600 font-bold" aria-hidden>—</span>
+                    <div className="flex items-start gap-2 text-ink">
+                      <span className="shrink-0 text-muted font-medium" aria-hidden>—</span>
                       <span className="leading-snug">Ne pas figurer dans la liste "Ne pas contacter"</span>
                     </div>
                   </div>
 
                   {/* Bilan Chiffré des Éligibilités */}
                   <div className="p-4 rounded-2xl bg-white border border-amber-500/20 space-y-2 text-xs">
-                    <div className="flex justify-between items-center font-bold text-[#21164c]">
+                    <div className="flex justify-between items-center font-medium text-ink">
                       <span>Total prospects dans la liste :</span>
-                      <span className="px-2 py-0.5 rounded-md bg-slate-100 font-extrabold">{totalListCount}</span>
+                      <span className="px-2 py-0.5 rounded-md bg-slate-100 font-semibold">{totalListCount}</span>
                     </div>
 
-                    <div className="flex justify-between items-center text-emerald-700 font-extrabold">
+                    <div className="flex justify-between items-center text-muted font-semibold">
                       <span>Éligibles pour cette campagne :</span>
-                      <span className="px-2 py-0.5 rounded-md bg-emerald-100 font-black">{eligibleCount}</span>
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-100 font-semibold">{eligibleCount}</span>
                     </div>
 
                     {busyCount > 0 && (
-                      <div className="flex justify-between items-center text-slate-500 text-[11px]">
+                      <div className="flex justify-between items-center text-slate-500 text-xs">
                         <span>• Déjà engagé en campagne :</span>
-                        <span className="font-bold">{busyCount}</span>
+                        <span className="font-medium">{busyCount}</span>
                       </div>
                     )}
 
                     {mismatchCount > 0 && (
-                      <div className="flex justify-between items-center text-slate-500 text-[11px]">
+                      <div className="flex justify-between items-center text-slate-500 text-xs">
                         <span>• Statut LinkedIn non conforme :</span>
-                        <span className="font-bold">{mismatchCount}</span>
+                        <span className="font-medium">{mismatchCount}</span>
                       </div>
                     )}
 
                     {dncCount > 0 && (
-                      <div className="flex justify-between items-center text-slate-500 text-[11px]">
+                      <div className="flex justify-between items-center text-slate-500 text-xs">
                         <span>• En liste "Ne pas contacter" :</span>
-                        <span className="font-bold">{dncCount}</span>
+                        <span className="font-medium">{dncCount}</span>
                       </div>
                     )}
                   </div>
@@ -1193,13 +1187,13 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                       key={idx}
                       disabled={!isUnlocked}
                       onClick={() => isUnlocked && setActiveStepTab(idx)}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
+                      className={`px-3.5 py-2 rounded-xl text-xs font-medium transition-all flex items-center gap-2 shrink-0 ${
                         isActive
-                          ? "bg-[#592eff] text-white shadow-sm shadow-[#592eff]/25"
+                          ? "bg-ink text-white"
                           : isValidated
-                          ? "bg-emerald-50 text-emerald-800 border border-emerald-200/80 hover:bg-emerald-100 cursor-pointer"
+                          ? "bg-surface-2 text-muted border border-line hover:bg-emerald-100 cursor-pointer"
                           : isUnlocked
-                          ? "bg-[#f5f5f7] text-[#5f5f69] hover:text-[#21164c] cursor-pointer"
+                          ? "bg-surface-2 text-muted hover:text-ink cursor-pointer"
                           : "bg-slate-100 text-slate-400 opacity-50 cursor-not-allowed border border-slate-200/60"
                       }`}
                       title={!isUnlocked ? `Validez l'étape ${idx} pour débloquer celle-ci` : undefined}
@@ -1207,12 +1201,12 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                       {!isUnlocked ? (
                         <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                       ) : isValidated && !isActive ? (
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <CheckCircle2 className="w-3.5 h-3.5 text-muted shrink-0" />
                       ) : (
                         getActionTypeIcon(step.actionType)
                       )}
                       <span>Étape {step.stepOrder}</span>
-                      <span className="text-[10px] opacity-80">
+                      <span className="text-xs opacity-80">
                         ({getActionTypeLabel(step.actionType)}
                         {step.actionType === "INVITATION" && (
                           <span className="ml-1 font-semibold">
@@ -1235,31 +1229,31 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                   {/* CAS 1 : VISITE DE PROFIL */}
                   {(configuredSteps[activeStepTab].actionType === "VISIT" ||
                     configuredSteps[activeStepTab].actionType === "VISIT_PROFILE") && (
-                    <div className="p-6 rounded-2xl bg-gradient-to-br from-[#fafafd] to-[#f4f3fe] border border-[#592eff]/20 space-y-4">
+                    <div className="space-y-4 rounded-xl border border-line bg-surface-2 p-5">
                       <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 rounded-2xl bg-[#592eff]/10 text-[#592eff] flex items-center justify-center shrink-0">
+                        <div className="w-10 h-10 rounded-2xl bg-surface-2 text-ink flex items-center justify-center shrink-0">
                           <Eye className="w-5 h-5" />
                         </div>
                         <div>
-                          <h4 className="text-xs font-bold text-[#21164c] uppercase tracking-wider mb-1">
+                          <h4 className="text-xs font-medium text-ink mb-1">
                             Consultation automatique du profil LinkedIn
                           </h4>
-                          <p className="text-xs text-[#5f5f69] leading-relaxed">
-                            Bleadin consultera discrètement le profil LinkedIn du prospect. Celui-ci recevra une notification LinkedIn native : <span className="font-semibold text-[#21164c]">"X a consulté votre profil"</span>. Cela crée de la familiarité avant toute sollicitation directe.
+                          <p className="text-xs text-muted leading-relaxed">
+                            Bleadin consultera discrètement le profil LinkedIn du prospect. Celui-ci recevra une notification LinkedIn native : <span className="font-semibold text-ink">"X a consulté votre profil"</span>. Cela crée de la familiarité avant toute sollicitation directe.
                           </p>
                         </div>
                       </div>
 
                       {configuredSteps[activeStepTab].stepOrder > 1 && (
-                        <div className="pt-3 border-t border-[#592eff]/10 flex items-center justify-between">
-                          <span className="text-xs font-bold text-[#21164c] flex items-center gap-1.5">
-                            <Clock className="w-4 h-4 text-[#592eff]" />
+                        <div className="pt-3 border-t border-ink flex items-center justify-between">
+                          <span className="text-xs font-medium text-ink flex items-center gap-1.5">
+                            <Clock className="w-4 h-4 text-ink" />
                             Délai avant la visite :
                           </span>
                           <select
                             value={configuredSteps[activeStepTab].delayDays}
                             onChange={(e) => handleStepDelayChange(Number(e.target.value))}
-                            className="px-3 py-1.5 rounded-xl border border-[#e0e0db] text-xs font-bold text-[#21164c] bg-white focus:outline-none focus:border-[#592eff]"
+                            className="px-3 py-1.5 rounded-xl border border-line text-xs font-medium text-ink bg-white focus:outline-none focus:border-ink"
                           >
                             <option value={0}>Immédiatement</option>
                             <option value={1}>1 jour ouvré après</option>
@@ -1272,30 +1266,30 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
 
                   {/* CAS 2 : SUIVRE LE PROFIL (FOLLOW) */}
                   {configuredSteps[activeStepTab].actionType === "FOLLOW" && (
-                    <div className="p-6 rounded-2xl bg-gradient-to-br from-[#fafafd] to-[#f4f3fe] border border-amber-500/20 space-y-4">
+                    <div className="space-y-4 rounded-xl border border-line bg-surface-2 p-5">
                       <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0">
+                        <div className="w-10 h-10 rounded-2xl bg-amber-500/10 text-muted flex items-center justify-center shrink-0">
                           <UserCheck className="w-5 h-5" />
                         </div>
                         <div>
-                          <h4 className="text-xs font-bold text-[#21164c] uppercase tracking-wider mb-1">
+                          <h4 className="text-xs font-medium text-ink mb-1">
                             Abonnement aux publications du prospect (Follow)
                           </h4>
-                          <p className="text-xs text-[#5f5f69] leading-relaxed">
+                          <p className="text-xs text-muted leading-relaxed">
                             Bleadin s'abonne automatiquement aux publications du prospect sur LinkedIn. Cela témoigne d'un intérêt authentique pour son contenu et renforce significativement les chances d'acceptation de votre prochaine invitation.
                           </p>
                         </div>
                       </div>
 
                       <div className="pt-3 border-t border-amber-500/10 flex items-center justify-between">
-                        <span className="text-xs font-bold text-[#21164c] flex items-center gap-1.5">
-                          <Clock className="w-4 h-4 text-amber-600" />
+                        <span className="text-xs font-medium text-ink flex items-center gap-1.5">
+                          <Clock className="w-4 h-4 text-muted" />
                           Délai après l'étape précédente :
                         </span>
                         <select
                           value={configuredSteps[activeStepTab].delayDays}
                           onChange={(e) => handleStepDelayChange(Number(e.target.value))}
-                          className="px-3 py-1.5 rounded-xl border border-[#e0e0db] text-xs font-bold text-[#21164c] bg-white focus:outline-none focus:border-[#592eff]"
+                          className="px-3 py-1.5 rounded-xl border border-line text-xs font-medium text-ink bg-white focus:outline-none focus:border-ink"
                         >
                           <option value={0}>Immédiatement après</option>
                           <option value={1}>1 jour ouvré après</option>
@@ -1310,9 +1304,9 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                     configuredSteps[activeStepTab].actionType === "MESSAGE") && (
                     <>
                       {/* Temporisation / Délai */}
-                      <div className="p-4 rounded-2xl bg-[#fafafd] border border-[#e0e0db] flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-xs font-bold text-[#21164c]">
-                          <Clock className="w-4 h-4 text-[#592eff]" />
+                      <div className="p-4 rounded-2xl bg-surface-2 border border-line flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-xs font-medium text-ink">
+                          <Clock className="w-4 h-4 text-ink" />
                           <span>
                             {configuredSteps[activeStepTab].actionType === "INVITATION"
                               ? "Délai avant l'envoi de l'invitation :"
@@ -1323,7 +1317,7 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                           <select
                             value={configuredSteps[activeStepTab].delayDays}
                             onChange={(e) => handleStepDelayChange(Number(e.target.value))}
-                            className="px-3 py-1.5 rounded-xl border border-[#e0e0db] text-xs font-bold text-[#21164c] bg-white focus:outline-none focus:border-[#592eff]"
+                            className="px-3 py-1.5 rounded-xl border border-line text-xs font-medium text-ink bg-white focus:outline-none focus:border-ink"
                           >
                             <option value={0}>
                               {configuredSteps[activeStepTab].actionType === "INVITATION"
@@ -1346,21 +1340,21 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                           {/* En-tête & Statut du choix */}
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                             <div>
-                              <label className="text-xs font-bold text-[#21164c] uppercase tracking-wider flex items-center gap-2">
-                                <Send className="w-3.5 h-3.5 text-[#592eff]" />
+                              <label className="text-xs font-medium text-ink flex items-center gap-2">
+                                <Send className="w-3.5 h-3.5 text-ink" />
                                 <span>Note d'invitation LinkedIn (Optionnelle)</span>
                               </label>
-                              <p className="text-xs text-[#5f5f69] mt-0.5">
+                              <p className="text-xs text-muted mt-0.5">
                                 Décidez si vous souhaitez accompagner votre invitation d'un mot personnalisé.
                               </p>
                             </div>
                             {Boolean(configuredSteps[activeStepTab].messageText?.trim()) ? (
-                              <span className="text-[11px] font-bold text-[#592eff] bg-[#592eff]/10 px-2.5 py-1 rounded-full flex items-center gap-1 self-start sm:self-center">
-                                <CheckCircle2 className="w-3.5 h-3.5 text-[#592eff]" /> Note acceptée
+                              <span className="text-xs font-medium text-ink bg-surface-2 px-2.5 py-1 rounded-full flex items-center gap-1 self-start sm:self-center">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-ink" /> Note acceptée
                               </span>
                             ) : (
-                              <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/80 flex items-center gap-1 self-start sm:self-center">
-                                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Sans note (Recommandé)
+                              <span className="text-xs font-medium text-muted bg-surface-2 px-2.5 py-1 rounded-full border border-line flex items-center gap-1 self-start sm:self-center">
+                                <ShieldCheck className="w-3.5 h-3.5 text-muted" /> Sans note (Recommandé)
                               </span>
                             )}
                           </div>
@@ -1372,8 +1366,8 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                               onClick={() => handleToggleInviteNote(false)}
                               className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between relative overflow-hidden ${
                                 !configuredSteps[activeStepTab].messageText?.trim()
-                                  ? "border-emerald-600 bg-emerald-50/40 ring-2 ring-emerald-500/20 shadow-xs"
-                                  : "border-[#e0e0db] bg-white hover:border-emerald-500/50 hover:bg-[#fafbfd]"
+                                  ? "border-emerald-600 bg-surface-2/40 ring-2 ring-emerald-500/20"
+                                  : "border-line bg-white hover:border-emerald-500/50 hover:bg-surface-2"
                               }`}
                             >
                               <div>
@@ -1383,35 +1377,35 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                                       className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors ${
                                         !configuredSteps[activeStepTab].messageText?.trim()
                                           ? "bg-emerald-600 text-white"
-                                          : "bg-gray-100 text-[#5f5f69]"
+                                          : "bg-gray-100 text-muted"
                                       }`}
                                     >
                                       <ShieldCheck className="w-4 h-4" />
                                     </div>
                                     <div>
-                                      <h4 className="text-xs font-bold text-[#21164c]">
+                                      <h4 className="text-xs font-medium text-ink">
                                         Refuser la note
                                       </h4>
-                                      <p className="text-[11px] text-[#5f5f69]">
+                                      <p className="text-xs text-muted">
                                         Invitation directe sans message
                                       </p>
                                     </div>
                                   </div>
-                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-200 shrink-0">
+                                  <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-muted border border-line shrink-0">
                                     Recommandé
                                   </span>
                                 </div>
-                                <p className="text-[11px] text-[#5f5f69] leading-relaxed">
+                                <p className="text-xs text-muted leading-relaxed">
                                   Sur LinkedIn, les invitations sans note obtiennent en moyenne <strong>+10% à +20% d'acceptation</strong> car elles semblent plus spontanées.
                                 </p>
                               </div>
 
-                              <div className="mt-3 pt-2.5 border-t border-[#e0e0db]/60 flex items-center justify-between text-[11px] font-bold">
+                              <div className="mt-3 pt-2.5 border-t border-line/60 flex items-center justify-between text-xs font-medium">
                                 <span
                                   className={
                                     !configuredSteps[activeStepTab].messageText?.trim()
-                                      ? "text-emerald-700 font-extrabold flex items-center gap-1"
-                                      : "text-[#5f5f69]"
+                                      ? "text-muted font-semibold flex items-center gap-1"
+                                      : "text-muted"
                                   }
                                 >
                                   {!configuredSteps[activeStepTab].messageText?.trim() ? (
@@ -1419,7 +1413,7 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                                       <Check className="w-3.5 h-3.5 stroke-[3]" /> Option active
                                     </>
                                   ) : (
-                                    "Cliquer pour refuser la note"
+                                   "Cliquer pour refuser la note"
                                   )}
                                 </span>
                               </div>
@@ -1430,8 +1424,8 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                               onClick={() => handleToggleInviteNote(true)}
                               className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between relative overflow-hidden ${
                                 Boolean(configuredSteps[activeStepTab].messageText?.trim())
-                                  ? "border-[#592eff] bg-[#592eff]/[0.03] ring-2 ring-[#592eff]/20 shadow-xs"
-                                  : "border-[#e0e0db] bg-white hover:border-[#592eff]/50 hover:bg-[#fafbfd]"
+                                  ? "border-ink bg-accent/[0.03] "
+                                  : "border-line bg-white hover:border-ink hover:bg-surface-2"
                               }`}
                             >
                               <div>
@@ -1440,36 +1434,36 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                                     <div
                                       className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors ${
                                         Boolean(configuredSteps[activeStepTab].messageText?.trim())
-                                          ? "bg-[#592eff] text-white"
-                                          : "bg-gray-100 text-[#5f5f69]"
+                                          ? "bg-ink text-white"
+                                          : "bg-gray-100 text-muted"
                                       }`}
                                     >
                                       <MessageSquare className="w-4 h-4" />
                                     </div>
                                     <div>
-                                      <h4 className="text-xs font-bold text-[#21164c]">
+                                      <h4 className="text-xs font-medium text-ink">
                                         Accepter la note
                                       </h4>
-                                      <p className="text-[11px] text-[#5f5f69]">
+                                      <p className="text-xs text-muted">
                                         Message personnalisé d'accroche
                                       </p>
                                     </div>
                                   </div>
-                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#592eff]/10 text-[#592eff] shrink-0">
+                                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-surface-2 text-ink shrink-0">
                                     Max 300 car.
                                   </span>
                                 </div>
-                                <p className="text-[11px] text-[#5f5f69] leading-relaxed">
+                                <p className="text-xs text-muted leading-relaxed">
                                   Idéal si vous avez une accroche spécifique, un contact partagé ou une proposition de valeur courte à contextualiser.
                                 </p>
                               </div>
 
-                              <div className="mt-3 pt-2.5 border-t border-[#e0e0db]/60 flex items-center justify-between text-[11px] font-bold">
+                              <div className="mt-3 pt-2.5 border-t border-line/60 flex items-center justify-between text-xs font-medium">
                                 <span
                                   className={
                                     Boolean(configuredSteps[activeStepTab].messageText?.trim())
-                                      ? "text-[#592eff] font-extrabold flex items-center gap-1"
-                                      : "text-[#5f5f69]"
+                                      ? "text-ink font-semibold flex items-center gap-1"
+                                      : "text-muted"
                                   }
                                 >
                                   {Boolean(configuredSteps[activeStepTab].messageText?.trim()) ? (
@@ -1477,7 +1471,7 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                                       <Check className="w-3.5 h-3.5 stroke-[3]" /> Option active
                                     </>
                                   ) : (
-                                    "Cliquer pour inclure la note"
+                                   "Cliquer pour inclure la note"
                                   )}
                                 </span>
                               </div>
@@ -1486,22 +1480,22 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
 
                           {/* Affichage conditionnel selon le choix */}
                           {!configuredSteps[activeStepTab].messageText?.trim() ? (
-                            <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-50/70 to-white border border-emerald-200/80 space-y-2.5 animate-in fade-in duration-200">
+                            <div className="space-y-2.5 rounded-xl border border-ok/30 bg-ok-soft p-4">
                               <div className="flex items-start gap-3">
-                                <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
+                                <div className="w-8 h-8 rounded-xl bg-emerald-100 text-muted flex items-center justify-center shrink-0 mt-0.5">
                                   <CheckCircle2 className="w-4 h-4" />
                                 </div>
                                 <div className="flex-1 text-xs">
-                                  <h5 className="font-bold text-[#21164c] mb-1">
+                                  <h5 className="font-medium text-ink mb-1">
                                     Invitation directe sans note d'accompagnement sélectionnée
                                   </h5>
-                                  <p className="text-[#5f5f69] leading-relaxed mb-2.5">
+                                  <p className="text-muted leading-relaxed mb-2.5">
                                     Votre demande de connexion sera envoyée directement sur LinkedIn sans message. C'est le format recommandé pour maximiser le taux d'acceptation. Vos messages de relance configurés aux étapes suivantes seront envoyés automatiquement dès que le prospect acceptera la connexion.
                                   </p>
                                   <button
                                     type="button"
                                     onClick={() => handleToggleInviteNote(true)}
-                                    className="text-xs font-bold text-[#592eff] hover:text-[#4520cc] hover:underline inline-flex items-center gap-1.5 cursor-pointer"
+                                    className="text-xs font-medium text-ink hover:text-[#4520cc] hover:underline inline-flex items-center gap-1.5 cursor-pointer"
                                   >
                                     <MessageSquare className="w-3.5 h-3.5" />
                                     Vous changez d'avis ? Cliquer ici pour rédiger une note d'invitation
@@ -1510,16 +1504,16 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                               </div>
                             </div>
                           ) : (
-                            <div className="space-y-2 animate-in fade-in duration-200">
+                            <div className="space-y-2 duration-200">
                               <div className="flex items-center justify-between mb-1.5">
                                 <div className="flex items-center gap-1.5">
-                                  <span className="text-[10px] text-[#5f5f69]">Variables disponibles :</span>
+                                  <span className="text-xs text-muted">Variables disponibles :</span>
                                   {["firstName", "lastName", "company"].map((varName) => (
                                     <button
                                       key={varName}
                                       type="button"
                                       onClick={() => handleInsertVariable(varName)}
-                                      className="px-2 py-0.5 text-[10px] font-bold bg-[#f0f0f5] text-[#592eff] hover:bg-[#592eff] hover:text-white rounded-md transition-colors cursor-pointer"
+                                      className="px-2 py-0.5 text-xs font-medium bg-[#f0f0f5] text-ink hover:bg-accent hover:text-white rounded-md transition-colors cursor-pointer"
                                     >
                                       + {varName}
                                     </button>
@@ -1529,7 +1523,7 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                                 <button
                                   type="button"
                                   onClick={handleResetInviteNoteToDefault}
-                                  className="text-[10px] font-bold text-[#5f5f69] hover:text-[#21164c] hover:bg-gray-100 px-2 py-0.5 rounded-md transition-colors cursor-pointer border border-[#e0e0db]"
+                                  className="text-xs font-medium text-muted hover:text-ink hover:bg-gray-100 px-2 py-0.5 rounded-md transition-colors cursor-pointer border border-line"
                                   title="Rétablir le texte par défaut proposé par le modèle"
                                 >
                                   Rétablir modèle
@@ -1541,21 +1535,21 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                                 value={configuredSteps[activeStepTab].messageText || ""}
                                 onChange={(e) => handleStepMessageChange(e.target.value)}
                                 placeholder="Bonjour {{firstName}}, je découvre votre profil et votre activité..."
-                                className={`w-full p-4 rounded-2xl border text-xs leading-relaxed text-[#21164c] focus:outline-none focus:ring-2 font-normal ${
+                                className={`w-full p-4 rounded-2xl border text-xs leading-relaxed text-ink focus:outline-none focus:ring-2 font-normal ${
                                   (configuredSteps[activeStepTab].messageText || "").length > 300
                                     ? "border-red-400 focus:border-red-500 focus:ring-red-100"
-                                    : "border-[#e0e0db] focus:border-[#592eff] focus:ring-[#592eff]/10"
+                                    : "border-line focus:border-ink focus:ring-accent/10"
                                 }`}
                               />
 
-                              <div className="flex items-center justify-between text-[11px] mt-1">
+                              <div className="flex items-center justify-between text-xs mt-1">
                                 <span
                                   className={`flex items-center gap-1 font-semibold ${
                                     (configuredSteps[activeStepTab].messageText || "").length > 300
-                                      ? "text-red-600 font-bold"
+                                      ? "text-red-600 font-medium"
                                       : (configuredSteps[activeStepTab].messageText || "").length > 270
-                                      ? "text-amber-600"
-                                      : "text-[#5f5f69]"
+                                      ? "text-muted"
+                                      : "text-muted"
                                   }`}
                                 >
                                   <Info className="w-3.5 h-3.5" />
@@ -1570,7 +1564,7 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                                 <button
                                   type="button"
                                   onClick={() => handleToggleInviteNote(false)}
-                                  className="text-[11px] font-bold text-slate-500 hover:text-red-600 transition-colors cursor-pointer"
+                                  className="text-xs font-medium text-slate-500 hover:text-red-600 transition-colors cursor-pointer"
                                 >
                                   Refuser la note (envoyer sans note)
                                 </button>
@@ -1582,17 +1576,17 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                         /* CAS DU MESSAGE CLASSIQUE (ÉTAPE SUIVANTE) */
                         <div>
                           <div className="flex items-center justify-between mb-2">
-                            <label className="text-xs font-bold text-[#21164c] uppercase tracking-wider">
+                            <label className="text-xs font-medium text-ink">
                               Contenu du message
                             </label>
                             <div className="flex items-center gap-1">
-                              <span className="text-[10px] text-[#5f5f69] mr-1">Variables :</span>
+                              <span className="text-xs text-muted mr-1">Variables :</span>
                               {["firstName", "lastName", "company"].map((varName) => (
                                 <button
                                   key={varName}
                                   type="button"
                                   onClick={() => handleInsertVariable(varName)}
-                                  className="px-2 py-0.5 text-[10px] font-bold bg-[#f0f0f5] text-[#592eff] hover:bg-[#592eff]/10 rounded-md transition-colors cursor-pointer"
+                                  className="px-2 py-0.5 text-xs font-medium bg-[#f0f0f5] text-ink hover:bg-surface-2 rounded-md transition-colors cursor-pointer"
                                 >
                                   + {varName}
                                 </button>
@@ -1605,7 +1599,7 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                             value={configuredSteps[activeStepTab].messageText || ""}
                             onChange={(e) => handleStepMessageChange(e.target.value)}
                             placeholder="Écrivez votre message de prospection..."
-                            className="w-full p-4 rounded-2xl border border-[#e0e0db] text-xs leading-relaxed text-[#21164c] focus:outline-none focus:border-[#592eff] focus:ring-2 focus:ring-[#592eff]/10 font-normal"
+                            className="w-full p-4 rounded-2xl border border-line text-xs leading-relaxed text-ink focus:outline-none focus:border-ink focus:ring-2 focus:ring-accent/10 font-normal"
                           />
                         </div>
                       )}
@@ -1614,15 +1608,15 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
 
                   {/* Indicateur d'état de l'étape (le bouton d'action principal est dans le pied de page) */}
                   <div className="pt-4 border-t border-[#f0f0ed] flex items-center justify-between">
-                    <div className="text-xs text-[#5f5f69] flex items-center gap-1.5">
+                    <div className="text-xs text-muted flex items-center gap-1.5">
                       {validatedStepTabs.includes(activeStepTab) ? (
-                        <span className="text-emerald-600 font-bold flex items-center gap-1.5">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        <span className="text-muted font-medium flex items-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4 text-muted" />
                           Étape {activeStepTab + 1} validée
                         </span>
                       ) : (
-                        <span className="text-[#5f5f69] flex items-center gap-1.5">
-                          <Info className="w-4 h-4 text-[#592eff]" />
+                        <span className="text-muted flex items-center gap-1.5">
+                          <Info className="w-4 h-4 text-ink" />
                           Cliquez sur « Valider & Étape suivante » ci-dessous pour continuer
                         </span>
                       )}
@@ -1636,36 +1630,36 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
           {/* STEP 4: Validation & Lancement */}
           {currentStep === 4 && (
             <div className="space-y-6">
-              <div className="p-6 rounded-2xl bg-gradient-to-r from-[#592eff]/10 to-transparent border border-[#592eff]/20">
-                <h3 className="text-base font-bold text-[#21164c] mb-1">
+              <div className="rounded-xl border border-line bg-surface-2 p-5">
+                <h3 className="text-base font-medium text-ink mb-1">
                   Récapitulatif de la campagne
                 </h3>
-                <p className="text-xs text-[#5f5f69]">
+                <p className="text-xs text-muted">
                   Vérifiez la configuration avant d'activer votre séquence d'envois.
                 </p>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4 pt-4 border-t border-[#592eff]/15">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4 pt-4 border-t border-ink">
                   <div>
-                    <span className="text-[11px] text-[#5f5f69] block">Nom :</span>
-                    <span className="text-xs font-bold text-[#21164c] truncate block">
+                    <span className="text-xs text-muted block">Nom :</span>
+                    <span className="text-xs font-medium text-ink truncate block">
                       {campaignName}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[11px] text-[#5f5f69] block">Audience :</span>
-                    <span className="text-xs font-bold text-[#21164c]">
+                    <span className="text-xs text-muted block">Audience :</span>
+                    <span className="text-xs font-medium text-ink">
                       {totalEligibleProspects} prospects
                     </span>
                   </div>
                   <div>
-                    <span className="text-[11px] text-[#5f5f69] block">Étapes :</span>
-                    <span className="text-xs font-bold text-[#21164c]">
+                    <span className="text-xs text-muted block">Étapes :</span>
+                    <span className="text-xs font-medium text-ink">
                       {configuredSteps.length} étape(s)
                     </span>
                   </div>
                   <div>
-                    <span className="text-[11px] text-[#5f5f69] block">Sécurité :</span>
-                    <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
+                    <span className="text-xs text-muted block">Sécurité :</span>
+                    <span className="text-xs font-medium text-muted flex items-center gap-1">
                       <ShieldCheck className="w-3.5 h-3.5" /> Quotas actifs
                     </span>
                   </div>
@@ -1673,25 +1667,25 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
               </div>
 
               {/* Étapes détaillées */}
-              <div className="p-5 rounded-2xl border border-[#e0e0db] space-y-3 bg-[#fafafd]">
-                <h4 className="text-xs font-bold text-[#21164c] uppercase tracking-wider mb-2">
+              <div className="p-5 rounded-2xl border border-line space-y-3 bg-surface-2">
+                <h4 className="text-xs font-medium text-ink mb-2">
                   Déroulement de la séquence
                 </h4>
                 <div className="space-y-2">
                   {configuredSteps.map((step, idx) => (
                     <div
                       key={idx}
-                      className="p-3 rounded-xl bg-white border border-[#e0e0db]/80 flex items-center justify-between text-xs"
+                      className="p-3 rounded-xl bg-white border border-line/80 flex items-center justify-between text-xs"
                     >
                       <div className="flex items-center gap-2.5">
-                        <span className="w-5 h-5 rounded-full bg-[#592eff]/10 text-[#592eff] font-bold text-[10px] flex items-center justify-center">
+                        <span className="w-5 h-5 rounded-full bg-surface-2 text-ink font-medium text-xs flex items-center justify-center">
                           {idx + 1}
                         </span>
                         {getActionTypeIcon(step.actionType)}
-                        <span className="font-bold text-[#21164c]">
+                        <span className="font-medium text-ink">
                           {getActionTypeLabel(step.actionType)}
                           {step.actionType === "INVITATION" && (
-                            <span className="ml-1.5 text-[10px] font-semibold text-[#592eff]">
+                            <span className="ml-1.5 text-xs font-semibold text-ink">
                               {step.messageText && step.messageText.trim().length > 0
                                 ? "• avec note"
                                 : "• sans note (recommandé)"}
@@ -1699,7 +1693,7 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
                           )}
                         </span>
                       </div>
-                      <span className="text-[11px] text-[#5f5f69]">
+                      <span className="text-xs text-muted">
                         {step.delayDays === 0
                           ? "Immédiat"
                           : `Délai : +${step.delayDays}j`}
@@ -1710,19 +1704,19 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
               </div>
 
               {/* Option d'activation */}
-              <div className="p-4 rounded-2xl border border-[#e0e0db] space-y-3">
+              <div className="p-4 rounded-2xl border border-line space-y-3">
                 <label className="flex items-start gap-3 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={startImmediately}
                     onChange={(e) => setStartImmediately(e.target.checked)}
-                    className="mt-1 w-4 h-4 rounded text-[#592eff] focus:ring-[#592eff]"
+                    className="mt-1 w-4 h-4 rounded text-ink focus:ring-accent"
                   />
                   <div>
-                    <span className="text-xs font-bold text-[#21164c] block">
+                    <span className="text-xs font-medium text-ink block">
                       Activer la campagne immédiatement
                     </span>
-                    <span className="text-xs text-[#5f5f69] leading-relaxed block">
+                    <span className="text-xs text-muted leading-relaxed block">
                       Le worker Bleadin commencera à exécuter les premières étapes selon vos créneaux et quotas de sécurité.
                     </span>
                   </div>
@@ -1730,107 +1724,6 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
               </div>
             </div>
           )}
-        </div>
-
-        {/* Modal Footer avec bouton Sauvegarder à chaque étape */}
-        <div className="px-8 py-5 border-t border-[#f0f0ed] bg-[#fafafd] flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
-          <div className="flex items-center gap-3">
-            {currentStep > 1 && (
-              <button
-                type="button"
-                onClick={() => {
-                  if (currentStep === 3) {
-                    if (activeStepTab > 0) {
-                      setActiveStepTab((prev) => prev - 1);
-                    } else {
-                      setCurrentStep(2);
-                    }
-                  } else if (currentStep === 4) {
-                    setCurrentStep(3);
-                    setActiveStepTab(configuredSteps.length - 1);
-                  } else {
-                    setCurrentStep((prev) => prev - 1);
-                  }
-                }}
-                className="px-4 py-2.5 rounded-full border border-[#e0e0db] text-xs font-bold text-[#5f5f69] hover:text-[#21164c] hover:bg-white transition-colors flex items-center gap-1.5 cursor-pointer"
-              >
-                <ChevronLeft className="w-4 h-4" /> Précédent
-              </button>
-            )}
-
-            {/* Message de succès de sauvegarde */}
-            {savedSuccessMsg && (
-              <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 px-3.5 py-1.5 rounded-full border border-emerald-200 animate-in fade-in duration-200">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                <span>{savedSuccessMsg}</span>
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
-            {/* Bouton Sauvegarder (brouillon) présent à chaque étape */}
-            <button
-              type="button"
-              disabled={savingDraft || loading}
-              onClick={handleSaveDraft}
-              className="px-4 py-2.5 rounded-full border border-[#e0e0db] bg-white hover:border-[#592eff]/40 hover:bg-[#592eff]/5 text-xs font-bold text-[#21164c] transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95 disabled:opacity-50"
-              title="Sauvegarder l'état actuel de la campagne dans les brouillons"
-            >
-              <BookmarkCheck className="w-4 h-4 text-[#592eff]" />
-              <span>{savingDraft ? "Sauvegarde..." : "Sauvegarder"}</span>
-            </button>
-
-            {currentStep < 4 ? (
-              <button
-                type="button"
-                onClick={() => {
-                  if (currentStep === 3) {
-                    handleValidateCurrentStepTab();
-                  } else {
-                    setCurrentStep((prev) => prev + 1);
-                  }
-                }}
-                className="px-6 py-2.5 rounded-full bg-[#592eff] hover:bg-[#4d25e0] text-white text-xs font-bold shadow-md shadow-[#592eff]/25 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
-              >
-                {currentStep === 3 ? (
-                  activeStepTab < configuredSteps.length - 1 ? (
-                    <>
-                      <span>Valider & Étape suivante</span>
-                      <ChevronRight className="w-4 h-4" />
-                    </>
-                  ) : (
-                    <>
-                      <span>Valider la séquence</span>
-                      <ChevronRight className="w-4 h-4" />
-                    </>
-                  )
-                ) : (
-                  <>
-                    <span>Suivant</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
-            ) : (
-              <button
-                type="button"
-                disabled={loading || savingDraft}
-                onClick={handleSubmitCampaign}
-                className="px-7 py-2.5 rounded-full bg-[#592eff] hover:bg-[#4d25e0] text-white text-xs font-bold shadow-md shadow-[#592eff]/30 transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer active:scale-95"
-              >
-                {loading ? (
-                  <span>Lancement...</span>
-                ) : (
-                  <>
-                    <Send className="w-3.5 h-3.5" />
-                    <span>Lancer la campagne</span>
-                  </>
-                )}
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
 
       {/* Modale de détails du modèle de séquence (Style Waalaxy) */}
       <TemplateDetailModal
@@ -1844,6 +1737,6 @@ export const CampaignWizardModal: React.FC<CampaignWizardModalProps> = ({
           setCurrentStep(2);
         }}
       />
-    </div>
+    </Modal>
   );
 };

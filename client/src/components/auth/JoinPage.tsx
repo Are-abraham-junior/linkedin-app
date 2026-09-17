@@ -97,7 +97,7 @@ export const JoinPage: React.FC<JoinPageProps> = ({ token, onJoined }) => {
   if (loadingInfo) {
     return (
       <AuthShell title="Invitation">
-        <p className="text-[15px] text-[#5f5f69]">Chargement de l'invitation…</p>
+        <p className="text-[15px] text-muted">Chargement de l'invitation…</p>
       </AuthShell>
     );
   }

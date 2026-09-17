@@ -17,6 +17,8 @@ const ProviderSchema = z.object({
   apiKey: z.string().trim().optional(),
   model: z.string().trim().min(1, "Modèle requis").max(120),
   temperature: z.coerce.number().min(0).max(2).default(0.2),
+  numCtx: z.coerce.number().int().min(2048).max(262144).default(16384),
+  thinking: z.preprocess((v) => v === true || v === "true" || v === 1, z.boolean()).default(false),
 });
 
 function zodMessage(err: unknown): string | null {
@@ -45,6 +47,8 @@ export async function createAiProvider(req: AuthenticatedRequest, res: Response)
         apiKey: body.apiKey || null,
         model: body.model,
         temperature: body.temperature,
+        numCtx: body.numCtx,
+        thinking: body.thinking,
         isActive: count === 0,
       },
     });
@@ -80,6 +84,8 @@ export async function updateAiProvider(req: AuthenticatedRequest, res: Response)
         ...(body.apiKey ? { apiKey: body.apiKey } : {}),
         model: body.model,
         temperature: body.temperature,
+        numCtx: body.numCtx,
+        thinking: body.thinking,
         status: "UNTESTED",
         lastError: null,
       },
@@ -129,6 +135,24 @@ export async function activateAiProvider(req: AuthenticatedRequest, res: Respons
     res.json({ success: true });
   } catch (err) {
     console.error("[adminAi:activateAiProvider]", err);
+    res.status(500).json({ success: false, error: "Une erreur inattendue est survenue." });
+  }
+}
+
+/** Désactive le provider : plus aucun provider actif → Bleadin IA est indisponible pour tous les utilisateurs. */
+export async function deactivateAiProvider(req: AuthenticatedRequest, res: Response) {
+  try {
+    const id = req.params.id as string;
+    const existing = await prisma.aiProvider.findUnique({ where: { id } });
+    if (!existing) {
+      res.status(404).json({ success: false, error: "Provider introuvable." });
+      return;
+    }
+    await prisma.aiProvider.update({ where: { id }, data: { isActive: false } });
+    invalidateProviderCache();
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[adminAi:deactivateAiProvider]", err);
     res.status(500).json({ success: false, error: "Une erreur inattendue est survenue." });
   }
 }

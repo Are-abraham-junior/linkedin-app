@@ -5,7 +5,8 @@ import { useAuth } from "../../context/AuthContext";
 import { apiRequest } from "../../services/api";
 import { streamAiMessage, type AiCard, type AiDraftStep, type AiStreamEvent } from "../../services/aiStream";
 import { renderMarkdown } from "./markdown";
-import { AccountStatusCard, CampaignProposalCard, ConfirmLaunchCard, LaunchResultCard, ListCard, ProfilesCard } from "./AiCards";
+import { ConfirmModal } from "../common/ConfirmModal";
+import { AccountStatusCard, ActionResultCard, CampaignProposalCard, CampaignStepsCard, ConfirmDeleteListCard, ConfirmLaunchCard, LaunchResultCard, ListCard, ProfilesCard } from "./AiCards";
 
 interface ConversationSummary {
   id: string;
@@ -31,6 +32,8 @@ interface AiStatus {
 const SUGGESTIONS = [
   "Je recherche 10 DG dans le secteur pétrolier en Côte d'Ivoire",
   "Propose-moi une séquence pour prendre des rendez-vous avec des DRH",
+  "Quelle stratégie pour prospecter des dirigeants très sollicités ?",
+  "Analyse les messages et les délais de ma dernière campagne",
   "Quels sont mes quotas d'invitations cette semaine ?",
   "Aide-moi à rédiger une note d'invitation pour des directeurs financiers",
 ];
@@ -51,9 +54,12 @@ export const BleadinIAView: React.FC = () => {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [activeTool, setActiveTool] = useState<string | null>(null);
-  const [pendingCampaignId, setPendingCampaignId] = useState<string | null>(null);
+  /** Jeton de la confirmation (lancement ou suppression) encore active : seule la carte qui le porte garde ses boutons. */
+  const [pendingToken, setPendingToken] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
+  const [conversationToDelete, setConversationToDelete] = useState<ConversationSummary | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -98,7 +104,7 @@ export const BleadinIAView: React.FC = () => {
             cards: Array.isArray(m.cards) ? m.cards : undefined,
           }))
         );
-        setPendingCampaignId(res.conversation?.workspace?.pendingConfirmation?.campaignId || null);
+        setPendingToken(res.conversation?.workspace?.pendingConfirmation?.token || null);
       }
     } finally {
       setLoadingConversation(false);
@@ -109,18 +115,26 @@ export const BleadinIAView: React.FC = () => {
     if (sending) return;
     setActiveId(null);
     setItems([]);
-    setPendingCampaignId(null);
+    setPendingToken(null);
     setNotice(null);
     textareaRef.current?.focus();
   };
 
-  const deleteConversation = async (id: string) => {
-    if (sending) return;
-    if (!window.confirm("Supprimer cette conversation ?")) return;
-    const res = await apiRequest(`/ai/conversations/${id}`, { method: "DELETE" });
-    if (res.success) {
-      setConversations((prev) => prev.filter((c) => c.id !== id));
-      if (activeId === id) startNewConversation();
+  const confirmDeleteConversation = async () => {
+    if (!conversationToDelete || deleting) return;
+    const id = conversationToDelete.id;
+    setDeleting(true);
+    try {
+      const res = await apiRequest(`/ai/conversations/${id}`, { method: "DELETE" });
+      if (res.success) {
+        setConversations((prev) => prev.filter((c) => c.id !== id));
+        if (activeId === id) startNewConversation();
+        setConversationToDelete(null);
+      } else {
+        setNotice(res.error || "Impossible de supprimer la conversation.");
+      }
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -165,14 +179,17 @@ export const BleadinIAView: React.FC = () => {
         }
         return [...prev.slice(0, idx), cardItem, ...prev.slice(idx)];
       });
-      if (card.type === "confirm_launch") setPendingCampaignId(card.campaignId);
-      if (card.type === "launch_result" || card.type === "campaign_proposal") setPendingCampaignId(null);
+      if (card.type === "confirm_launch" || card.type === "confirm_delete_list") setPendingToken(card.token);
+      else if (card.type === "launch_result" || card.type === "campaign_proposal" || card.type === "action_result") setPendingToken(null);
     };
 
     const onEvent = (event: AiStreamEvent) => {
       switch (event.type) {
         case "delta":
           setItems((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + event.text } : m)));
+          break;
+        case "replace":
+          setItems((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: event.text } : m)));
           break;
         case "tool_start":
           setActiveTool(event.label);
@@ -235,8 +252,20 @@ export const BleadinIAView: React.FC = () => {
     }
     if (res.card) {
       setItems((prev) => [...prev, { id: res.messageId || localId(), role: "tool", content: "", cards: [res.card] }]);
-      setPendingCampaignId(null);
+      setPendingToken(null);
     }
+    return true;
+  };
+
+  const saveCampaignSteps = async (campaignId: string, steps: AiDraftStep[]): Promise<boolean> => {
+    if (!activeId) return false;
+    const patches = steps.map((s) => ({ stepOrder: s.stepOrder, delayDays: s.delayDays, messageText: s.messageText ?? undefined }));
+    const res = await apiRequest<{ card: AiCard; messageId: string }>(`/ai/conversations/${activeId}/update-campaign`, { method: "POST", body: { campaignId, steps: patches } });
+    if (!res.success) {
+      setNotice(res.error || "Impossible de modifier la campagne.");
+      return false;
+    }
+    if (res.card) setItems((prev) => [...prev, { id: res.messageId || localId(), role: "tool", content: "", cards: [res.card] }]);
     return true;
   };
 
@@ -254,11 +283,26 @@ export const BleadinIAView: React.FC = () => {
             key={key}
             card={card}
             disabled={sending}
-            consumed={!isLast || pendingCampaignId !== card.campaignId}
+            consumed={!isLast || pendingToken !== card.token}
             onConfirm={(token) => runTurn({ confirmToken: token }, "Je confirme le lancement de la campagne.")}
             onCancel={() => sendText("Annule le lancement, je ne veux pas lancer maintenant.")}
           />
         );
+      case "confirm_delete_list":
+        return (
+          <ConfirmDeleteListCard
+            key={key}
+            card={card}
+            disabled={sending}
+            consumed={!isLast || pendingToken !== card.token}
+            onConfirm={(token) => runTurn({ confirmToken: token }, `Je confirme la suppression de la liste « ${card.list.name} ».`)}
+            onCancel={() => sendText("Annule la suppression, je garde cette liste.")}
+          />
+        );
+      case "campaign_steps":
+        return <CampaignStepsCard key={key} card={card} disabled={sending} onSaveSteps={isLast ? saveCampaignSteps : undefined} />;
+      case "action_result":
+        return <ActionResultCard key={key} card={card} />;
       case "launch_result":
         return <LaunchResultCard key={key} card={card} />;
       case "account_status":
@@ -273,7 +317,7 @@ export const BleadinIAView: React.FC = () => {
   if (!status) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <Loader2 className="w-6 h-6 text-[#592eff] animate-spin" />
+        <Loader2 className="w-6 h-6 text-ink animate-spin" />
       </div>
     );
   }
@@ -281,13 +325,13 @@ export const BleadinIAView: React.FC = () => {
   if (!status.planAllowed) {
     return (
       <div className="flex-1 flex items-center justify-center p-6">
-        <div className="max-w-md w-full rounded-[32px] bg-white border border-[#e0e0db] p-8 text-center shadow-xs">
-          <div className="w-14 h-14 mx-auto rounded-3xl bg-[#ffaae6] flex items-center justify-center">
-            <Lock className="w-6 h-6 text-[#21164c]" />
+        <div className="max-w-md w-full rounded-[32px] bg-white border border-line p-8 text-center">
+          <div className="w-14 h-14 mx-auto rounded-2xl bg-[#ffaae6] flex items-center justify-center">
+            <Lock className="w-6 h-6 text-ink" />
           </div>
-          <h2 className="mt-5 text-xl font-extrabold text-[#21164c]">Bleadin IA est réservé aux offres Pro et Business</h2>
-          <p className="mt-2 text-[13px] text-[#5f5f69]">Votre assistant de prospection : recherche de profils, création de listes, séquences et messages rédigés pour vous, lancement guidé des campagnes.</p>
-          <button type="button" onClick={() => navigate("/settings?tab=billing")} className="mt-6 inline-flex items-center gap-2 h-10 px-5 rounded-xl bg-[#592eff] text-white text-[13px] font-semibold hover:bg-[#4a22e0]">
+          <h2 className="mt-5 text-xl font-semibold text-ink">Bleadin IA est réservé aux offres Pro et Business</h2>
+          <p className="mt-2 text-sm text-muted">Votre assistant de prospection : recherche de profils, création de listes, séquences et messages rédigés pour vous, lancement guidé des campagnes.</p>
+          <button type="button" onClick={() => navigate("/settings?tab=billing")} className="mt-6 inline-flex items-center gap-2 h-10 px-5 rounded-xl bg-accent text-white text-sm font-semibold hover:bg-accent-hover">
             <Sparkles className="w-4 h-4" />
             Découvrir les offres
           </button>
@@ -299,16 +343,16 @@ export const BleadinIAView: React.FC = () => {
   if (!status.providerConfigured) {
     return (
       <div className="flex-1 flex items-center justify-center p-6">
-        <div className="max-w-md w-full rounded-[32px] bg-white border border-[#e0e0db] p-8 text-center shadow-xs">
-          <div className="w-14 h-14 mx-auto rounded-3xl bg-[#bcf2ff] flex items-center justify-center">
-            <Settings2 className="w-6 h-6 text-[#21164c]" />
+        <div className="max-w-md w-full rounded-[32px] bg-white border border-line p-8 text-center">
+          <div className="w-14 h-14 mx-auto rounded-2xl bg-[#bcf2ff] flex items-center justify-center">
+            <Settings2 className="w-6 h-6 text-ink" />
           </div>
-          <h2 className="mt-5 text-xl font-extrabold text-[#21164c]">Bleadin IA n'est pas encore activé</h2>
-          <p className="mt-2 text-[13px] text-[#5f5f69]">
+          <h2 className="mt-5 text-xl font-semibold text-ink">Bleadin IA n'est pas encore activé</h2>
+          <p className="mt-2 text-sm text-muted">
             {isSuperAdmin ? "Configurez et activez un provider IA dans les paramètres de la plateforme." : "L'assistant sera disponible dès que l'administrateur de la plateforme aura activé un provider IA."}
           </p>
           {isSuperAdmin && (
-            <button type="button" onClick={() => navigate("/admin/settings")} className="mt-6 inline-flex items-center gap-2 h-10 px-5 rounded-xl bg-[#592eff] text-white text-[13px] font-semibold hover:bg-[#4a22e0]">
+            <button type="button" onClick={() => navigate("/admin/settings")} className="mt-6 inline-flex items-center gap-2 h-10 px-5 rounded-xl bg-accent text-white text-sm font-semibold hover:bg-accent-hover">
               Configurer les providers IA
             </button>
           )}
@@ -322,28 +366,28 @@ export const BleadinIAView: React.FC = () => {
   const lastCardItemId = [...items].reverse().find((m) => m.cards?.length)?.id;
 
   return (
-    <div className="flex-1 min-h-0 flex bg-[#f8f9fc]">
+    <div className="flex-1 min-h-0 flex bg-surface-2">
       {/* Conversations */}
-      <aside className={`${sidebarOpen ? "w-64" : "w-0"} shrink-0 transition-all duration-200 overflow-hidden border-r border-[#e0e0db] bg-white hidden md:flex flex-col`}>
-        <div className="p-3 border-b border-[#e0e0db]/70">
-          <button type="button" onClick={startNewConversation} disabled={sending} className="w-full inline-flex items-center justify-center gap-2 h-9 rounded-xl bg-[#21164c] text-white text-[12px] font-semibold hover:bg-[#2c1f66] disabled:opacity-60">
+      <aside className={`${sidebarOpen ? "w-64" : "w-0"} shrink-0 transition-all duration-200 overflow-hidden border-r border-line bg-white hidden md:flex flex-col`}>
+        <div className="p-3 border-b border-line/70">
+          <button type="button" onClick={startNewConversation} disabled={sending} className="w-full inline-flex items-center justify-center gap-2 h-9 rounded-xl bg-ink text-white text-[12px] font-semibold hover:bg-[#2c1f66] disabled:opacity-60">
             <Plus className="w-4 h-4" />
             Nouvelle conversation
           </button>
         </div>
         <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
-          {conversations.length === 0 && <p className="px-3 py-6 text-center text-[11px] text-[#5f5f69]">Aucune conversation pour l'instant.</p>}
+          {conversations.length === 0 && <p className="px-3 py-6 text-center text-xs text-muted">Aucune conversation pour l'instant.</p>}
           {conversations.map((c) => (
-            <div key={c.id} className={`group flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer ${activeId === c.id ? "bg-[#592eff]/10 text-[#592eff]" : "hover:bg-[#f5f5f7] text-[#353241]"}`} onClick={() => openConversation(c.id)}>
+            <div key={c.id} className={`group flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer ${activeId === c.id ? "bg-surface-2 text-ink" : "hover:bg-surface-2 text-ink-2"}`} onClick={() => openConversation(c.id)}>
               <MessageSquare className="w-3.5 h-3.5 shrink-0" />
               <span className="flex-1 min-w-0 truncate text-[12px] font-semibold">{c.title}</span>
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  deleteConversation(c.id);
+                  if (!sending) setConversationToDelete(c);
                 }}
-                className="opacity-0 group-hover:opacity-100 text-[#5f5f69] hover:text-red-600"
+                className="opacity-0 group-hover:opacity-100 text-muted hover:text-danger"
                 title="Supprimer"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -355,18 +399,18 @@ export const BleadinIAView: React.FC = () => {
 
       {/* Zone de chat */}
       <section className="flex-1 min-w-0 flex flex-col">
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-[#e0e0db]/70 bg-white/70">
-          <button type="button" onClick={() => setSidebarOpen((v) => !v)} className="hidden md:inline-flex w-8 h-8 items-center justify-center rounded-lg text-[#5f5f69] hover:bg-[#f5f5f7]" title={sidebarOpen ? "Masquer les conversations" : "Afficher les conversations"}>
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-line/70 bg-white/70">
+          <button type="button" onClick={() => setSidebarOpen((v) => !v)} className="hidden md:inline-flex w-8 h-8 items-center justify-center rounded-lg text-muted hover:bg-surface-2" title={sidebarOpen ? "Masquer les conversations" : "Afficher les conversations"}>
             {sidebarOpen ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
           </button>
-          <div className="w-7 h-7 rounded-xl bg-[#592eff] flex items-center justify-center text-white">
+          <div className="w-7 h-7 rounded-xl bg-accent flex items-center justify-center text-white">
             <Sparkles className="w-3.5 h-3.5" />
           </div>
           <div className="min-w-0">
-            <p className="text-[13px] font-bold text-[#21164c] leading-tight">Bleadin IA</p>
-            <p className="text-[10px] text-[#5f5f69] leading-tight">Expert prospection LinkedIn</p>
+            <p className="text-sm font-medium text-ink leading-tight">Bleadin IA</p>
+            <p className="text-xs text-muted leading-tight">Expert prospection LinkedIn</p>
           </div>
-          <button type="button" onClick={startNewConversation} disabled={sending} className="md:hidden ml-auto inline-flex items-center gap-1 h-8 px-3 rounded-lg bg-[#21164c] text-white text-[11px] font-semibold">
+          <button type="button" onClick={startNewConversation} disabled={sending} className="md:hidden ml-auto inline-flex items-center gap-1 h-8 px-3 rounded-lg bg-ink text-white text-xs font-semibold">
             <Plus className="w-3.5 h-3.5" /> Nouveau
           </button>
         </div>
@@ -375,18 +419,16 @@ export const BleadinIAView: React.FC = () => {
           <div className="max-w-3xl mx-auto px-4 py-6 space-y-4">
             {loadingConversation ? (
               <div className="flex justify-center py-10">
-                <Loader2 className="w-5 h-5 text-[#592eff] animate-spin" />
+                <Loader2 className="w-5 h-5 text-ink animate-spin" />
               </div>
             ) : items.length === 0 ? (
               <div className="py-10 text-center">
-                <div className="w-16 h-16 mx-auto rounded-[28px] bg-[#592eff] flex items-center justify-center text-white shadow-lg shadow-[#592eff]/30">
-                  <Sparkles className="w-7 h-7" />
-                </div>
-                <h2 className="mt-5 text-2xl font-extrabold text-[#21164c]">Bonjour{user?.firstName ? ` ${user.firstName}` : ""}, qui prospectons-nous aujourd'hui ?</h2>
-                <p className="mt-2 text-[13px] text-[#5f5f69] max-w-md mx-auto">Décrivez votre cible : je cherche les profils, je crée la liste, je propose la séquence et je rédige les messages. Vous validez, puis vous lancez.</p>
+                <Sparkles className="mx-auto h-7 w-7 text-accent" strokeWidth={1.5} />
+                <h2 className="display mt-5 text-2xl">Bonjour{user?.firstName ? ` ${user.firstName}` : ""}, qui prospectons-nous aujourd'hui ?</h2>
+                <p className="mt-2 text-sm text-muted max-w-md mx-auto">Décrivez votre cible ou posez une question de stratégie : je cherche les profils, j'organise vos listes, je conçois la séquence, je rédige et j'améliore vos messages et vos délais. Vous validez, puis vous lancez.</p>
                 <div className="mt-6 grid gap-2 sm:grid-cols-2">
                   {SUGGESTIONS.map((s) => (
-                    <button key={s} type="button" onClick={() => sendText(s)} className="text-left rounded-2xl border border-[#e0e0db] bg-white px-4 py-3 text-[12px] font-semibold text-[#353241] hover:border-[#592eff] hover:text-[#592eff] transition-colors">
+                    <button key={s} type="button" onClick={() => sendText(s)} className="text-left rounded-lg border border-line bg-white px-4 py-3 text-[12px] font-semibold text-ink-2 hover:border-ink hover:text-ink transition-colors">
                       {s}
                     </button>
                   ))}
@@ -400,7 +442,7 @@ export const BleadinIAView: React.FC = () => {
                     <div key={m.id} className="space-y-3">
                       {m.role === "user" && m.content && (
                         <div className="flex justify-end">
-                          <div className="max-w-[85%] rounded-2xl rounded-br-md bg-[#592eff] text-white px-4 py-2.5 text-[13px] whitespace-pre-wrap">{m.content}</div>
+                          <div className="max-w-[85%] rounded-2xl rounded-br-md bg-accent text-white px-4 py-2.5 text-sm whitespace-pre-wrap">{m.content}</div>
                         </div>
                       )}
                       {m.cards.map((card, i) => renderCard(card, `${m.id}-${i}`, isLast))}
@@ -410,24 +452,24 @@ export const BleadinIAView: React.FC = () => {
                 if (m.role === "user") {
                   return (
                     <div key={m.id} className="flex justify-end">
-                      <div className="max-w-[85%] rounded-2xl rounded-br-md bg-[#592eff] text-white px-4 py-2.5 text-[13px] whitespace-pre-wrap">{m.content}</div>
+                      <div className="max-w-[85%] rounded-2xl rounded-br-md bg-accent text-white px-4 py-2.5 text-sm whitespace-pre-wrap">{m.content}</div>
                     </div>
                   );
                 }
                 if (m.role !== "assistant" || (!m.content && !m.streaming)) return null;
                 return (
                   <div key={m.id} className="flex gap-2.5">
-                    <div className="w-7 h-7 rounded-xl bg-[#592eff] flex items-center justify-center text-white shrink-0 mt-0.5">
+                    <div className="w-7 h-7 rounded-xl bg-accent flex items-center justify-center text-white shrink-0 mt-0.5">
                       <Sparkles className="w-3.5 h-3.5" />
                     </div>
-                    <div className={`max-w-[85%] rounded-2xl rounded-tl-md border px-4 py-2.5 text-[13px] text-[#353241] ${m.error ? "bg-red-50 border-red-200 text-red-700" : "bg-white border-[#e0e0db]"}`}>
+                    <div className={`max-w-[85%] rounded-2xl rounded-tl-md border px-4 py-2.5 text-sm text-ink-2 ${m.error ? "bg-surface-2 border-line text-danger" : "bg-white border-line"}`}>
                       {m.error && <AlertCircle className="inline w-3.5 h-3.5 mr-1 -mt-0.5" />}
                       {m.content ? renderMarkdown(m.content) : null}
                       {m.streaming && (
-                        <span className="inline-flex items-center gap-1 text-[#5f5f69] mt-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#592eff] animate-bounce [animation-delay:-0.3s]" />
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#592eff] animate-bounce [animation-delay:-0.15s]" />
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#592eff] animate-bounce" />
+                        <span className="inline-flex items-center gap-1 text-muted mt-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-accent [animation-delay:-0.3s]" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-accent [animation-delay:-0.15s]" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-accent" />
                         </span>
                       )}
                     </div>
@@ -436,8 +478,8 @@ export const BleadinIAView: React.FC = () => {
               })
             )}
             {activeTool && (
-              <div className="flex items-center gap-2 pl-10 text-[12px] text-[#5f5f69]">
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-[#592eff]" />
+              <div className="flex items-center gap-2 pl-10 text-[12px] text-muted">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-ink" />
                 {activeTool}…
               </div>
             )}
@@ -445,14 +487,14 @@ export const BleadinIAView: React.FC = () => {
           </div>
         </div>
 
-        <div className="border-t border-[#e0e0db]/70 bg-white/80 backdrop-blur px-4 py-3">
+        <div className="border-t border-line/70 bg-white/80 backdrop-blur px-4 py-3">
           <div className="max-w-3xl mx-auto">
             {notice && (
-              <p className="mb-2 text-[12px] text-red-600 flex items-center gap-1">
+              <p className="mb-2 text-[12px] text-danger flex items-center gap-1">
                 <AlertCircle className="w-3.5 h-3.5" /> {notice}
               </p>
             )}
-            <div className="flex items-end gap-2 rounded-3xl border border-[#e0e0db] bg-white px-4 py-2 focus-within:border-[#592eff] shadow-xs">
+            <div className="flex items-end gap-2 rounded-2xl border border-line bg-white px-4 py-2 focus-within:border-ink">
               <textarea
                 ref={textareaRef}
                 value={input}
@@ -460,7 +502,7 @@ export const BleadinIAView: React.FC = () => {
                 onKeyDown={handleKeyDown}
                 rows={1}
                 placeholder="Décrivez votre cible ou posez une question…"
-                className="flex-1 resize-none bg-transparent text-[13px] text-[#353241] placeholder:text-[#5f5f69]/70 focus:outline-none max-h-40 py-1.5"
+                className="flex-1 resize-none bg-transparent text-sm text-ink-2 placeholder:text-muted/70 focus:outline-none max-h-40 py-1.5"
                 style={{ height: "auto" }}
                 onInput={(e) => {
                   const el = e.currentTarget;
@@ -469,19 +511,34 @@ export const BleadinIAView: React.FC = () => {
                 }}
               />
               {sending ? (
-                <button type="button" onClick={stop} className="w-9 h-9 rounded-2xl bg-[#21164c] text-white flex items-center justify-center shrink-0" title="Arrêter">
+                <button type="button" onClick={stop} className="w-9 h-9 rounded-lg bg-ink text-white flex items-center justify-center shrink-0" title="Arrêter">
                   <Square className="w-3.5 h-3.5" fill="currentColor" />
                 </button>
               ) : (
-                <button type="button" onClick={() => sendText(input)} disabled={!input.trim()} className="w-9 h-9 rounded-2xl bg-[#592eff] text-white flex items-center justify-center shrink-0 hover:bg-[#4a22e0] disabled:opacity-40" title="Envoyer">
+                <button type="button" onClick={() => sendText(input)} disabled={!input.trim()} className="w-9 h-9 rounded-lg bg-accent text-white flex items-center justify-center shrink-0 hover:bg-accent-hover disabled:opacity-40" title="Envoyer">
                   <Send className="w-4 h-4" />
                 </button>
               )}
             </div>
-            <p className="mt-1.5 text-[10px] text-[#5f5f69] text-center">Bleadin IA prépare, vous validez : aucune campagne n'est lancée sans votre confirmation.</p>
+            <p className="mt-1.5 text-xs text-muted text-center">Bleadin IA prépare, vous validez : aucune campagne n'est lancée ni liste supprimée sans votre confirmation.</p>
           </div>
         </div>
       </section>
+
+      <ConfirmModal
+        isOpen={conversationToDelete !== null}
+        onClose={() => {
+          if (!deleting) setConversationToDelete(null);
+        }}
+        onConfirm={confirmDeleteConversation}
+        title="Supprimer cette conversation ?"
+        description="L'historique des échanges avec Bleadin IA sera définitivement effacé. Les listes et campagnes créées au cours de cette conversation sont conservées."
+        itemName={conversationToDelete?.title}
+        itemType="Conversation"
+        confirmText="Supprimer la conversation"
+        variant="danger"
+        isLoading={deleting}
+      />
     </div>
   );
 };

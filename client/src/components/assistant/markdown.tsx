@@ -11,8 +11,8 @@ function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
     const token = match[0];
     const key = `${keyPrefix}-${i++}`;
     if (token.startsWith("**")) nodes.push(<strong key={key}>{token.slice(2, -2)}</strong>);
-    else if (token.startsWith("`")) nodes.push(<code key={key} className="px-1 py-0.5 rounded bg-[#f5f5f7] text-[11px]">{token.slice(1, -1)}</code>);
-    else if (token.startsWith("[")) nodes.push(<a key={key} href={match[3]} target="_blank" rel="noreferrer" className="text-[#592eff] underline">{match[2]}</a>);
+    else if (token.startsWith("`")) nodes.push(<code key={key} className="px-1 py-0.5 rounded bg-surface-2 text-xs">{token.slice(1, -1)}</code>);
+    else if (token.startsWith("[")) nodes.push(<a key={key} href={match[3]} target="_blank" rel="noreferrer" className="text-ink underline">{match[2]}</a>);
     else nodes.push(<em key={key}>{token.slice(1, -1)}</em>);
     last = match.index + token.length;
   }
@@ -59,7 +59,7 @@ export function renderMarkdown(text: string): React.ReactNode {
     flushList();
     if (!line.trim()) return;
     if (heading) {
-      blocks.push(<p key={`h-${idx}`} className="font-bold text-[#21164c]">{renderInline(heading[1], `h-${idx}`)}</p>);
+      blocks.push(<p key={`h-${idx}`} className="font-medium text-ink">{renderInline(heading[1], `h-${idx}`)}</p>);
       return;
     }
     blocks.push(<p key={`p-${idx}`}>{renderInline(line, `p-${idx}`)}</p>);

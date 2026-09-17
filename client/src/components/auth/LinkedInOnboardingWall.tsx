@@ -82,29 +82,29 @@ export const LinkedInOnboardingWall: React.FC<LinkedInOnboardingWallProps> = ({ 
   const displayName = user?.firstName || user?.name || user?.email?.split("@")[0] || "Chère prospectrice, cher prospecteur";
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#f8f9fc] via-[#ffffff] to-[#f0edf9] flex items-center justify-center p-4 sm:p-6">
+    <div className="min-h-screen bg-ink flex items-center justify-center p-4 sm:p-6">
       <div className="w-full max-w-2xl">
         {/* Header */}
         <div className="text-center mb-6">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#0077b5]/10 text-[#0077b5] text-xs font-bold mb-3 tracking-wide">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#0077b5]/10 text-[#0077b5] text-xs font-medium mb-3">
             <LinkedInIcon className="w-4 h-4" />
             Connexion LinkedIn
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#21164c] tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-semibold text-ink tracking-tight">
             Connectez votre compte LinkedIn
           </h1>
-          <p className="text-[#5f5f69] text-xs sm:text-sm mt-1">
-            Espace actif : <span className="font-bold text-[#21164c]">{user?.organization?.name || "Bleadin"}</span>
+          <p className="text-muted text-xs sm:text-sm mt-1">
+            Espace actif : <span className="font-medium text-ink">{user?.organization?.name || "Bleadin"}</span>
           </p>
         </div>
 
         {/* Card Form */}
-        <div className="adora-card p-6 sm:p-8 relative overflow-hidden shadow-2xl shadow-[#0077b5]/10 border border-[#e0e0db]/60 bg-white rounded-3xl">
+        <div className="rounded-2xl border border-line bg-surface p-6 sm:p-8 relative overflow-hidden border border-line/60 bg-white rounded-2xl">
           {onDismiss && !success && (
             <button
               type="button"
               onClick={onDismiss}
-              className="absolute right-4 top-4 w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-full hover:bg-gray-100 transition-colors cursor-pointer font-bold"
+              className="absolute right-4 top-4 w-8 h-8 flex items-center justify-center text-muted hover:text-muted rounded-full hover:bg-surface-2 transition-colors cursor-pointer font-medium"
               title="Fermer"
             >
               ✕
@@ -113,20 +113,20 @@ export const LinkedInOnboardingWall: React.FC<LinkedInOnboardingWallProps> = ({ 
 
           {success ? (
             <div className="py-6 flex flex-col items-center text-center">
-              <div className="w-16 h-16 rounded-full bg-emerald-50 flex items-center justify-center mb-4 animate-pulse">
-                <CheckCircle2 className="w-9 h-9 text-emerald-600" />
+              <div className="w-16 h-16 rounded-full bg-surface-2 flex items-center justify-center mb-4 animate-pulse">
+                <CheckCircle2 className="w-9 h-9 text-ok" />
               </div>
-              <h2 className="text-xl font-extrabold text-[#21164c] mb-1.5">
+              <h2 className="text-xl font-semibold text-ink mb-1.5">
                 Votre compte LinkedIn est connecté.
               </h2>
-              <p className="text-[#5f5f69] text-xs sm:text-sm">
+              <p className="text-muted text-xs sm:text-sm">
                 Redirection vers votre tableau de bord...
               </p>
             </div>
           ) : (
           <>
           {error && (
-            <div className="mb-5 p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold flex items-start gap-2.5">
+            <div className="mb-5 p-3.5 rounded-2xl bg-surface-2 border border-line text-danger text-xs font-semibold flex items-start gap-2.5">
               <p className="flex-1">{error}</p>
             </div>
           )}
@@ -148,35 +148,35 @@ export const LinkedInOnboardingWall: React.FC<LinkedInOnboardingWallProps> = ({ 
           ) : (
           <form onSubmit={handleConnect} className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-[#21164c] uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-medium text-ink mb-1.5">
                 Email LinkedIn
               </label>
               <div className="relative">
-                <Mail className="w-4 h-4 text-[#5f5f69] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <Mail className="w-4 h-4 text-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="email"
                   required
                   value={linkedinEmail}
                   onChange={(e) => setLinkedinEmail(e.target.value)}
                   placeholder="nom@exemple.com"
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#f8f9fc] border border-[#e0e0db] text-[#21164c] text-xs focus:outline-none focus:border-[#0077b5] focus:bg-white focus:ring-3 focus:ring-[#0077b5]/10 transition-all font-medium"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-surface-2 border border-line text-ink text-xs focus:outline-none focus:border-[#0077b5] focus:bg-white focus:ring-3 focus:ring-[#0077b5]/10 transition-all font-medium"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-[#21164c] uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-medium text-ink mb-1.5">
                 Mot de passe LinkedIn
               </label>
               <div className="relative">
-                <Lock className="w-4 h-4 text-[#5f5f69] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <Lock className="w-4 h-4 text-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="password"
                   required
                   value={linkedinPassword}
                   onChange={(e) => setLinkedinPassword(e.target.value)}
                   placeholder="••••••••••••"
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#f8f9fc] border border-[#e0e0db] text-[#21164c] text-xs focus:outline-none focus:border-[#0077b5] focus:bg-white focus:ring-3 focus:ring-[#0077b5]/10 transition-all font-medium"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-surface-2 border border-line text-ink text-xs focus:outline-none focus:border-[#0077b5] focus:bg-white focus:ring-3 focus:ring-[#0077b5]/10 transition-all font-medium"
                 />
               </div>
             </div>
@@ -185,7 +185,7 @@ export const LinkedInOnboardingWall: React.FC<LinkedInOnboardingWallProps> = ({ 
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full py-3 px-5 rounded-xl bg-[#0077b5] hover:bg-[#005f93] text-white font-bold text-xs shadow-lg shadow-[#0077b5]/25 hover:shadow-[#0077b5]/35 active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                className="w-full py-3 px-5 rounded-xl bg-[#0077b5] hover:bg-[#005f93] text-white font-medium text-xs transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
               >
                 {isLoading ? (
                   <>
@@ -205,12 +205,12 @@ export const LinkedInOnboardingWall: React.FC<LinkedInOnboardingWallProps> = ({ 
           )}
 
           {/* Footer Action: Logout / Switch account */}
-          <div className="mt-6 pt-4 border-t border-[#e0e0db]/50 flex items-center justify-between text-xs text-[#5f5f69]">
+          <div className="mt-6 pt-4 border-t border-line/50 flex items-center justify-between text-xs text-muted">
             <span>Connecté en tant que <strong>{user?.email}</strong></span>
             <button
               type="button"
               onClick={logout}
-              className="inline-flex items-center gap-1.5 text-red-600 hover:text-red-700 font-semibold cursor-pointer"
+              className="inline-flex items-center gap-1.5 text-danger hover:text-danger font-semibold cursor-pointer"
             >
               <LogOut className="w-3.5 h-3.5" />
               Changer de compte

@@ -27,39 +27,39 @@ export const LinkedInRequiredModal: React.FC<LinkedInRequiredModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#21164c]/40 backdrop-blur-md animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40">
       <div
-        className="bg-white w-full max-w-md rounded-[32px] shadow-2xl shadow-[#592eff]/15 border border-[#e0e0db]/80 overflow-hidden relative"
+        className="bg-white w-full max-w-md rounded-[32px] border border-line/80 overflow-hidden relative"
         style={{ animation: "modalPop 0.25s cubic-bezier(0.16, 1, 0.3, 1)" }}
       >
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 w-9 h-9 rounded-2xl bg-[#f8f9fc] hover:bg-gray-100 flex items-center justify-center text-[#5f5f69] hover:text-[#21164c] transition-colors cursor-pointer border border-[#e0e0db]/60 z-10"
+          className="absolute top-4 right-4 w-9 h-9 rounded-2xl bg-surface-2 hover:bg-surface-2 flex items-center justify-center text-muted hover:text-ink transition-colors cursor-pointer border border-line/60 z-10"
           title="Fermer"
         >
           <X className="w-4 h-4" />
         </button>
 
         {/* Decorative Top Accent Header */}
-        <div className="p-7 pb-4 text-center relative bg-gradient-to-b from-[#592eff]/5 to-transparent">
-          <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-[#0077b5] to-[#0a66c2] text-white flex items-center justify-center mx-auto mb-4 shadow-xl shadow-[#0077b5]/25 ring-4 ring-white">
+        <div className="p-7 pb-4 text-center relative bg-ink">
+          <div className="w-16 h-16 rounded-2xl bg-ink text-white flex items-center justify-center mx-auto mb-4">
             <LinkedInIcon className="w-8 h-8" />
           </div>
 
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#0077b5]/10 text-[#0077b5] text-xs font-bold mb-2">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#0077b5]/10 text-[#0077b5] text-xs font-medium mb-2">
             <ShieldAlert className="w-3.5 h-3.5" />
             <span>Compte LinkedIn non lié</span>
           </div>
 
-          <h2 className="text-xl font-extrabold text-[#21164c] tracking-tight">
+          <h2 className="text-xl font-semibold text-ink tracking-tight">
             {title}
           </h2>
 
-          <p className="text-xs text-[#5f5f69] mt-2 leading-relaxed px-2">
+          <p className="text-xs text-muted mt-2 leading-relaxed px-2">
             {featureName ? (
               <>
-                L'action <span className="font-bold text-[#21164c]">"{featureName}"</span> nécessite un compte LinkedIn actif pour interagir avec le réseau en toute sécurité.
+                L'action <span className="font-medium text-ink">"{featureName}"</span> nécessite un compte LinkedIn actif pour interagir avec le réseau en toute sécurité.
               </>
             ) : (
               description
@@ -69,17 +69,17 @@ export const LinkedInRequiredModal: React.FC<LinkedInRequiredModalProps> = ({
 
         {/* Value Points */}
         <div className="px-7 py-3">
-          <div className="bg-[#f8f9fc] rounded-2xl p-4 border border-[#e0e0db]/60 space-y-2.5 text-xs text-[#21164c]">
+          <div className="bg-surface-2 rounded-2xl p-4 border border-line/60 space-y-2.5 text-xs text-ink">
             <div className="flex items-center gap-2.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <CheckCircle2 className="w-4 h-4 text-ok shrink-0" />
               <span className="font-medium">Recherche & extraction de profils ciblés</span>
             </div>
             <div className="flex items-center gap-2.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <CheckCircle2 className="w-4 h-4 text-ok shrink-0" />
               <span className="font-medium">Envoi automatique d'invitations & relances</span>
             </div>
             <div className="flex items-center gap-2.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <CheckCircle2 className="w-4 h-4 text-ok shrink-0" />
               <span className="font-medium">Protection anti-spam avec jitter intelligent</span>
             </div>
           </div>
@@ -92,8 +92,7 @@ export const LinkedInRequiredModal: React.FC<LinkedInRequiredModalProps> = ({
               onClose();
               onConnectLinkedIn();
             }}
-            className="w-full py-3.5 px-5 rounded-2xl font-bold text-white text-xs shadow-lg shadow-[#592eff]/25 hover:shadow-[#592eff]/35 active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer"
-            style={{ background: "linear-gradient(135deg, #592eff, #7c3aed)" }}
+            className="flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-accent px-5 text-base font-semibold text-white transition-colors hover:bg-accent-hover"
           >
             <LinkedInIcon className="w-4 h-4" />
             <span>Connecter mon compte LinkedIn</span>
@@ -102,7 +101,7 @@ export const LinkedInRequiredModal: React.FC<LinkedInRequiredModalProps> = ({
 
           <button
             onClick={onClose}
-            className="w-full py-2.5 px-4 rounded-xl font-bold text-xs text-[#5f5f69] hover:text-[#21164c] hover:bg-[#f8f9fc] transition-colors cursor-pointer"
+            className="w-full py-2.5 px-4 rounded-xl font-medium text-xs text-muted hover:text-ink hover:bg-surface-2 transition-colors cursor-pointer"
           >
             Plus tard
           </button>

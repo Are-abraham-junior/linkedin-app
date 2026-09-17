@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { apiRequest } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
+import { Modal } from "../ui/Modal";
 import {
   Search,
   Users,
@@ -241,7 +242,6 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
     return () => clearTimeout(timer);
   }, [sectorSearchQuery]);
 
-  if (!isOpen) return null;
 
   const toggleHeadcount = (tierId: string) => {
     if (!hasSalesNavigator) {
@@ -584,44 +584,28 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
     : COMMON_SECTORS;
 
   return (
-    <div className="fixed inset-0 bg-[#21164c]/40 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50 animate-in fade-in">
-      <div className="adora-card bg-white w-full max-w-6xl h-[92vh] max-h-[92vh] flex flex-col p-4 sm:p-6 shadow-2xl relative overflow-hidden">
-        {/* Close button */}
-        <button
-          onClick={onClose}
-          className="absolute right-4 top-4 p-2 rounded-full hover:bg-[#f5f5f7] text-[#5f5f69] transition-colors z-20 cursor-pointer"
-        >
-          <X className="w-4 h-4" />
-        </button>
-
-        {/* Header (Full Width Top) */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-[#e0e0db] gap-3 shrink-0 pr-10">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-[#0a66c2]/10 text-[#0a66c2] flex items-center justify-center shrink-0">
-              <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
-                <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.2a1.64 1.64 0 1 0 0 3.28 1.64 1.64 0 0 0 0-3.28z" />
-              </svg>
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg sm:text-xl font-bold text-[#21164c]">Recherche de Profils LinkedIn</h2>
-               
-              </div>
-              <p className="text-xs text-[#5f5f69]">
-                Ciblez des décideurs par critères métier, secteur d'activité et taille d'entreprise
-              </p>
-            </div>
-          </div>
+    <Modal
+      open={isOpen}
+      onClose={onClose}
+      size="xl"
+      title="Recherche LinkedIn"
+      description="Ciblez des décideurs par métier, secteur et taille d'entreprise."
+      className="h-[calc(100vh-2rem)] max-w-[1200px]"
+      bodyClassName="flex min-h-0 flex-1 flex-col px-6 pb-6"
+    >
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="flex shrink-0 flex-col justify-between gap-3 border-b border-line pb-3 sm:flex-row sm:items-center">
+          <div />
 
           {/* Mode Switcher */}
-          <div className="flex items-center gap-1 bg-[#f5f5f7] p-1 rounded-xl shrink-0 self-start sm:self-auto">
+          <div className="flex items-center gap-1 bg-surface-2 p-1 rounded-xl shrink-0 self-start sm:self-auto">
             <button
               type="button"
               onClick={() => setSearchMode("CRITERIA")}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+              className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                 searchMode === "CRITERIA"
-                  ? "bg-white text-[#592eff] shadow-xs"
-                  : "text-[#5f5f69] hover:text-[#21164c]"
+                  ? "bg-white text-ink"
+                  : "text-muted hover:text-ink"
               }`}
             >
               Par Critères
@@ -629,10 +613,10 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
             <button
               type="button"
               onClick={() => setSearchMode("URL")}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer ${
+              className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer ${
                 searchMode === "URL"
-                  ? "bg-white text-[#592eff] shadow-xs"
-                  : "text-[#5f5f69] hover:text-[#21164c]"
+                  ? "bg-white text-ink"
+                  : "text-muted hover:text-ink"
               }`}
             >
               <Link className="w-3 h-3" /> Coller URL LinkedIn
@@ -640,10 +624,10 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
             <button
               type="button"
               onClick={() => setSearchMode("POST")}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer ${
+              className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer ${
                 searchMode === "POST"
-                  ? "bg-white text-[#592eff] shadow-xs"
-                  : "text-[#5f5f69] hover:text-[#21164c]"
+                  ? "bg-white text-ink"
+                  : "text-muted hover:text-ink"
               }`}
             >
               <MessageCircle className="w-3 h-3" /> Engagements d'un post
@@ -657,33 +641,33 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
           {/* ========================================================================= */}
           {/* VOLET GAUCHE : FILTRES & PARAMÈTRES (Largeur fixe 360px sur Desktop)       */}
           {/* ========================================================================= */}
-          <div className="w-full lg:w-[360px] shrink-0 flex flex-col h-full min-h-0 bg-[#f8f9fc] border border-[#e0e0db] rounded-2xl overflow-hidden shadow-2xs">
+          <div className="w-full lg:w-[360px] shrink-0 flex flex-col h-full min-h-0 bg-surface-2 border border-line rounded-2xl overflow-hidden">
             {/* Header du volet filtres */}
-            <div className="px-3.5 py-2.5 bg-white border-b border-[#e0e0db] flex items-center justify-between shrink-0">
-              <span className="text-xs font-bold text-[#21164c] flex items-center gap-1.5 uppercase tracking-wider">
-                <Sliders className="w-3.5 h-3.5 text-[#592eff]" /> Paramètres
+            <div className="px-3.5 py-2.5 bg-white border-b border-line flex items-center justify-between shrink-0">
+              <span className="text-xs font-medium text-ink flex items-center gap-1.5">
+                <Sliders className="w-3.5 h-3.5 text-ink" /> Paramètres
               </span>
               <div className="flex items-center gap-1.5">
                 {hasSalesNavigator ? (
                   <span
-                    className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200"
+                    className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-surface-2 text-muted border border-line"
                     title="Compte LinkedIn Sales Navigator actif"
                   >
-                    <Sparkles className="w-2.5 h-2.5 text-emerald-600" /> Sales Nav
+                    <Sparkles className="w-2.5 h-2.5 text-muted" /> Sales Nav
                   </span>
                 ) : isPremium ? (
                   <span
-                    className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200"
+                    className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-surface-2 text-muted border border-line"
                     title="Compte LinkedIn Premium"
                   >
-                    <ShieldCheck className="w-2.5 h-2.5 text-blue-600" /> Premium
+                    <ShieldCheck className="w-2.5 h-2.5 text-muted" /> Premium
                   </span>
                 ) : (
                   <span
-                    className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200"
+                    className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-surface-2 text-muted border border-line"
                     title="Compte LinkedIn Standard"
                   >
-                    <Users className="w-2.5 h-2.5 text-slate-500" /> Standard
+                    <Users className="w-2.5 h-2.5 text-muted" /> Standard
                   </span>
                 )}
               </div>
@@ -694,12 +678,12 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
               {searchMode === "CRITERIA" ? (
                 <>
                   {/* Moteur de recherche : Standard vs Sales Navigator */}
-                  <div className="p-2 bg-white rounded-xl border border-[#e0e0db]/80 space-y-1.5">
+                  <div className="p-2 bg-white rounded-xl border border-line/80 space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-[#21164c] uppercase tracking-wider">
+                      <span className="text-xs font-medium text-ink">
                         Moteur :
                       </span>
-                      <span className="text-[10px] text-[#5f5f69]">
+                      <span className="text-xs text-muted">
                         {apiMode === "sales_navigator"
                           ? "Ciblage avancé"
                           : !hasSalesNavigator
@@ -707,14 +691,14 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                           : "Gratuit"}
                       </span>
                     </div>
-                    <div className="grid grid-cols-2 gap-1 p-0.5 bg-[#f5f5f7] rounded-lg">
+                    <div className="grid grid-cols-2 gap-1 p-0.5 bg-surface-2 rounded-lg">
                       <button
                         type="button"
                         onClick={() => setApiMode("classic")}
-                        className={`py-1 rounded-md text-[11px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                        className={`py-1 rounded-md text-xs font-medium transition-all flex items-center justify-center gap-1 cursor-pointer ${
                           apiMode === "classic"
-                            ? "bg-[#21164c] text-white shadow-xs"
-                            : "text-[#5f5f69] hover:text-[#21164c]"
+                            ? "bg-ink text-white"
+                            : "text-muted hover:text-ink"
                         }`}
                       >
                         <Users className="w-3 h-3" /> Standard
@@ -728,12 +712,12 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                           }
                           setApiMode("sales_navigator");
                         }}
-                        className={`py-1 rounded-md text-[11px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                        className={`py-1 rounded-md text-xs font-medium transition-all flex items-center justify-center gap-1 cursor-pointer ${
                           apiMode === "sales_navigator"
-                            ? "bg-[#592eff] text-white shadow-xs"
+                            ? "bg-accent text-white"
                             : hasSalesNavigator
-                            ? "text-[#5f5f69] hover:text-[#592eff]"
-                            : "text-[#8e8e93] hover:text-amber-700 hover:bg-amber-50"
+                            ? "text-muted hover:text-ink"
+                            : "text-[#8e8e93] hover:text-muted hover:bg-surface-2"
                         }`}
                         title={
                           !hasSalesNavigator
@@ -742,13 +726,13 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                         }
                       >
                         {!hasSalesNavigator ? (
-                          <Lock className="w-3 h-3 text-amber-500 shrink-0" />
+                          <Lock className="w-3 h-3 text-muted shrink-0" />
                         ) : (
                           <Sparkles className="w-3 h-3 shrink-0" />
                         )}
                         <span>Sales Nav</span>
                         {!hasSalesNavigator && (
-                          <span className="text-[8px] bg-amber-100 text-amber-700 px-1 py-0.2 rounded font-bold">
+                          <span className="text-[8px] bg-surface-2 text-muted px-1 py-0.2 rounded font-medium">
                             Sales Nav
                           </span>
                         )}
@@ -758,7 +742,7 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
 
                   {/* Poste / Titre */}
                   <div>
-                    <label className="block text-[10px] font-bold text-[#21164c] uppercase mb-1">
+                    <label className="block text-xs font-medium text-ink mb-1">
                       Poste / Titre
                     </label>
                     <input
@@ -766,13 +750,13 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                       placeholder="ex: commercial, directeur, rh..."
                       value={title}
                       onChange={(e) => setTitle(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-[#e0e0db] text-xs bg-white focus:outline-none focus:border-[#592eff]"
+                      className="w-full px-3 py-2 rounded-xl border border-line text-xs bg-white focus:outline-none focus:border-ink"
                     />
                   </div>
 
                   {/* Localisation */}
                   <div>
-                    <label className="block text-[10px] font-bold text-[#21164c] uppercase mb-1">
+                    <label className="block text-xs font-medium text-ink mb-1">
                       Localisation
                     </label>
                     <input
@@ -780,13 +764,13 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                       placeholder="ex: Abidjan, Côte d'Ivoire, Paris..."
                       value={location}
                       onChange={(e) => setLocation(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-[#e0e0db] text-xs bg-white focus:outline-none focus:border-[#592eff]"
+                      className="w-full px-3 py-2 rounded-xl border border-line text-xs bg-white focus:outline-none focus:border-ink"
                     />
                   </div>
 
                   {/* Entreprise (Optionnel) */}
                   <div>
-                    <label className="block text-[10px] font-bold text-[#21164c] uppercase mb-1">
+                    <label className="block text-xs font-medium text-ink mb-1">
                       Entreprise (Optionnel)
                     </label>
                     <input
@@ -794,15 +778,15 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                       placeholder="ex: Orange, MTN, Total..."
                       value={company}
                       onChange={(e) => setCompany(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-[#e0e0db] text-xs bg-white focus:outline-none focus:border-[#592eff]"
+                      className="w-full px-3 py-2 rounded-xl border border-line text-xs bg-white focus:outline-none focus:border-ink"
                     />
                   </div>
 
                   {/* Secteur d'activité */}
                   <div className="relative" ref={sectorDropdownRef}>
                     <div className="flex items-center justify-between mb-1">
-                      <label className="block text-[10px] font-bold text-[#21164c] uppercase flex items-center gap-1">
-                        <Briefcase className="w-3 h-3 text-[#592eff]" /> Secteur d'activité
+                      <label className="block text-xs font-medium text-ink flex items-center gap-1">
+                        <Briefcase className="w-3 h-3 text-ink" /> Secteur d'activité
                       </label>
                       {selectedSector && (
                         <button
@@ -811,7 +795,7 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                             setSelectedSector(null);
                             setSectorSearchQuery("");
                           }}
-                          className="text-[10px] text-red-600 hover:underline font-semibold cursor-pointer"
+                          className="text-xs text-danger hover:underline font-semibold cursor-pointer"
                         >
                           Effacer
                         </button>
@@ -819,9 +803,9 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                     </div>
 
                     {selectedSector ? (
-                      <div className="flex items-center justify-between p-2 rounded-xl bg-[#592eff]/10 border border-[#592eff]/30 text-xs">
-                        <span className="font-bold text-[#21164c] flex items-center gap-1.5 truncate">
-                          <Check className="w-3.5 h-3.5 text-[#592eff] shrink-0" />
+                      <div className="flex items-center justify-between p-2 rounded-xl bg-surface-2 border border-ink text-xs">
+                        <span className="font-medium text-ink flex items-center gap-1.5 truncate">
+                          <Check className="w-3.5 h-3.5 text-ink shrink-0" />
                           <span className="truncate">{selectedSector.title}</span>
                         </span>
                         <button
@@ -830,7 +814,7 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                             setSelectedSector(null);
                             setSectorSearchQuery("");
                           }}
-                          className="p-1 hover:bg-white rounded-lg text-[#5f5f69] hover:text-red-600 shrink-0 cursor-pointer"
+                          className="p-1 hover:bg-white rounded-lg text-muted hover:text-danger shrink-0 cursor-pointer"
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>
@@ -846,25 +830,25 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                             setSectorSearchQuery(e.target.value);
                             setIsSectorDropdownOpen(true);
                           }}
-                          className="w-full pl-3 pr-8 py-2 rounded-xl border border-[#e0e0db] text-xs bg-white focus:outline-none focus:border-[#592eff]"
+                          className="w-full pl-3 pr-8 py-2 rounded-xl border border-line text-xs bg-white focus:outline-none focus:border-ink"
                         />
                         <button
                           type="button"
                           onClick={() => setIsSectorDropdownOpen((prev) => !prev)}
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#5f5f69] cursor-pointer"
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted cursor-pointer"
                         >
                           <ChevronDown className="w-3.5 h-3.5" />
                         </button>
 
                         {/* Menu déroulant de suggestions */}
                         {isSectorDropdownOpen && (
-                          <div className="absolute z-30 left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-[#e0e0db] rounded-xl shadow-xl p-1">
+                          <div className="absolute z-30 left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-line rounded-xl p-1">
                             {isSearchingSectors ? (
-                              <div className="p-2.5 text-center text-xs text-[#5f5f69] flex items-center justify-center gap-1.5">
-                                <RefreshCw className="w-3 h-3 animate-spin text-[#592eff]" /> Recherche...
+                              <div className="p-2.5 text-center text-xs text-muted flex items-center justify-center gap-1.5">
+                                <RefreshCw className="w-3 h-3 animate-spin text-ink" /> Recherche...
                               </div>
                             ) : displayedSectors.length === 0 ? (
-                              <div className="p-2.5 text-center text-xs text-[#5f5f69]">
+                              <div className="p-2.5 text-center text-xs text-muted">
                                 Aucun secteur trouvé.
                               </div>
                             ) : (
@@ -878,7 +862,7 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                                       setIsSectorDropdownOpen(false);
                                       setSectorSearchQuery("");
                                     }}
-                                    className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold text-[#21164c] hover:bg-[#592eff]/10 hover:text-[#592eff] flex items-center transition-colors cursor-pointer"
+                                    className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold text-ink hover:bg-surface-2 hover:text-ink flex items-center transition-colors cursor-pointer"
                                   >
                                     <span className="truncate">{s.title}</span>
                                   </button>
@@ -894,10 +878,10 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                   {/* Taille de l'entreprise (Headcount) */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <label className="block text-[10px] font-bold text-[#21164c] uppercase flex items-center gap-1.5">
-                        <Building className="w-3 h-3 text-[#592eff]" /> Taille d'entreprise
+                      <label className="block text-xs font-medium text-ink flex items-center gap-1.5">
+                        <Building className="w-3 h-3 text-ink" /> Taille d'entreprise
                         {!hasSalesNavigator && (
-                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 text-[9px] font-semibold border border-amber-200">
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-surface-2 text-muted text-xs font-semibold border border-line">
                             <Lock className="w-2.5 h-2.5" /> Requis Sales Nav
                           </span>
                         )}
@@ -906,7 +890,7 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                         <button
                           type="button"
                           onClick={() => setShowSalesNavLockedModal(true)}
-                          className="text-[10px] text-amber-600 hover:text-amber-700 font-semibold flex items-center gap-1 cursor-pointer"
+                          className="text-xs text-muted hover:text-muted font-semibold flex items-center gap-1 cursor-pointer"
                         >
                           <Info className="w-3 h-3" /> Pourquoi ?
                         </button>
@@ -914,7 +898,7 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                         <button
                           type="button"
                           onClick={() => setApiMode("sales_navigator")}
-                          className="text-[10px] font-bold text-[#592eff] hover:underline flex items-center gap-0.5 cursor-pointer"
+                          className="text-xs font-medium text-ink hover:underline flex items-center gap-0.5 cursor-pointer"
                         >
                           <Sparkles className="w-2.5 h-2.5" /> Sales Nav
                         </button>
@@ -923,7 +907,7 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                           <button
                             type="button"
                             onClick={() => setSelectedHeadcounts([])}
-                            className="text-[10px] text-red-600 hover:underline font-semibold cursor-pointer"
+                            className="text-xs text-danger hover:underline font-semibold cursor-pointer"
                           >
                             Reset ({selectedHeadcounts.length})
                           </button>
@@ -945,12 +929,12 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                             onClick={() => toggleHeadcount(tier.id)}
                             className={`px-1.5 py-1.5 rounded-lg border text-center transition-all flex flex-col justify-center cursor-pointer ${
                               isLocked
-                                ? "bg-[#f5f5f7]/60 border-[#e0e0db] text-[#8e8e93] hover:border-amber-400 hover:bg-amber-50/40"
+                                ? "bg-surface-2/60 border-line text-[#8e8e93] hover:border-amber-400 hover:bg-surface-2"
                                 : isClassic
-                                ? "bg-[#f5f5f7] border-[#e0e0db] text-[#5f5f69] hover:border-[#592eff]/50 hover:bg-[#592eff]/5 opacity-80"
+                                ? "bg-surface-2 border-line text-muted hover:border-ink hover:bg-surface-2 opacity-80"
                                 : isSelected
-                                ? "bg-[#592eff] border-[#592eff] text-white shadow-xs"
-                                : "bg-white border-[#e0e0db] text-[#21164c] hover:border-[#592eff]/40 hover:bg-[#f8f9fc]"
+                                ? "bg-accent border-ink text-white"
+                                : "bg-white border-line text-ink hover:border-ink hover:bg-surface-2"
                             }`}
                             title={
                               isLocked
@@ -961,7 +945,7 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                             }
                           >
                             <span
-                              className={`text-[11px] font-bold leading-tight ${
+                              className={`text-xs font-medium leading-tight ${
                                 isSelected && !isClassic && !isLocked ? "text-white" : ""
                               }`}
                             >
@@ -969,7 +953,7 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                             </span>
                             <span
                               className={`text-[8px] leading-tight truncate ${
-                                isSelected && !isClassic && !isLocked ? "text-white/80" : "text-[#5f5f69]"
+                                isSelected && !isClassic && !isLocked ? "text-white/80" : "text-muted"
                               }`}
                             >
                               {tier.sub}
@@ -980,8 +964,8 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                     </div>
 
                     {!hasSalesNavigator && (
-                      <p className="text-[10px] text-amber-800 flex items-center gap-1 mt-1.5 bg-amber-50/90 border border-amber-200/70 rounded-lg px-2 py-1">
-                        <Lock className="w-3 h-3 text-amber-600 shrink-0" />
+                      <p className="text-xs text-muted flex items-center gap-1 mt-1.5 bg-surface-2 border border-line rounded-lg px-2 py-1">
+                        <Lock className="w-3 h-3 text-muted shrink-0" />
                         <span>Filtre effectif réservé aux comptes Sales Navigator.</span>
                       </p>
                     )}
@@ -991,21 +975,21 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                 /* Mode Post LinkedIn : personnes ayant liké / commenté */
                 <div className="space-y-3">
                   <div className="space-y-2">
-                    <label className="block text-[10px] font-bold text-[#21164c] uppercase">URL du post LinkedIn</label>
+                    <label className="block text-xs font-medium text-ink">URL du post LinkedIn</label>
                     <textarea
                       rows={3}
                       placeholder="https://www.linkedin.com/posts/…-activity-7332661864792528-…"
                       value={postUrl}
                       onChange={(e) => setPostUrl(e.target.value)}
-                      className="w-full p-2.5 rounded-xl border border-[#e0e0db] text-xs bg-white focus:outline-none focus:border-[#592eff] resize-none"
+                      className="w-full p-2.5 rounded-xl border border-line text-xs bg-white focus:outline-none focus:border-ink resize-none"
                     />
-                    <p className="text-[10px] text-[#5f5f69] italic">
+                    <p className="text-xs text-muted italic">
                       Ouvrez le post sur linkedin.com, puis « … » › Copier le lien du post.
                     </p>
                   </div>
 
-                  <div className="p-2 bg-white rounded-xl border border-[#e0e0db]/80 space-y-1.5">
-                    <span className="block text-[10px] font-bold text-[#21164c] uppercase">Récupérer</span>
+                  <div className="p-2 bg-white rounded-xl border border-line/80 space-y-1.5">
+                    <span className="block text-xs font-medium text-ink">Récupérer</span>
                     {[
                       { key: "reactions", label: "Personnes ayant liké / réagi", icon: ThumbsUp, checked: includeReactions, set: setIncludeReactions },
                       { key: "comments", label: "Personnes ayant commenté", icon: MessageCircle, checked: includeComments, set: setIncludeComments },
@@ -1015,16 +999,16 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                         type="button"
                         onClick={() => set(!checked)}
                         className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
-                          checked ? "bg-[#592eff]/10 text-[#21164c]" : "text-[#5f5f69] hover:bg-[#f5f5f7]"
+                          checked ? "bg-surface-2 text-ink" : "text-muted hover:bg-surface-2"
                         }`}
                       >
-                        {checked ? <CheckSquare className="w-4 h-4 text-[#592eff]" /> : <Square className="w-4 h-4 text-[#9a9aa5]" />}
-                        <Icon className="w-3.5 h-3.5 text-[#592eff]" />
+                        {checked ? <CheckSquare className="w-4 h-4 text-ink" /> : <Square className="w-4 h-4 text-[#9a9aa5]" />}
+                        <Icon className="w-3.5 h-3.5 text-ink" />
                         {label}
                       </button>
                     ))}
-                    <p className="text-[10px] text-[#5f5f69] flex items-start gap-1 pt-0.5">
-                      <Info className="w-3 h-3 text-[#592eff] shrink-0 mt-0.5" />
+                    <p className="text-xs text-muted flex items-start gap-1 pt-0.5">
+                      <Info className="w-3 h-3 text-ink shrink-0 mt-0.5" />
                       <span>Les pages entreprise sont ignorées. Un profil qui a liké et commenté n'apparaît qu'une fois.</span>
                     </p>
                   </div>
@@ -1032,7 +1016,7 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
               ) : (
                 /* Mode URL LinkedIn */
                 <div className="space-y-2">
-                  <label className="block text-[10px] font-bold text-[#21164c] uppercase">
+                  <label className="block text-xs font-medium text-ink">
                     URL Recherche LinkedIn
                   </label>
                   <textarea
@@ -1040,23 +1024,23 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                     placeholder="Collez l'URL de votre recherche LinkedIn..."
                     value={searchUrl}
                     onChange={(e) => setSearchUrl(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border border-[#e0e0db] text-xs bg-white focus:outline-none focus:border-[#592eff] resize-none"
+                    className="w-full p-2.5 rounded-xl border border-line text-xs bg-white focus:outline-none focus:border-ink resize-none"
                   />
-                  <p className="text-[10px] text-[#5f5f69] italic">
+                  <p className="text-xs text-muted italic">
                     Copiez directement l'URL d'une recherche filtrée depuis linkedin.com.
                   </p>
                 </div>
               )}
 
               {/* Quota d'extraction */}
-              <div className="pt-1.5 border-t border-[#e0e0db]/60 flex items-center justify-between">
-                <span className="text-[11px] font-bold text-[#21164c] flex items-center gap-1">
-                  <Sliders className="w-3 h-3 text-[#592eff]" /> Extraire :
+              <div className="pt-1.5 border-t border-line/60 flex items-center justify-between">
+                <span className="text-xs font-medium text-ink flex items-center gap-1">
+                  <Sliders className="w-3 h-3 text-ink" /> Extraire :
                 </span>
                 <select
                   value={importLimit}
                   onChange={(e) => setImportLimit(parseInt(e.target.value) || 25)}
-                  className="px-2 py-1 rounded-lg border border-[#e0e0db] bg-white text-xs font-bold text-[#592eff] focus:outline-none focus:border-[#592eff] cursor-pointer"
+                  className="px-2 py-1 rounded-lg border border-line bg-white text-xs font-medium text-ink focus:outline-none focus:border-ink cursor-pointer"
                 >
                   <option value={10}>10 profils</option>
                   <option value={25}>25 profils</option>
@@ -1070,7 +1054,7 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                 <button
                   type="submit"
                   disabled={searching}
-                  className="w-full py-2.5 px-4 rounded-xl bg-[#592eff] hover:bg-[#4d25e0] text-white text-xs font-bold shadow-md shadow-[#592eff]/25 flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer"
+                  className="w-full py-2.5 px-4 rounded-xl bg-accent hover:bg-accent-hover text-white text-xs font-medium flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer"
                 >
                   {searching ? (
                     <>
@@ -1090,27 +1074,27 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
           {/* ========================================================================= */}
           {/* VOLET DROIT : RÉSULTATS & SÉLECTION (Pleine Hauteur, Flex-1)               */}
           {/* ========================================================================= */}
-          <div className="flex-1 flex flex-col h-full min-h-0 bg-white border border-[#e0e0db] rounded-2xl overflow-hidden shadow-2xs">
+          <div className="flex-1 flex flex-col h-full min-h-0 bg-white border border-line rounded-2xl overflow-hidden">
             
             {/* Toolbar Supérieure (Sticky Header) */}
-            <div className="px-4 py-2.5 bg-[#f8f9fc] border-b border-[#e0e0db] flex flex-wrap items-center justify-between gap-2 shrink-0">
+            <div className="px-4 py-2.5 bg-surface-2 border-b border-line flex flex-wrap items-center justify-between gap-2 shrink-0">
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   disabled={results.length === 0}
                   onClick={toggleSelectAll}
-                  className="flex items-center gap-2 text-xs font-bold text-[#21164c] hover:text-[#592eff] transition-colors disabled:opacity-40 cursor-pointer"
+                  className="flex items-center gap-2 text-xs font-medium text-ink hover:text-ink transition-colors disabled:opacity-40 cursor-pointer"
                 >
                   {filteredResults.length > 0 && filteredResults.every((p) => selectedProfileIds.has(String(p.providerProfileId))) ? (
-                    <CheckSquare className="w-4 h-4 text-[#592eff]" />
+                    <CheckSquare className="w-4 h-4 text-ink" />
                   ) : (
-                    <Square className="w-4 h-4 text-[#5f5f69]" />
+                    <Square className="w-4 h-4 text-muted" />
                   )}
                   <span>Tout sélectionner</span>
                 </button>
 
                 {results.length > 0 && (
-                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-[#592eff]/10 text-[#592eff]">
+                  <span className="text-xs font-medium px-2 py-0.5 rounded-md bg-surface-2 text-ink">
                     {selectedProfileIds.size} / {results.length} sélectionné(s)
                   </span>
                 )}
@@ -1119,19 +1103,19 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
               {/* Champ de filtrage instantané par mot-clé */}
               {results.length > 0 && (
                 <div className="relative">
-                  <Search className="w-3.5 h-3.5 text-[#5f5f69] absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <Search className="w-3.5 h-3.5 text-muted absolute left-2.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     value={resultFilterQuery}
                     onChange={(e) => setResultFilterQuery(e.target.value)}
                     placeholder="Filtrer parmi les résultats..."
-                    className="pl-8 pr-7 py-1 text-xs rounded-lg border border-[#e0e0db] bg-white text-[#21164c] placeholder-[#5f5f69] focus:outline-none focus:border-[#592eff] w-48 sm:w-60"
+                    className="pl-8 pr-7 py-1 text-xs rounded-lg border border-line bg-white text-ink placeholder-muted focus:outline-none focus:border-ink w-48 sm:w-60"
                   />
                   {resultFilterQuery && (
                     <button
                       type="button"
                       onClick={() => setResultFilterQuery("")}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-[#5f5f69] hover:text-red-600 cursor-pointer"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-danger cursor-pointer"
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -1142,9 +1126,9 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
 
             {/* Alertes d'erreur ou de succès */}
             {error && (
-              <div className="m-3 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold flex items-center justify-between gap-3 shrink-0">
+              <div className="m-3 p-3 rounded-xl bg-surface-2 border border-line text-danger text-xs font-semibold flex items-center justify-between gap-3 shrink-0">
                 <div className="flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0 text-red-600" />
+                  <AlertCircle className="w-4 h-4 flex-shrink-0 text-danger" />
                   <span>{error}</span>
                 </div>
                 {error.toLowerCase().includes("reconnecter") && (
@@ -1154,7 +1138,7 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                       onClose();
                       openLinkedInModal();
                     }}
-                    className="px-3 py-1 bg-[#592eff] hover:bg-[#4722d4] text-white text-xs font-bold rounded-lg shadow-xs transition-all shrink-0 cursor-pointer"
+                    className="px-3 py-1 bg-accent hover:bg-accent-hover text-white text-xs font-medium rounded-lg transition-all shrink-0 cursor-pointer"
                   >
                     Reconnecter LinkedIn
                   </button>
@@ -1163,7 +1147,7 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
             )}
 
             {successMsg && (
-              <div className="m-3 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold flex items-center gap-2 shrink-0">
+              <div className="m-3 p-3 rounded-xl bg-surface-2 border border-line text-muted text-xs font-semibold flex items-center gap-2 shrink-0">
                 <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
                 <span>{successMsg}</span>
               </div>
@@ -1171,10 +1155,10 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
 
             {/* Récapitulatif du post analysé (mode POST) */}
             {searchMode === "POST" && postSummary && !searching && (
-              <div className="mx-3 mt-3 p-3 rounded-xl bg-[#f8f9fc] border border-[#e0e0db] text-xs shrink-0 space-y-1">
+              <div className="mx-3 mt-3 p-3 rounded-xl bg-surface-2 border border-line text-xs shrink-0 space-y-1">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-bold text-[#21164c] flex items-center gap-1.5">
-                    <MessageCircle className="w-3.5 h-3.5 text-[#592eff]" />
+                  <span className="font-medium text-ink flex items-center gap-1.5">
+                    <MessageCircle className="w-3.5 h-3.5 text-ink" />
                     Post de {postSummary.authorName}
                     {postSummary.shareUrl && (
                       <a
@@ -1182,25 +1166,25 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
-                        className="text-[#592eff] hover:underline"
+                        className="text-ink hover:underline"
                         title="Ouvrir le post"
                       >
                         <ExternalLink className="w-3 h-3" />
                       </a>
                     )}
                   </span>
-                  <span className="text-[11px] text-[#5f5f69] flex items-center gap-2">
+                  <span className="text-xs text-muted flex items-center gap-2">
                     <span className="inline-flex items-center gap-1"><ThumbsUp className="w-3 h-3" /> {postSummary.reactionCount}</span>
                     <span className="inline-flex items-center gap-1"><MessageCircle className="w-3 h-3" /> {postSummary.commentCount}</span>
                   </span>
                 </div>
                 {postSummary.text && (
-                  <p className="text-[11px] text-[#5f5f69] line-clamp-2" title={postSummary.text}>
+                  <p className="text-xs text-muted line-clamp-2" title={postSummary.text}>
                     {postSummary.text}
                   </p>
                 )}
                 {postTruncated && (
-                  <p className="text-[10px] text-amber-700">
+                  <p className="text-xs text-muted">
                     Résultats limités à {importLimit} personnes — augmentez « Extraire » pour en récupérer davantage.
                   </p>
                 )}
@@ -1208,17 +1192,17 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
             )}
 
             {/* Zone de défilement des profils (Pleine Hauteur) */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-2.5 bg-[#fbfbfe] custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-3 space-y-2.5 bg-surface-2 custom-scrollbar">
               {searching ? (
-                <div className="h-full min-h-[260px] flex flex-col items-center justify-center text-[#5f5f69] space-y-3">
-                  <div className="w-12 h-12 rounded-2xl bg-[#592eff]/10 flex items-center justify-center">
-                    <RefreshCw className="w-6 h-6 animate-spin text-[#592eff]" />
+                <div className="h-full min-h-[260px] flex flex-col items-center justify-center text-muted space-y-3">
+                  <div className="w-12 h-12 rounded-2xl bg-surface-2 flex items-center justify-center">
+                    <RefreshCw className="w-6 h-6 animate-spin text-ink" />
                   </div>
                   <div className="text-center">
-                    <p className="text-sm font-bold text-[#21164c]">
+                    <p className="text-sm font-medium text-ink">
                       Extraction en cours depuis LinkedIn...
                     </p>
-                    <p className="text-xs text-[#5f5f69] mt-0.5">
+                    <p className="text-xs text-muted mt-0.5">
                       {searchMode === "POST"
                         ? `Lecture des likes et commentaires du post (jusqu'à ${importLimit} personnes).`
                         : `Récupération de ${importLimit} profils avec détails et photo.`}
@@ -1226,26 +1210,26 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                   </div>
                 </div>
               ) : results.length === 0 ? (
-                <div className="h-full min-h-[260px] flex flex-col items-center justify-center text-[#5f5f69] space-y-3 p-6 text-center">
-                  <div className="w-14 h-14 rounded-3xl bg-[#f5f5f7] flex items-center justify-center">
-                    <Search className="w-7 h-7 text-[#5f5f69]" />
+                <div className="h-full min-h-[260px] flex flex-col items-center justify-center text-muted space-y-3 p-6 text-center">
+                  <div className="w-14 h-14 rounded-2xl bg-surface-2 flex items-center justify-center">
+                    <Search className="w-7 h-7 text-muted" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-[#21164c]">Aucun profil extrait pour l'instant</h3>
-                    <p className="text-xs text-[#5f5f69] max-w-sm mt-1">
+                    <h3 className="text-sm font-medium text-ink">Aucun profil extrait pour l'instant</h3>
+                    <p className="text-xs text-muted max-w-sm mt-1">
                       Définissez vos critères dans le panneau de gauche et cliquez sur <strong>Lancer la recherche</strong> pour charger les profils LinkedIn.
                     </p>
                   </div>
                 </div>
               ) : filteredResults.length === 0 ? (
-                <div className="h-full min-h-[200px] flex flex-col items-center justify-center text-[#5f5f69] space-y-2 p-6 text-center">
-                  <p className="text-xs font-bold text-[#21164c]">
+                <div className="h-full min-h-[200px] flex flex-col items-center justify-center text-muted space-y-2 p-6 text-center">
+                  <p className="text-xs font-medium text-ink">
                     Aucun profil extrait ne correspond à « {resultFilterQuery} »
                   </p>
                   <button
                     type="button"
                     onClick={() => setResultFilterQuery("")}
-                    className="text-xs text-[#592eff] hover:underline font-semibold cursor-pointer"
+                    className="text-xs text-ink hover:underline font-semibold cursor-pointer"
                   >
                     Effacer le filtre
                   </button>
@@ -1261,21 +1245,21 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                       onClick={() => toggleSelectOne(id)}
                       className={`flex items-start sm:items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer ${
                         isSelected
-                          ? "bg-[#592eff]/5 border-[#592eff]/40 shadow-xs"
-                          : "bg-white border-[#e0e0db] hover:border-[#592eff]/30 hover:bg-[#f8f9fc]"
+                          ? "bg-surface-2 border-ink"
+                          : "bg-white border-line hover:border-ink hover:bg-surface-2"
                       }`}
                     >
                       <div className="flex items-start sm:items-center gap-3.5 min-w-0 flex-1">
                         <div className="mt-1 sm:mt-0 flex-shrink-0">
                           {isSelected ? (
-                            <CheckSquare className="w-4 h-4 text-[#592eff]" />
+                            <CheckSquare className="w-4 h-4 text-ink" />
                           ) : (
-                            <Square className="w-4 h-4 text-[#5f5f69]" />
+                            <Square className="w-4 h-4 text-muted" />
                           )}
                         </div>
 
                         {/* Avatar */}
-                        <div className="w-11 h-11 rounded-full overflow-hidden border border-[#e0e0db] shrink-0 bg-[#f5f5f7] flex items-center justify-center">
+                        <div className="w-11 h-11 rounded-full overflow-hidden border border-line shrink-0 bg-surface-2 flex items-center justify-center">
                           {p.avatarUrl ? (
                             <img
                               src={p.avatarUrl}
@@ -1286,7 +1270,7 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                               }}
                             />
                           ) : (
-                            <span className="text-xs font-bold text-[#5f5f69]">
+                            <span className="text-xs font-medium text-muted">
                               {(p.fullName || "P").substring(0, 2).toUpperCase()}
                             </span>
                           )}
@@ -1295,22 +1279,22 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                         {/* Text Infos */}
                         <div className="min-w-0 flex-1 pr-2">
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <p className="font-bold text-[#21164c] text-xs sm:text-sm truncate">
+                            <p className="font-medium text-ink text-xs sm:text-sm truncate">
                               {p.fullName}
                             </p>
                             {p.networkDistance && (
-                              <span className="text-[10px] bg-[#f5f5f7] px-1.5 py-0.2 rounded font-semibold text-[#5f5f69]">
+                              <span className="text-xs bg-surface-2 px-1.5 py-0.2 rounded font-semibold text-muted">
                                 {p.networkDistance.replace("DISTANCE_", "")}°
                               </span>
                             )}
                             {p.industry && (
-                              <span className="text-[10px] bg-[#592eff]/10 text-[#592eff] px-2 py-0.5 rounded-full font-semibold truncate max-w-[200px]">
+                              <span className="text-xs bg-surface-2 text-ink px-2 py-0.5 rounded-full font-semibold truncate max-w-[200px]">
                                 {p.industry}
                               </span>
                             )}
                             {p.engagement?.reacted && (
                               <span
-                                className="text-[10px] bg-[#dfff9d] text-[#21164c] px-2 py-0.5 rounded-full font-semibold inline-flex items-center gap-1"
+                                className="text-xs bg-[#dfff9d] text-ink px-2 py-0.5 rounded-full font-semibold inline-flex items-center gap-1"
                                 title={`Réaction : ${p.engagement.reactionType || "LIKE"}`}
                               >
                                 <ThumbsUp className="w-3 h-3" /> A liké
@@ -1318,7 +1302,7 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                             )}
                             {p.engagement?.commented && (
                               <span
-                                className="text-[10px] bg-[#bcf2ff] text-[#21164c] px-2 py-0.5 rounded-full font-semibold inline-flex items-center gap-1"
+                                className="text-xs bg-[#bcf2ff] text-ink px-2 py-0.5 rounded-full font-semibold inline-flex items-center gap-1"
                                 title={p.engagement.commentText || "A commenté"}
                               >
                                 <MessageCircle className="w-3 h-3" /> A commenté
@@ -1330,7 +1314,7 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 onClick={(e) => e.stopPropagation()}
-                                className="text-[#592eff] hover:text-[#4d25e0] p-0.5 rounded transition-colors"
+                                className="text-ink hover:text-[#4d25e0] p-0.5 rounded transition-colors"
                                 title="Ouvrir le profil LinkedIn"
                               >
                                 <ExternalLink className="w-3.5 h-3.5" />
@@ -1338,24 +1322,24 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                             )}
                           </div>
 
-                          <p className="text-[11px] text-[#5f5f69] line-clamp-1 mt-0.5">
+                          <p className="text-xs text-muted line-clamp-1 mt-0.5">
                             {p.headline || "—"}
                           </p>
 
-                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[#5f5f69] mt-1">
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted mt-1">
                             {p.company && (
                               <span className="flex items-center gap-1 truncate">
-                                <Building className="w-3 h-3 text-[#592eff] shrink-0" /> {p.company}
+                                <Building className="w-3 h-3 text-ink shrink-0" /> {p.company}
                               </span>
                             )}
                             {p.location && (
                               <span className="flex items-center gap-1 truncate">
-                                <MapPin className="w-3 h-3 text-[#592eff] shrink-0" /> {p.location}
+                                <MapPin className="w-3 h-3 text-ink shrink-0" /> {p.location}
                               </span>
                             )}
                           </div>
                           {p.engagement?.commentText && (
-                            <p className="text-[11px] text-[#5f5f69] italic line-clamp-2 mt-1 pl-2 border-l-2 border-[#bcf2ff]">
+                            <p className="text-xs text-muted italic line-clamp-2 mt-1 pl-2 border-l-2 border-[#bcf2ff]">
                               « {p.engagement.commentText} »
                             </p>
                           )}
@@ -1369,7 +1353,7 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
               {/* Pagination Unipile : page suivante de la même recherche + profils déjà connus ignorés */}
               {!searching && searchMode !== "POST" && (nextCursor || excludedCount > 0) && (
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-2 pb-1">
-                  <p className="text-[11px] text-[#5f5f69]">
+                  <p className="text-xs text-muted">
                     {excludedCount > 0
                       ? `${excludedCount} profil${excludedCount > 1 ? "s" : ""} déjà présent${excludedCount > 1 ? "s" : ""} dans vos listes ${excludedCount > 1 ? "ont" : "a"} été ignoré${excludedCount > 1 ? "s" : ""}.`
                       : `${results.length} profil${results.length > 1 ? "s" : ""} chargé${results.length > 1 ? "s" : ""}.`}
@@ -1379,7 +1363,7 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                       type="button"
                       onClick={handleLoadMore}
                       disabled={loadingMore}
-                      className="px-4 py-2 rounded-xl border border-[#e0e0db] bg-white text-xs font-semibold text-[#21164c] hover:bg-[#f5f5f7] disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                      className="px-4 py-2 rounded-xl border border-line bg-white text-xs font-semibold text-ink hover:bg-surface-2 disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
                     >
                       {loadingMore ? (
                         <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -1394,15 +1378,15 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
             </div>
 
             {/* Barre d'action inférieure épinglée (Sticky Footer) */}
-            <div className="p-3.5 bg-white border-t border-[#e0e0db] flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+            <div className="p-3.5 bg-white border-t border-line flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
               <div className="flex items-center gap-2 w-full sm:w-auto">
-                <span className="text-xs font-bold text-[#21164c] whitespace-nowrap">
+                <span className="text-xs font-medium text-ink whitespace-nowrap">
                   Ajouter dans la liste :
                 </span>
                 <select
                   value={selectedListId}
                   onChange={(e) => setSelectedListId(e.target.value)}
-                  className="px-3 py-1.5 rounded-xl border border-[#e0e0db] bg-white text-xs text-[#353241] font-semibold focus:outline-none focus:border-[#592eff] cursor-pointer max-w-[220px] truncate"
+                  className="px-3 py-1.5 rounded-xl border border-line bg-white text-xs text-ink-2 font-semibold focus:outline-none focus:border-ink cursor-pointer max-w-[220px] truncate"
                 >
                   {lists.map((l) => (
                     <option key={l.id} value={l.id}>
@@ -1416,7 +1400,7 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-4 py-2 rounded-xl border border-[#e0e0db] text-xs font-semibold text-[#5f5f69] hover:bg-[#f5f5f7] cursor-pointer"
+                  className="px-4 py-2 rounded-xl border border-line text-xs font-semibold text-muted hover:bg-surface-2 cursor-pointer"
                 >
                   Fermer
                 </button>
@@ -1424,7 +1408,7 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                   type="button"
                   disabled={importing || selectedProfileIds.size === 0}
                   onClick={handleImportSelected}
-                  className="px-5 py-2 rounded-xl bg-[#592eff] hover:bg-[#4d25e0] text-white text-xs font-bold shadow-md shadow-[#592eff]/25 flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                  className="px-5 py-2 rounded-xl bg-accent hover:bg-accent-hover text-white text-xs font-medium flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
                 >
                   {importing ? (
                     <>
@@ -1445,34 +1429,34 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
         {/* MODALE D'EXPLICATION : FONCTIONNALITÉ SALES NAVIGATOR REQUISE              */}
         {/* ========================================================================= */}
         {showSalesNavLockedModal && (
-          <div className="fixed inset-0 bg-[#21164c]/60 backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-in fade-in">
-            <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-[#e0e0db] space-y-4 relative animate-in zoom-in-95">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/40 p-4">
+            <div className="bg-white rounded-2xl p-6 max-w-md w-full border border-line space-y-4 relative">
               <button
                 type="button"
                 onClick={() => setShowSalesNavLockedModal(false)}
-                className="absolute right-4 top-4 p-2 rounded-full hover:bg-[#f5f5f7] text-[#5f5f69] transition-colors cursor-pointer"
+                className="absolute right-4 top-4 p-2 rounded-full hover:bg-surface-2 text-muted transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
 
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-muted flex items-center justify-center shrink-0">
                   <Lock className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-[#21164c]">
+                  <h3 className="text-base font-medium text-ink">
                     Sales Navigator requis
                   </h3>
                   <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="text-xs text-[#5f5f69]">Compte connecté :</span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-[#21164c] border border-slate-200">
+                    <span className="text-xs text-muted">Compte connecté :</span>
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-surface-2 text-ink border border-line">
                       {accountType === "PREMIUM" ? "LinkedIn Premium" : "LinkedIn Standard"}
                     </span>
                   </div>
                 </div>
               </div>
 
-              <div className="text-xs text-[#5f5f69] space-y-2 leading-relaxed bg-[#f8f9fc] p-3.5 rounded-2xl border border-[#e0e0db]">
+              <div className="text-xs text-muted space-y-2 leading-relaxed bg-surface-2 p-3.5 rounded-2xl border border-line">
                 <p>
                   Le ciblage <strong>Sales Navigator</strong> et le filtre par <strong>taille d'entreprise (effectif)</strong> s'appuient sur l'API Sales Navigator de LinkedIn.
                 </p>
@@ -1481,8 +1465,8 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                 </p>
               </div>
 
-              <div className="p-3 bg-emerald-50/80 border border-emerald-200/60 rounded-2xl text-xs text-emerald-800 flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <div className="p-3 bg-surface-2 border border-line rounded-2xl text-xs text-muted flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 text-muted shrink-0 mt-0.5" />
                 <span>
                   <strong>Votre recherche reste active :</strong> Vous pouvez continuer à cibler des profils par <strong>intitulé de poste</strong>, <strong>localisation</strong>, <strong>entreprise</strong>, <strong>secteur d'activité</strong> et <strong>mots-clés</strong> en mode Standard.
                 </span>
@@ -1495,7 +1479,7 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                     setShowSalesNavLockedModal(false);
                     setApiMode("classic");
                   }}
-                  className="px-4 py-2 rounded-xl border border-[#e0e0db] text-xs font-bold text-[#21164c] hover:bg-[#f5f5f7] cursor-pointer"
+                  className="px-4 py-2 rounded-xl border border-line text-xs font-medium text-ink hover:bg-surface-2 cursor-pointer"
                 >
                   Continuer en Standard
                 </button>
@@ -1509,7 +1493,7 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
                       openLinkedInModal();
                     }
                   }}
-                  className="px-4 py-2 rounded-xl bg-[#592eff] hover:bg-[#4d25e0] text-white text-xs font-bold shadow-md shadow-[#592eff]/25 flex items-center gap-1.5 cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-accent hover:bg-accent-hover text-white text-xs font-medium flex items-center gap-1.5 cursor-pointer"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
                   Reconnecter un compte
@@ -1519,6 +1503,6 @@ export const LinkedInSearchModal: React.FC<LinkedInSearchModalProps> = ({
           </div>
         )}
       </div>
-    </div>
+    </Modal>
   );
 };

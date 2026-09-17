@@ -10,6 +10,7 @@ import {
   deleteConversation,
   postMessage,
   updateDraft,
+  updateCampaignSteps,
 } from "../controllers/ai.controller.js";
 
 const router = Router();
@@ -27,5 +28,6 @@ router.patch("/conversations/:id", renameConversation);
 router.delete("/conversations/:id", deleteConversation);
 router.post("/conversations/:id/messages", postMessage);
 router.post("/conversations/:id/update-draft", updateDraft);
+router.post("/conversations/:id/update-campaign", updateCampaignSteps);
 
 export default router;

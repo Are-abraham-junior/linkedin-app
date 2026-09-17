@@ -6,6 +6,9 @@ export type AiCard =
   | { type: "campaign_proposal"; campaign: { id: string; name: string; steps: AiDraftStep[]; listId: string | null; listName: string | null; prospectsCount: number } }
   | { type: "confirm_launch"; token: string; campaignId: string; summary: { name: string; listName: string | null; prospectsCount: number; steps: AiDraftStep[] } }
   | { type: "launch_result"; campaignId: string; name: string; prospectsEnrolled: number }
+  | { type: "confirm_delete_list"; token: string; list: { id: string; name: string; prospectsCount: number } }
+  | { type: "action_result"; ok: boolean; title: string; detail?: string }
+  | { type: "campaign_steps"; campaign: AiCampaignSummary; changed?: number[] }
   | {
       type: "account_status";
       connected: boolean;
@@ -28,6 +31,16 @@ export interface AiProfile {
   connectionStatus?: string;
 }
 
+export type AiCampaignStatus = "DRAFT" | "ACTIVE" | "PAUSED" | "COMPLETED" | "ARCHIVED";
+
+export interface AiCampaignSummary {
+  id: string;
+  name: string;
+  status: AiCampaignStatus;
+  steps: AiDraftStep[];
+  prospectsCount: number;
+}
+
 export interface AiDraftStep {
   stepOrder: number;
   actionType: "INVITATION" | "MESSAGE" | "VISIT_PROFILE" | "FOLLOW" | "DELAY";
@@ -37,6 +50,7 @@ export interface AiDraftStep {
 
 export type AiStreamEvent =
   | { type: "delta"; text: string }
+  | { type: "replace"; text: string }
   | { type: "tool_start"; name: string; label: string }
   | { type: "tool_end"; name: string; ok: boolean }
   | { type: "card"; card: AiCard; messageId: string }

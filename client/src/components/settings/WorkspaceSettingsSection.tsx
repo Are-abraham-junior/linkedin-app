@@ -74,21 +74,21 @@ export const WorkspaceSettingsSection: React.FC = () => {
   if (!loading && !workspace) return null;
 
   return (
-    <div className="adora-card p-6 sm:p-7 bg-white rounded-3xl border border-[#e0e0db]/80 shadow-xs space-y-6">
+    <div className="rounded-2xl border border-line bg-surface p-6 sm:p-7 bg-white rounded-2xl border border-line/80 space-y-6">
       <div className="flex items-center gap-3 border-b border-[#f0f0f4] pb-4">
-        <div className="w-9 h-9 rounded-2xl bg-[#592eff]/10 flex items-center justify-center text-[#592eff]">
+        <div className="w-9 h-9 rounded-2xl bg-surface-2 flex items-center justify-center text-ink">
           <Building2 className="w-4 h-4" />
         </div>
         <div>
-          <h3 className="text-sm font-extrabold text-[#21164c]">Espace de travail</h3>
-          <p className="text-[11px] text-[#5f5f69]">
+          <h3 className="text-sm font-semibold text-ink">Espace de travail</h3>
+          <p className="text-xs text-muted">
             Photo de profil de votre espace, affichée à côté de son nom dans toute l'application.
           </p>
         </div>
       </div>
 
       {loading || !workspace ? (
-        <div className="flex items-center gap-2 text-xs text-[#5f5f69] py-2">
+        <div className="flex items-center gap-2 text-xs text-muted py-2">
           <Loader2 className="w-4 h-4 animate-spin" /> Chargement…
         </div>
       ) : (
@@ -98,8 +98,8 @@ export const WorkspaceSettingsSection: React.FC = () => {
           <div
             className={`flex items-center gap-2 p-3 rounded-xl text-xs font-semibold ${
               msg.type === "success"
-                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                : "bg-red-50 text-red-700 border border-red-200"
+                ? "bg-surface-2 text-ok border border-line"
+                : "bg-surface-2 text-danger border border-line"
             }`}
           >
             {msg.type === "success" ? <Check className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
@@ -111,18 +111,18 @@ export const WorkspaceSettingsSection: React.FC = () => {
           <WorkspaceAvatar
             name={workspace.name}
             avatarUrl={workspace.avatarUrl}
-            className="w-24 h-24 rounded-3xl"
+            className="w-24 h-24 rounded-2xl"
             textClassName="text-3xl"
           />
           <div className="space-y-3 flex-1 min-w-0">
             <div>
-              <label className="block text-[11px] font-bold text-[#21164c] uppercase tracking-wider mb-1">
+              <label className="block text-xs font-medium text-ink mb-1">
                 Nom de l'espace
               </label>
-              <p className="text-base font-extrabold text-[#21164c] truncate">{workspace.name}</p>
+              <p className="text-base font-semibold text-ink truncate">{workspace.name}</p>
             </div>
             <div>
-              <label className="block text-[11px] font-bold text-[#21164c] uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-medium text-ink mb-1.5">
                 Photo de profil (optionnel)
               </label>
               {workspace.canEdit ? (
@@ -138,7 +138,7 @@ export const WorkspaceSettingsSection: React.FC = () => {
                     type="button"
                     onClick={() => inputRef.current?.click()}
                     disabled={saving}
-                    className="py-2.5 px-5 rounded-xl bg-[#592eff] hover:bg-[#4d25e0] text-white text-xs font-bold shadow-md shadow-[#592eff]/25 flex items-center gap-2 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+                    className="py-2.5 px-5 rounded-xl bg-accent hover:bg-accent-hover text-white text-xs font-medium flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
                   >
                     {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImagePlus className="w-4 h-4" />}
                     {workspace.avatarUrl ? "Changer la photo" : "Télécharger une photo"}
@@ -148,7 +148,7 @@ export const WorkspaceSettingsSection: React.FC = () => {
                       type="button"
                       onClick={() => save(null)}
                       disabled={saving}
-                      className="py-2.5 px-4 rounded-xl bg-white hover:bg-red-50 border border-[#e0e0db] hover:border-red-200 text-[#5f5f69] hover:text-red-600 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                      className="py-2.5 px-4 rounded-xl bg-white hover:bg-surface-2 border border-line hover:border-line text-muted hover:text-danger text-xs font-medium flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
                     >
                       <Trash2 className="w-4 h-4" />
                       Supprimer
@@ -161,7 +161,7 @@ export const WorkspaceSettingsSection: React.FC = () => {
                   Seul un propriétaire ou administrateur de l'espace peut modifier la photo.
                 </p>
               )}
-              <p className="text-[11px] text-[#9a9aa5] mt-2">
+              <p className="text-xs text-[#9a9aa5] mt-2">
                 PNG, JPEG ou WebP. L'image est recadrée en carré et redimensionnée en 256×256 avant l'enregistrement.
               </p>
             </div>

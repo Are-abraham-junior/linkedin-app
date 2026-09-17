@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { initialsDataUrl } from "../ui/avatarFallback";
 import { apiRequest } from "../../services/api";
 import { User, Role, UserStatus, Organization } from "../../types";
 import {
@@ -222,19 +223,12 @@ export const UserManagement: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-8 py-8 space-y-6 animate-in fade-in duration-300">
+    <div className="mx-auto w-full max-w-[1440px] space-y-6 px-4 py-6 sm:px-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="badge-tag bg-[#592eff]/10 text-[#592eff] border border-[#592eff]/20">
-              <Users className="w-3.5 h-3.5" /> Gestion des Accès & Quotas
-            </span>
-          </div>
-          <h1 className="text-3xl font-extrabold text-[#21164c] tracking-tight">
-            Utilisateurs & Profils
-          </h1>
-          <p className="text-sm text-[#5f5f69] mt-1">
+          <h1 className="display text-2xl leading-tight">Utilisateurs</h1>
+          <p className="mt-1 text-base text-muted">
             Contrôlez les accès (Super Admin / Utilisateur), statuts et quotas LinkedIn.
           </p>
         </div>
@@ -244,22 +238,22 @@ export const UserManagement: React.FC = () => {
             setFormError(null);
             setIsCreateModalOpen(true);
           }}
-          className="py-2.5 px-5 rounded-xl bg-[#592eff] hover:bg-[#4d25e0] text-white text-xs font-bold shadow-md shadow-[#592eff]/25 flex items-center gap-2 transition-all transform active:scale-95 self-start sm:self-auto"
+          className="inline-flex h-9 items-center gap-2 self-start rounded-lg bg-accent px-3.5 text-base font-semibold text-white transition-colors hover:bg-accent-hover sm:self-auto"
         >
-          <UserPlus className="w-4 h-4" /> Ajouter un Utilisateur
+          <UserPlus className="h-4 w-4" strokeWidth={1.75} /> Ajouter un utilisateur
         </button>
       </div>
 
       {/* Filter Bar */}
-      <div className="adora-card p-4 flex flex-col md:flex-row items-center justify-between gap-3">
+      <div className="rounded-2xl border border-line bg-surface p-4 flex flex-col md:flex-row items-center justify-between gap-3">
         <form onSubmit={handleSearchSubmit} className="relative w-full md:w-96">
-          <Search className="w-4 h-4 text-[#5f5f69] absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             placeholder="Rechercher par nom ou email..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 rounded-xl border border-[#e0e0db] bg-white text-xs text-[#353241] focus:outline-none focus:border-[#592eff]"
+            className="w-full pl-10 pr-4 py-2 rounded-xl border border-line bg-white text-xs text-ink-2 focus:outline-none focus:border-ink"
           />
         </form>
 
@@ -268,7 +262,7 @@ export const UserManagement: React.FC = () => {
           <select
             value={roleFilter}
             onChange={(e) => setRoleFilter(e.target.value)}
-            className="px-3 py-2 rounded-xl border border-[#e0e0db] bg-white text-xs text-[#353241] font-medium focus:outline-none focus:border-[#592eff]"
+            className="px-3 py-2 rounded-xl border border-line bg-white text-xs text-ink-2 font-medium focus:outline-none focus:border-ink"
           >
             <option value="ALL">Tous les Rôles</option>
             <option value="SUPER_ADMIN">Super Admins</option>
@@ -279,7 +273,7 @@ export const UserManagement: React.FC = () => {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 rounded-xl border border-[#e0e0db] bg-white text-xs text-[#353241] font-medium focus:outline-none focus:border-[#592eff]"
+            className="px-3 py-2 rounded-xl border border-line bg-white text-xs text-ink-2 font-medium focus:outline-none focus:border-ink"
           >
             <option value="ALL">Tous les Statuts</option>
             <option value="ACTIVE">Actifs</option>
@@ -288,7 +282,7 @@ export const UserManagement: React.FC = () => {
 
           <button
             onClick={fetchUsers}
-            className="p-2 rounded-xl border border-[#e0e0db] bg-white hover:bg-[#f5f5f7] text-[#353241] text-xs transition-colors"
+            className="p-2 rounded-xl border border-line bg-white hover:bg-surface-2 text-ink-2 text-xs transition-colors"
             title="Rafraîchir"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
@@ -297,11 +291,11 @@ export const UserManagement: React.FC = () => {
       </div>
 
       {/* Users Table */}
-      <div className="adora-card p-6 overflow-hidden">
+      <div className="rounded-2xl border border-line bg-surface p-6 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-[#e0e0db] text-[#5f5f69] uppercase font-bold tracking-wider">
+              <tr className="border-b border-line text-muted font-medium">
                 <th className="pb-3">Utilisateur</th>
                 <th className="pb-3">Organisation</th>
                 <th className="pb-3">Rôle</th>
@@ -311,36 +305,36 @@ export const UserManagement: React.FC = () => {
                 <th className="pb-3 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#e0e0db]/50">
+            <tbody className="divide-y divide-line/50">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-[#5f5f69]">
+                  <td colSpan={7} className="py-8 text-center text-muted">
                     Chargement des utilisateurs...
                   </td>
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-[#5f5f69]">
+                  <td colSpan={7} className="py-8 text-center text-muted">
                     Aucun utilisateur trouvé avec ces filtres.
                   </td>
                 </tr>
               ) : (
                 users.map((u) => (
-                  <tr key={u.id} className="hover:bg-[#f8f9fc] transition-colors">
+                  <tr key={u.id} className="hover:bg-surface-2 transition-colors">
                     {/* User info */}
                     <td className="py-3.5">
                       <div className="flex items-center gap-3">
                         <img
                           src={
                             u.avatarUrl ||
-                            `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name || u.email)}&background=592eff&color=fff`
+                            initialsDataUrl(u.name || u.email)
                           }
                           alt={u.name || u.email}
-                          className="w-9 h-9 rounded-full object-cover border border-[#e0e0db]"
+                          className="w-9 h-9 rounded-full object-cover border border-line"
                         />
                         <div>
-                          <p className="font-bold text-[#21164c] text-sm">{u.name || "Sans nom"}</p>
-                          <p className="text-[11px] text-[#5f5f69] flex items-center gap-1">
+                          <p className="font-medium text-ink text-sm">{u.name || "Sans nom"}</p>
+                          <p className="text-xs text-muted flex items-center gap-1">
                             <Mail className="w-3 h-3" /> {u.email}
                           </p>
                         </div>
@@ -350,21 +344,21 @@ export const UserManagement: React.FC = () => {
                     {/* Organization */}
                     <td className="py-3.5">
                       {u.organization ? (
-                        <span className="font-semibold text-[#21164c] flex items-center gap-1">
-                          <Building2 className="w-3.5 h-3.5 text-[#592eff]" /> {u.organization.name}
+                        <span className="font-semibold text-ink flex items-center gap-1">
+                          <Building2 className="w-3.5 h-3.5 text-ink" /> {u.organization.name}
                         </span>
                       ) : (
-                        <span className="text-[#5f5f69] italic">Espace Individuel</span>
+                        <span className="text-muted italic">Espace Individuel</span>
                       )}
                     </td>
 
                     {/* Role */}
                     <td className="py-3.5">
                       <span
-                        className={`badge-tag ${
+                        className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium ${
                           u.role === "SUPER_ADMIN"
-                            ? "bg-[#592eff]/10 text-[#592eff] border border-[#592eff]/25 font-bold"
-                            : "bg-[#f5f5f7] text-[#5f5f69] border border-[#e0e0db]"
+                            ? "bg-surface-2 text-ink border border-ink font-medium"
+                            : "bg-surface-2 text-muted border border-line"
                         }`}
                       >
                         {u.role === "SUPER_ADMIN" && <ShieldCheck className="w-3 h-3" />}
@@ -375,24 +369,24 @@ export const UserManagement: React.FC = () => {
                     {/* Status */}
                     <td className="py-3.5">
                       {u.status === "ACTIVE" ? (
-                        <span className="badge-tag bg-emerald-50 text-emerald-600 border border-emerald-200">
+                        <span className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium bg-surface-2 text-ok border border-line">
                           <CheckCircle2 className="w-3 h-3" /> Actif
                         </span>
                       ) : (
-                        <span className="badge-tag bg-red-50 text-red-600 border border-red-200">
+                        <span className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium bg-surface-2 text-danger border border-line">
                           <Ban className="w-3 h-3" /> Suspendu
                         </span>
                       )}
                     </td>
 
                     {/* Quotas */}
-                    <td className="py-3.5 font-medium text-[#353241]">
-                      <div className="flex items-center gap-1.5 text-[11px]">
-                        <span className="bg-[#592eff]/10 text-[#592eff] px-1.5 py-0.5 rounded font-bold">
+                    <td className="py-3.5 font-medium text-ink-2">
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <span className="bg-surface-2 text-ink px-1.5 py-0.5 rounded font-medium">
                           {u.maxWeeklyInvites ?? "offre"} inv/sem
                         </span>
                         <span>•</span>
-                        <span className="bg-[#2ed6ff]/15 text-[#00819e] px-1.5 py-0.5 rounded font-bold">
+                        <span className="bg-[#2ed6ff]/15 text-[#00819e] px-1.5 py-0.5 rounded font-medium">
                           {u.maxWeeklyMessages ?? "offre"} msg/sem
                         </span>
                       </div>
@@ -400,7 +394,7 @@ export const UserManagement: React.FC = () => {
 
                     {/* Campaigns count */}
                     <td className="py-3.5">
-                      <span className="font-bold text-[#21164c]">
+                      <span className="font-medium text-ink">
                         {u.stats?.campaigns || 0} campagne(s)
                       </span>
                     </td>
@@ -410,14 +404,14 @@ export const UserManagement: React.FC = () => {
                       <div className="flex items-center justify-end gap-1.5">
                         <button
                           onClick={() => openDetailModal(u)}
-                          className="p-1.5 rounded-lg border border-[#e0e0db] hover:bg-[#592eff]/10 hover:border-[#592eff]/30 text-[#353241] hover:text-[#592eff] transition-colors"
+                          className="p-1.5 rounded-lg border border-line hover:bg-surface-2 hover:border-ink text-ink-2 hover:text-ink transition-colors"
                           title="Voir Fiche Profil"
                         >
                           <Eye className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => openEditModal(u)}
-                          className="p-1.5 rounded-lg border border-[#e0e0db] hover:bg-[#592eff]/10 hover:border-[#592eff]/30 text-[#353241] hover:text-[#592eff] transition-colors"
+                          className="p-1.5 rounded-lg border border-line hover:bg-surface-2 hover:border-ink text-ink-2 hover:text-ink transition-colors"
                           title="Modifier Rôle & Quotas"
                         >
                           <Sliders className="w-3.5 h-3.5" />
@@ -425,7 +419,7 @@ export const UserManagement: React.FC = () => {
                         {u.role !== "SUPER_ADMIN" && (
                           <button
                             onClick={() => handleOpenDeleteUser(u.id, u.name)}
-                            className="p-1.5 rounded-lg border border-[#e0e0db] hover:bg-red-50 hover:border-red-200 text-[#5f5f69] hover:text-red-600 transition-colors"
+                            className="p-1.5 rounded-lg border border-line hover:bg-surface-2 hover:border-line text-muted hover:text-danger transition-colors"
                             title="Supprimer"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -443,13 +437,13 @@ export const UserManagement: React.FC = () => {
 
       {/* CREATE USER MODAL */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 bg-[#21164c]/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in">
-          <div className="adora-card bg-white w-full max-w-lg p-6 sm:p-8 shadow-2xl relative">
-            <h2 className="text-xl font-bold text-[#21164c] mb-1">Ajouter un utilisateur</h2>
-            <p className="text-xs text-[#5f5f69] mb-5">Créez un compte utilisateur et attribuez-lui des quotas personnalisés.</p>
+        <div className="fixed inset-0 bg-ink/40 flex items-center justify-center p-4 z-50">
+          <div className="rounded-2xl border border-line bg-surface bg-white w-full max-w-lg p-6 sm:p-8 relative">
+            <h2 className="text-xl font-medium text-ink mb-1">Ajouter un utilisateur</h2>
+            <p className="text-xs text-muted mb-5">Créez un compte utilisateur et attribuez-lui des quotas personnalisés.</p>
 
             {formError && (
-              <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold">
+              <div className="mb-4 p-3 rounded-xl bg-surface-2 border border-line text-danger text-xs font-semibold">
                 {formError}
               </div>
             )}
@@ -457,7 +451,7 @@ export const UserManagement: React.FC = () => {
             <form onSubmit={handleCreateUser} className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-bold text-[#21164c] uppercase tracking-wider mb-1">
+                  <label className="block text-xs font-medium text-ink mb-1">
                     Nom complet
                   </label>
                   <input
@@ -466,11 +460,11 @@ export const UserManagement: React.FC = () => {
                     placeholder="Marc Koffi"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-[#e0e0db] text-xs focus:outline-none focus:border-[#592eff]"
+                    className="w-full px-3 py-2 rounded-xl border border-line text-xs focus:outline-none focus:border-ink"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-[#21164c] uppercase tracking-wider mb-1">
+                  <label className="block text-xs font-medium text-ink mb-1">
                     Email
                   </label>
                   <input
@@ -479,13 +473,13 @@ export const UserManagement: React.FC = () => {
                     placeholder="marc@growth.ci"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-[#e0e0db] text-xs focus:outline-none focus:border-[#592eff]"
+                    className="w-full px-3 py-2 rounded-xl border border-line text-xs focus:outline-none focus:border-ink"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-[#21164c] uppercase tracking-wider mb-1">
+                <label className="block text-xs font-medium text-ink mb-1">
                   Mot de passe
                 </label>
                 <input
@@ -494,19 +488,19 @@ export const UserManagement: React.FC = () => {
                   placeholder="••••••••"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-[#e0e0db] text-xs focus:outline-none focus:border-[#592eff]"
+                  className="w-full px-3 py-2 rounded-xl border border-line text-xs focus:outline-none focus:border-ink"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-bold text-[#21164c] uppercase tracking-wider mb-1">
+                  <label className="block text-xs font-medium text-ink mb-1">
                     Rôle
                   </label>
                   <select
                     value={formData.role}
                     onChange={(e) => setFormData({ ...formData, role: e.target.value as Role })}
-                    className="w-full px-3 py-2 rounded-xl border border-[#e0e0db] text-xs bg-white focus:outline-none focus:border-[#592eff]"
+                    className="w-full px-3 py-2 rounded-xl border border-line text-xs bg-white focus:outline-none focus:border-ink"
                   >
                     <option value="USER">USER (Utilisateur)</option>
                     <option value="SUPER_ADMIN">SUPER_ADMIN (Super Admin)</option>
@@ -514,13 +508,13 @@ export const UserManagement: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-[#21164c] uppercase tracking-wider mb-1">
+                  <label className="block text-xs font-medium text-ink mb-1">
                     Organisation
                   </label>
                   <select
                     value={formData.organizationId}
                     onChange={(e) => setFormData({ ...formData, organizationId: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-[#e0e0db] text-xs bg-white focus:outline-none focus:border-[#592eff]"
+                    className="w-full px-3 py-2 rounded-xl border border-line text-xs bg-white focus:outline-none focus:border-ink"
                   >
                     <option value="">Aucune (Indépendant)</option>
                     {organizations.map((org) => (
@@ -532,9 +526,9 @@ export const UserManagement: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 p-3 rounded-2xl bg-[#f8f9fc] border border-[#e0e0db]">
+              <div className="grid grid-cols-2 gap-3 p-3 rounded-2xl bg-surface-2 border border-line">
                 <div>
-                  <label className="block text-[11px] font-bold text-[#21164c] uppercase tracking-wider mb-1">
+                  <label className="block text-xs font-medium text-ink mb-1">
                     Max invitations / semaine (vide = offre)
                   </label>
                   <input
@@ -544,11 +538,11 @@ export const UserManagement: React.FC = () => {
                     onChange={(e) =>
                       setFormData({ ...formData, maxWeeklyInvites: e.target.value === "" ? null : parseInt(e.target.value) || 0 })
                     }
-                    className="w-full px-3 py-1.5 rounded-lg border border-[#e0e0db] text-xs bg-white focus:outline-none focus:border-[#592eff]"
+                    className="w-full px-3 py-1.5 rounded-lg border border-line text-xs bg-white focus:outline-none focus:border-ink"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-[#21164c] uppercase tracking-wider mb-1">
+                  <label className="block text-xs font-medium text-ink mb-1">
                     Max messages / semaine (vide = offre)
                   </label>
                   <input
@@ -558,23 +552,23 @@ export const UserManagement: React.FC = () => {
                     onChange={(e) =>
                       setFormData({ ...formData, maxWeeklyMessages: e.target.value === "" ? null : parseInt(e.target.value) || 0 })
                     }
-                    className="w-full px-3 py-1.5 rounded-lg border border-[#e0e0db] text-xs bg-white focus:outline-none focus:border-[#592eff]"
+                    className="w-full px-3 py-1.5 rounded-lg border border-line text-xs bg-white focus:outline-none focus:border-ink"
                   />
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#e0e0db]">
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-line">
                 <button
                   type="button"
                   onClick={() => setIsCreateModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-[#e0e0db] text-xs font-semibold text-[#5f5f69] hover:bg-[#f5f5f7]"
+                  className="px-4 py-2 rounded-xl border border-line text-xs font-semibold text-muted hover:bg-surface-2"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
                   disabled={actionLoading}
-                  className="px-5 py-2 rounded-xl bg-[#592eff] hover:bg-[#4d25e0] text-white text-xs font-bold shadow-md shadow-[#592eff]/25 disabled:opacity-50"
+                  className="px-5 py-2 rounded-xl bg-accent hover:bg-accent-hover text-white text-xs font-medium disabled:opacity-50"
                 >
                   {actionLoading ? "Création..." : "Créer l'utilisateur"}
                 </button>
@@ -586,41 +580,41 @@ export const UserManagement: React.FC = () => {
 
       {/* EDIT USER & QUOTAS MODAL */}
       {isEditModalOpen && selectedUser && (
-        <div className="fixed inset-0 bg-[#21164c]/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in">
-          <div className="adora-card bg-white w-full max-w-lg p-6 sm:p-8 shadow-2xl relative">
-            <h2 className="text-xl font-bold text-[#21164c] mb-1">Modifier l'Utilisateur</h2>
-            <p className="text-xs text-[#5f5f69] mb-5">
-              Édition des privilèges et des limites pour <span className="font-bold">{selectedUser.email}</span>
+        <div className="fixed inset-0 bg-ink/40 flex items-center justify-center p-4 z-50">
+          <div className="rounded-2xl border border-line bg-surface bg-white w-full max-w-lg p-6 sm:p-8 relative">
+            <h2 className="text-xl font-medium text-ink mb-1">Modifier l'Utilisateur</h2>
+            <p className="text-xs text-muted mb-5">
+              Édition des privilèges et des limites pour <span className="font-medium">{selectedUser.email}</span>
             </p>
 
             {formError && (
-              <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold">
+              <div className="mb-4 p-3 rounded-xl bg-surface-2 border border-line text-danger text-xs font-semibold">
                 {formError}
               </div>
             )}
 
             <form onSubmit={handleEditUser} className="space-y-4">
               <div>
-                <label className="block text-[11px] font-bold text-[#21164c] uppercase tracking-wider mb-1">
+                <label className="block text-xs font-medium text-ink mb-1">
                   Nom
                 </label>
                 <input
                   type="text"
                   value={editFormData.name}
                   onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-[#e0e0db] text-xs focus:outline-none focus:border-[#592eff]"
+                  className="w-full px-3 py-2 rounded-xl border border-line text-xs focus:outline-none focus:border-ink"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-bold text-[#21164c] uppercase tracking-wider mb-1">
+                  <label className="block text-xs font-medium text-ink mb-1">
                     Rôle
                   </label>
                   <select
                     value={editFormData.role}
                     onChange={(e) => setEditFormData({ ...editFormData, role: e.target.value as Role })}
-                    className="w-full px-3 py-2 rounded-xl border border-[#e0e0db] text-xs bg-white focus:outline-none focus:border-[#592eff]"
+                    className="w-full px-3 py-2 rounded-xl border border-line text-xs bg-white focus:outline-none focus:border-ink"
                   >
                     <option value="USER">USER</option>
                     <option value="SUPER_ADMIN">SUPER_ADMIN</option>
@@ -628,7 +622,7 @@ export const UserManagement: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-[#21164c] uppercase tracking-wider mb-1">
+                  <label className="block text-xs font-medium text-ink mb-1">
                     Statut du compte
                   </label>
                   <select
@@ -636,7 +630,7 @@ export const UserManagement: React.FC = () => {
                     onChange={(e) =>
                       setEditFormData({ ...editFormData, status: e.target.value as UserStatus })
                     }
-                    className="w-full px-3 py-2 rounded-xl border border-[#e0e0db] text-xs bg-white focus:outline-none focus:border-[#592eff]"
+                    className="w-full px-3 py-2 rounded-xl border border-line text-xs bg-white focus:outline-none focus:border-ink"
                   >
                     <option value="ACTIVE">ACTIF</option>
                     <option value="SUSPENDED">SUSPENDU</option>
@@ -645,13 +639,13 @@ export const UserManagement: React.FC = () => {
               </div>
 
               {/* Quotas */}
-              <div className="p-3 rounded-2xl bg-[#f8f9fc] border border-[#e0e0db] space-y-3">
-                <p className="text-xs font-bold text-[#21164c] flex items-center gap-1.5">
-                  <Sliders className="w-3.5 h-3.5 text-[#592eff]" /> Plafonds hebdomadaires LinkedIn
+              <div className="p-3 rounded-2xl bg-surface-2 border border-line space-y-3">
+                <p className="text-xs font-medium text-ink flex items-center gap-1.5">
+                  <Sliders className="w-3.5 h-3.5 text-ink" /> Plafonds hebdomadaires LinkedIn
                 </p>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[10px] text-[#5f5f69] uppercase font-bold mb-1">
+                    <label className="block text-xs text-muted font-medium mb-1">
                       Invitations / semaine (vide = offre)
                     </label>
                     <input
@@ -661,11 +655,11 @@ export const UserManagement: React.FC = () => {
                       onChange={(e) =>
                         setEditFormData({ ...editFormData, maxWeeklyInvites: e.target.value === "" ? null : parseInt(e.target.value) || 0 })
                       }
-                      className="w-full px-3 py-1.5 rounded-lg border border-[#e0e0db] text-xs bg-white focus:outline-none focus:border-[#592eff]"
+                      className="w-full px-3 py-1.5 rounded-lg border border-line text-xs bg-white focus:outline-none focus:border-ink"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] text-[#5f5f69] uppercase font-bold mb-1">
+                    <label className="block text-xs text-muted font-medium mb-1">
                       Messages / semaine (vide = offre)
                     </label>
                     <input
@@ -675,14 +669,14 @@ export const UserManagement: React.FC = () => {
                       onChange={(e) =>
                         setEditFormData({ ...editFormData, maxWeeklyMessages: e.target.value === "" ? null : parseInt(e.target.value) || 0 })
                       }
-                      className="w-full px-3 py-1.5 rounded-lg border border-[#e0e0db] text-xs bg-white focus:outline-none focus:border-[#592eff]"
+                      className="w-full px-3 py-1.5 rounded-lg border border-line text-xs bg-white focus:outline-none focus:border-ink"
                     />
                   </div>
                 </div>
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-[#21164c] uppercase tracking-wider mb-1">
+                <label className="block text-xs font-medium text-ink mb-1">
                   Réinitialiser le mot de passe (Laisser vide pour ne pas changer)
                 </label>
                 <input
@@ -690,22 +684,22 @@ export const UserManagement: React.FC = () => {
                   placeholder="Nouveau mot de passe"
                   value={editFormData.newPassword}
                   onChange={(e) => setEditFormData({ ...editFormData, newPassword: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-[#e0e0db] text-xs focus:outline-none focus:border-[#592eff]"
+                  className="w-full px-3 py-2 rounded-xl border border-line text-xs focus:outline-none focus:border-ink"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#e0e0db]">
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-line">
                 <button
                   type="button"
                   onClick={() => setIsEditModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-[#e0e0db] text-xs font-semibold text-[#5f5f69] hover:bg-[#f5f5f7]"
+                  className="px-4 py-2 rounded-xl border border-line text-xs font-semibold text-muted hover:bg-surface-2"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
                   disabled={actionLoading}
-                  className="px-5 py-2 rounded-xl bg-[#592eff] hover:bg-[#4d25e0] text-white text-xs font-bold shadow-md shadow-[#592eff]/25 disabled:opacity-50"
+                  className="px-5 py-2 rounded-xl bg-accent hover:bg-accent-hover text-white text-xs font-medium disabled:opacity-50"
                 >
                   {actionLoading ? "Enregistrement..." : "Enregistrer les modifications"}
                 </button>
@@ -717,29 +711,29 @@ export const UserManagement: React.FC = () => {
 
       {/* USER DETAIL MODAL */}
       {isDetailModalOpen && selectedUser && (
-        <div className="fixed inset-0 bg-[#21164c]/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in">
-          <div className="adora-card bg-white w-full max-w-lg p-6 sm:p-8 shadow-2xl relative">
+        <div className="fixed inset-0 bg-ink/40 flex items-center justify-center p-4 z-50">
+          <div className="rounded-2xl border border-line bg-surface bg-white w-full max-w-lg p-6 sm:p-8 relative">
             <div className="flex items-center gap-4 mb-6">
               <img
                 src={
                   selectedUser.avatarUrl ||
-                  `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedUser.name || selectedUser.email)}&background=592eff&color=fff`
+                  initialsDataUrl(selectedUser.name || selectedUser.email)
                 }
                 alt={selectedUser.name || selectedUser.email}
-                className="w-14 h-14 rounded-full object-cover border-2 border-[#592eff]"
+                className="w-14 h-14 rounded-full object-cover border border-ink"
               />
               <div>
-                <h3 className="text-xl font-bold text-[#21164c]">{selectedUser.name || "Sans nom"}</h3>
-                <p className="text-xs text-[#5f5f69]">{selectedUser.email}</p>
+                <h3 className="text-xl font-medium text-ink">{selectedUser.name || "Sans nom"}</h3>
+                <p className="text-xs text-muted">{selectedUser.email}</p>
                 <div className="flex items-center gap-2 mt-1.5">
-                  <span className="badge-tag bg-[#592eff]/10 text-[#592eff] border border-[#592eff]/20 text-[10px]">
+                  <span className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium bg-surface-2 text-ink border border-ink text-xs">
                     {selectedUser.role}
                   </span>
                   <span
-                    className={`badge-tag text-[10px] ${
+                    className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium text-xs ${
                       selectedUser.status === "ACTIVE"
-                        ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
-                        : "bg-red-50 text-red-600 border border-red-200"
+                        ? "bg-surface-2 text-ok border border-line"
+                        : "bg-surface-2 text-danger border border-line"
                     }`}
                   >
                     {selectedUser.status}
@@ -749,36 +743,36 @@ export const UserManagement: React.FC = () => {
             </div>
 
             <div className="space-y-3 text-xs">
-              <div className="p-3.5 rounded-2xl bg-[#f8f9fc] border border-[#e0e0db] flex justify-between">
-                <span className="text-[#5f5f69]">Organisation rattachée :</span>
-                <span className="font-bold text-[#21164c]">
+              <div className="p-3.5 rounded-2xl bg-surface-2 border border-line flex justify-between">
+                <span className="text-muted">Organisation rattachée :</span>
+                <span className="font-medium text-ink">
                   {selectedUser.organization?.name || "Espace Solo"}
                 </span>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-[#f8f9fc] border border-[#e0e0db] flex justify-between">
-                <span className="text-[#5f5f69]">Compte LinkedIn Associé :</span>
-                <span className="font-bold text-[#21164c]">
+              <div className="p-3.5 rounded-2xl bg-surface-2 border border-line flex justify-between">
+                <span className="text-muted">Compte LinkedIn Associé :</span>
+                <span className="font-medium text-ink">
                   {selectedUser.linkedInAccount ? (
-                    <span className="text-emerald-600 font-bold">
+                    <span className="text-ok font-medium">
                       {selectedUser.linkedInAccount.accountName || "Connecté"}
                     </span>
                   ) : (
-                    <span className="text-amber-600 font-medium">Non lié</span>
+                    <span className="text-warn font-medium">Non lié</span>
                   )}
                 </span>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-[#f8f9fc] border border-[#e0e0db] flex justify-between">
-                <span className="text-[#5f5f69]">Quotas autorisés :</span>
-                <span className="font-bold text-[#592eff]">
+              <div className="p-3.5 rounded-2xl bg-surface-2 border border-line flex justify-between">
+                <span className="text-muted">Quotas autorisés :</span>
+                <span className="font-medium text-ink">
                   {selectedUser.maxWeeklyInvites ?? "offre"} inv/sem • {selectedUser.maxWeeklyMessages ?? "offre"} msg/sem
                 </span>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-[#f8f9fc] border border-[#e0e0db] flex justify-between">
-                <span className="text-[#5f5f69]">Campagnes actives :</span>
-                <span className="font-bold text-[#21164c]">
+              <div className="p-3.5 rounded-2xl bg-surface-2 border border-line flex justify-between">
+                <span className="text-muted">Campagnes actives :</span>
+                <span className="font-medium text-ink">
                   {selectedUser.stats?.campaigns || 0}
                 </span>
               </div>
@@ -787,7 +781,7 @@ export const UserManagement: React.FC = () => {
             <div className="mt-6 flex justify-end">
               <button
                 onClick={() => setIsDetailModalOpen(false)}
-                className="px-5 py-2 rounded-xl bg-[#592eff] text-white text-xs font-bold shadow-md hover:bg-[#4d25e0]"
+                className="px-5 py-2 rounded-xl bg-accent text-white text-xs font-medium hover:bg-accent-hover"
               >
                 Fermer la fiche
               </button>

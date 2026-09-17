@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { initialsDataUrl } from "../ui/avatarFallback";
 import { useAuth } from "../../context/AuthContext";
 import { apiRequest } from "../../services/api";
 import { WorkspaceSettingsSection } from "./WorkspaceSettingsSection";
@@ -181,8 +182,8 @@ export const AccountSettingsTab: React.FC = () => {
   if (fetching) {
     return (
       <div className="p-12 flex flex-col items-center justify-center gap-3">
-        <Loader2 className="w-7 h-7 animate-spin text-[#592eff]" />
-        <span className="text-xs text-[#5f5f69] font-medium">Chargement des paramètres de votre compte...</span>
+        <Loader2 className="w-7 h-7 animate-spin text-ink" />
+        <span className="text-xs text-muted font-medium">Chargement des paramètres de votre compte...</span>
       </div>
     );
   }
@@ -191,30 +192,30 @@ export const AccountSettingsTab: React.FC = () => {
     <form onSubmit={handleSave} className="space-y-8 max-w-4xl">
       {message && (
         <div
-          className={`p-4 rounded-2xl flex items-center gap-3 text-xs font-semibold animate-in fade-in ${
+          className={`p-4 rounded-2xl flex items-center gap-3 text-xs font-semibold ${
             message.type === "success"
-              ? "bg-emerald-50 border border-emerald-200 text-emerald-800"
-              : "bg-red-50 border border-red-200 text-red-800"
+              ? "bg-surface-2 border border-line text-ok"
+              : "bg-surface-2 border border-line text-danger"
           }`}
         >
           {message.type === "success" ? (
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <CheckCircle2 className="w-4 h-4 text-ok shrink-0" />
           ) : (
-            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+            <AlertCircle className="w-4 h-4 text-danger shrink-0" />
           )}
           <span>{message.text}</span>
         </div>
       )}
 
       {/* Bloc 1 : Profil & Identité */}
-      <div className="adora-card p-6 sm:p-7 bg-white rounded-3xl border border-[#e0e0db]/80 shadow-xs space-y-6">
+      <div className="rounded-2xl border border-line bg-surface p-6 sm:p-7 bg-white rounded-2xl border border-line/80 space-y-6">
         <div className="flex items-center gap-3 border-b border-[#f0f0f4] pb-4">
-          <div className="w-9 h-9 rounded-2xl bg-[#592eff]/10 flex items-center justify-center text-[#592eff]">
+          <div className="w-9 h-9 rounded-2xl bg-surface-2 flex items-center justify-center text-ink">
             <UserIcon className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-base font-bold text-[#21164c]">Profil & Coordonnées</h3>
-            <p className="text-xs text-[#5f5f69]">Gérez vos informations visibles et de connexion</p>
+            <h3 className="text-base font-medium text-ink">Profil & Coordonnées</h3>
+            <p className="text-xs text-muted">Gérez vos informations visibles et de connexion</p>
           </div>
         </div>
 
@@ -224,24 +225,22 @@ export const AccountSettingsTab: React.FC = () => {
               src={
                 avatarUrl ||
                 user?.avatarUrl ||
-                `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                  `${firstName} ${lastName}`.trim() || user?.name || "User"
-                )}&background=592eff&color=fff`
+                initialsDataUrl(`${firstName} ${lastName}`.trim() || user?.name || "User")
               }
               alt="Avatar"
-              className="w-20 h-20 rounded-full object-cover border-2 border-[#592eff]/30 shadow-md"
+              className="w-20 h-20 rounded-full object-cover border border-ink"
             />
           </div>
           <div className="flex-1 w-full space-y-2">
-            <label className="text-xs font-bold text-[#21164c]">URL de l'image de profil</label>
+            <label className="text-xs font-medium text-ink">URL de l'image de profil</label>
             <input
               type="url"
               value={avatarUrl}
               onChange={(e) => setAvatarUrl(e.target.value)}
               placeholder="https://example.com/avatar.jpg"
-              className="w-full px-3.5 py-2.5 bg-[#f8f9fc] border border-[#e0e0db] rounded-xl text-xs text-[#21164c] placeholder-[#9ca3af] focus:outline-none focus:border-[#592eff] focus:bg-white transition-all"
+              className="w-full px-3.5 py-2.5 bg-surface-2 border border-line rounded-xl text-xs text-ink placeholder-[#9ca3af] focus:outline-none focus:border-ink focus:bg-white transition-all"
             />
-            <p className="text-[11px] text-[#7c7c88]">
+            <p className="text-xs text-muted-2">
               Laissez vide pour utiliser votre photo de profil LinkedIn synchronisée automatiquement.
             </p>
           </div>
@@ -249,37 +248,37 @@ export const AccountSettingsTab: React.FC = () => {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-[#21164c]">Prénom</label>
+            <label className="text-xs font-medium text-ink">Prénom</label>
             <input
               type="text"
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
               placeholder="Ex: Jean"
-              className="w-full px-3.5 py-2.5 bg-[#f8f9fc] border border-[#e0e0db] rounded-xl text-xs text-[#21164c] focus:outline-none focus:border-[#592eff] focus:bg-white transition-all"
+              className="w-full px-3.5 py-2.5 bg-surface-2 border border-line rounded-xl text-xs text-ink focus:outline-none focus:border-ink focus:bg-white transition-all"
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-[#21164c]">Nom de famille</label>
+            <label className="text-xs font-medium text-ink">Nom de famille</label>
             <input
               type="text"
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
               placeholder="Ex: Dupont"
-              className="w-full px-3.5 py-2.5 bg-[#f8f9fc] border border-[#e0e0db] rounded-xl text-xs text-[#21164c] focus:outline-none focus:border-[#592eff] focus:bg-white transition-all"
+              className="w-full px-3.5 py-2.5 bg-surface-2 border border-line rounded-xl text-xs text-ink focus:outline-none focus:border-ink focus:bg-white transition-all"
             />
           </div>
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-xs font-bold text-[#21164c] flex items-center gap-1.5">
-            <Mail className="w-3.5 h-3.5 text-[#592eff]" />
+          <label className="text-xs font-medium text-ink flex items-center gap-1.5">
+            <Mail className="w-3.5 h-3.5 text-ink" />
             Adresse email professionnelle
           </label>
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-3.5 py-2.5 bg-[#f8f9fc] border border-[#e0e0db] rounded-xl text-xs text-[#21164c] focus:outline-none focus:border-[#592eff] focus:bg-white transition-all"
+            className="w-full px-3.5 py-2.5 bg-surface-2 border border-line rounded-xl text-xs text-ink focus:outline-none focus:border-ink focus:bg-white transition-all"
           />
         </div>
       </div>
@@ -288,48 +287,48 @@ export const AccountSettingsTab: React.FC = () => {
       <WorkspaceSettingsSection />
 
       {/* Bloc 2 : Sécurité & Mot de passe */}
-      <div className="adora-card p-6 sm:p-7 bg-white rounded-3xl border border-[#e0e0db]/80 shadow-xs space-y-6">
+      <div className="rounded-2xl border border-line bg-surface p-6 sm:p-7 bg-white rounded-2xl border border-line/80 space-y-6">
         <div className="flex items-center gap-3 border-b border-[#f0f0f4] pb-4">
-          <div className="w-9 h-9 rounded-2xl bg-[#592eff]/10 flex items-center justify-center text-[#592eff]">
+          <div className="w-9 h-9 rounded-2xl bg-surface-2 flex items-center justify-center text-ink">
             <Lock className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-base font-bold text-[#21164c]">Sécurité & Authentification</h3>
-            <p className="text-xs text-[#5f5f69]">Mettez à jour votre mot de passe d'accès à Bleadin</p>
+            <h3 className="text-base font-medium text-ink">Sécurité & Authentification</h3>
+            <p className="text-xs text-muted">Mettez à jour votre mot de passe d'accès à Bleadin</p>
           </div>
         </div>
 
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-[#21164c]">Mot de passe actuel</label>
+            <label className="text-xs font-medium text-ink">Mot de passe actuel</label>
             <input
               type="password"
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
               placeholder="••••••••••••"
-              className="w-full px-3.5 py-2.5 bg-[#f8f9fc] border border-[#e0e0db] rounded-xl text-xs text-[#21164c] focus:outline-none focus:border-[#592eff] focus:bg-white transition-all"
+              className="w-full px-3.5 py-2.5 bg-surface-2 border border-line rounded-xl text-xs text-ink focus:outline-none focus:border-ink focus:bg-white transition-all"
             />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-[#21164c]">Nouveau mot de passe</label>
+              <label className="text-xs font-medium text-ink">Nouveau mot de passe</label>
               <input
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="Minimum 8 caractères"
-                className="w-full px-3.5 py-2.5 bg-[#f8f9fc] border border-[#e0e0db] rounded-xl text-xs text-[#21164c] focus:outline-none focus:border-[#592eff] focus:bg-white transition-all"
+                className="w-full px-3.5 py-2.5 bg-surface-2 border border-line rounded-xl text-xs text-ink focus:outline-none focus:border-ink focus:bg-white transition-all"
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-[#21164c]">Confirmer le nouveau mot de passe</label>
+              <label className="text-xs font-medium text-ink">Confirmer le nouveau mot de passe</label>
               <input
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Retapez le mot de passe"
-                className="w-full px-3.5 py-2.5 bg-[#f8f9fc] border border-[#e0e0db] rounded-xl text-xs text-[#21164c] focus:outline-none focus:border-[#592eff] focus:bg-white transition-all"
+                className="w-full px-3.5 py-2.5 bg-surface-2 border border-line rounded-xl text-xs text-ink focus:outline-none focus:border-ink focus:bg-white transition-all"
               />
             </div>
           </div>
@@ -337,25 +336,25 @@ export const AccountSettingsTab: React.FC = () => {
       </div>
 
       {/* Bloc 3 : Quotas journaliers & Plages de travail */}
-      <div className="adora-card p-6 sm:p-7 bg-white rounded-3xl border border-[#e0e0db]/80 shadow-xs space-y-6">
+      <div className="rounded-2xl border border-line bg-surface p-6 sm:p-7 bg-white rounded-2xl border border-line/80 space-y-6">
         <div className="flex items-center gap-3 border-b border-[#f0f0f4] pb-4">
-          <div className="w-9 h-9 rounded-2xl bg-[#592eff]/10 flex items-center justify-center text-[#592eff]">
+          <div className="w-9 h-9 rounded-2xl bg-surface-2 flex items-center justify-center text-ink">
             <Sliders className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-base font-bold text-[#21164c]">Règles & Quotas de Prospection</h3>
-            <p className="text-xs text-[#5f5f69]">Contrôle anti-détection pour protéger votre compte LinkedIn</p>
+            <h3 className="text-base font-medium text-ink">Règles & Quotas de Prospection</h3>
+            <p className="text-xs text-muted">Contrôle anti-détection pour protéger votre compte LinkedIn</p>
           </div>
         </div>
 
         {/* Quotas hebdomadaires (bornés par l'offre) */}
         {quotas && (
-          <p className="text-xs text-[#5f5f69]">
-            Offre <span className="font-bold text-[#21164c]">{quotas.planName}</span> : vos volumes sont répartis
+          <p className="text-xs text-muted">
+            Offre <span className="font-medium text-ink">{quotas.planName}</span> : vos volumes sont répartis
             automatiquement sur vos jours de travail, avec une quantité légèrement différente chaque jour pour rester
             naturel aux yeux de LinkedIn. Vous pouvez les abaisser ici, jamais dépasser votre offre.
             {quotas.warmup?.active && (
-              <span className="ml-1 inline-flex items-center px-2 py-0.5 rounded-full bg-[#dfff9d] text-[#21164c] font-bold text-[11px]">
+              <span className="ml-1 inline-flex items-center px-2 py-0.5 rounded-full bg-[#dfff9d] text-ink font-medium text-xs">
                 Montée en charge : jour {quotas.warmup.dayIndex + 1}/{quotas.warmup.totalDays}
               </span>
             )}
@@ -367,10 +366,10 @@ export const AccountSettingsTab: React.FC = () => {
             const planWeek = info?.planWeek ?? 0;
             const value = weeklyLimits[kind];
             return (
-              <div key={kind} className="p-4 rounded-2xl bg-[#f8f9fc] border border-[#e0e0db]/60 space-y-3">
+              <div key={kind} className="p-4 rounded-2xl bg-surface-2 border border-line/60 space-y-3">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-[#21164c]">{ACTION_LABELS[kind]} max / semaine</label>
-                  <span className="px-2.5 py-0.5 rounded-full bg-[#592eff]/10 text-[#592eff] font-extrabold text-xs">
+                  <label className="text-xs font-medium text-ink">{ACTION_LABELS[kind]} max / semaine</label>
+                  <span className="px-2.5 py-0.5 rounded-full bg-surface-2 text-ink font-semibold text-xs">
                     {value} / sem
                   </span>
                 </div>
@@ -384,7 +383,7 @@ export const AccountSettingsTab: React.FC = () => {
                   onChange={(e) => setWeeklyLimits({ ...weeklyLimits, [kind]: Number(e.target.value) })}
                   className="w-full accent-[#592eff] cursor-pointer disabled:cursor-not-allowed"
                 />
-                <p className="text-[11px] text-[#7c7c88]">
+                <p className="text-xs text-muted-2">
                   {info
                     ? `Offre : ${planWeek} / sem · ${info.planMonth.toLocaleString("fr-FR")} / mois` +
                       (info.target !== null
@@ -400,40 +399,40 @@ export const AccountSettingsTab: React.FC = () => {
         {/* Plages horaires & fuseau */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-[#21164c] flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-[#592eff]" />
+            <label className="text-xs font-medium text-ink flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-ink" />
               Début des envois
             </label>
             <input
               type="time"
               value={workingHoursStart}
               onChange={(e) => setWorkingHoursStart(e.target.value)}
-              className="w-full px-3 py-2 bg-[#f8f9fc] border border-[#e0e0db] rounded-xl text-xs font-semibold text-[#21164c] focus:outline-none focus:border-[#592eff]"
+              className="w-full px-3 py-2 bg-surface-2 border border-line rounded-xl text-xs font-semibold text-ink focus:outline-none focus:border-ink"
             />
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-[#21164c] flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-[#592eff]" />
+            <label className="text-xs font-medium text-ink flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-ink" />
               Fin des envois
             </label>
             <input
               type="time"
               value={workingHoursEnd}
               onChange={(e) => setWorkingHoursEnd(e.target.value)}
-              className="w-full px-3 py-2 bg-[#f8f9fc] border border-[#e0e0db] rounded-xl text-xs font-semibold text-[#21164c] focus:outline-none focus:border-[#592eff]"
+              className="w-full px-3 py-2 bg-surface-2 border border-line rounded-xl text-xs font-semibold text-ink focus:outline-none focus:border-ink"
             />
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-[#21164c] flex items-center gap-1.5">
-              <Globe className="w-3.5 h-3.5 text-[#592eff]" />
+            <label className="text-xs font-medium text-ink flex items-center gap-1.5">
+              <Globe className="w-3.5 h-3.5 text-ink" />
               Fuseau horaire
             </label>
             <select
               value={timezone}
               onChange={(e) => setTimezone(e.target.value)}
-              className="w-full px-3 py-2 bg-[#f8f9fc] border border-[#e0e0db] rounded-xl text-xs font-semibold text-[#21164c] focus:outline-none focus:border-[#592eff]"
+              className="w-full px-3 py-2 bg-surface-2 border border-line rounded-xl text-xs font-semibold text-ink focus:outline-none focus:border-ink"
             >
               {TIMEZONES.map((tz) => (
                 <option key={tz.value} value={tz.value}>
@@ -446,8 +445,8 @@ export const AccountSettingsTab: React.FC = () => {
 
         {/* Jours actifs */}
         <div className="space-y-2 pt-2">
-          <label className="text-xs font-bold text-[#21164c] flex items-center gap-1.5">
-            <Calendar className="w-3.5 h-3.5 text-[#592eff]" />
+          <label className="text-xs font-medium text-ink flex items-center gap-1.5">
+            <Calendar className="w-3.5 h-3.5 text-ink" />
             Jours ouvrés d'exécution des campagnes
           </label>
           <div className="flex flex-wrap gap-2">
@@ -458,10 +457,10 @@ export const AccountSettingsTab: React.FC = () => {
                   key={day.id}
                   type="button"
                   onClick={() => toggleDay(day.id)}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  className={`px-4 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer ${
                     active
-                      ? "bg-[#592eff] text-white shadow-xs shadow-[#592eff]/30"
-                      : "bg-[#f0f0f4] text-[#7c7c88] hover:bg-[#e4e4e9]"
+                      ? "bg-accent text-white"
+                      : "bg-[#f0f0f4] text-muted-2 hover:bg-[#e4e4e9]"
                   }`}
                 >
                   {day.label}
@@ -469,7 +468,7 @@ export const AccountSettingsTab: React.FC = () => {
               );
             })}
           </div>
-          <p className="text-[11px] text-[#7c7c88]">
+          <p className="text-xs text-muted-2">
             Les actions en file d'attente ne s'exécutent que pendant vos créneaux définis pour simuler une présence humaine naturelle.
           </p>
         </div>
@@ -480,7 +479,7 @@ export const AccountSettingsTab: React.FC = () => {
         <button
           type="submit"
           disabled={loading}
-          className="px-6 py-3 bg-[#592eff] hover:bg-[#4922db] text-white font-bold text-xs rounded-2xl shadow-lg shadow-[#592eff]/25 hover:shadow-[#592eff]/40 active:scale-[0.98] transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+          className="px-6 py-3 bg-accent hover:bg-accent-hover text-white font-medium text-xs rounded-2xl transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
         >
           {loading ? (
             <>

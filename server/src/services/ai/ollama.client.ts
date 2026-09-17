@@ -9,7 +9,13 @@ export interface AiProviderConfig {
   apiKey?: string | null;
   model: string;
   temperature?: number | null;
+  /** Fenêtre de contexte (num_ctx). Défaut 16384. */
+  numCtx?: number | null;
+  /** Mode réflexion des modèles qui le supportent (qwen3, deepseek-r1…). Désactivé par défaut. */
+  thinking?: boolean | null;
 }
+
+export const DEFAULT_NUM_CTX = 16384;
 
 export interface ChatToolCall {
   id: string;
@@ -140,6 +146,8 @@ async function chatOllama(opts: ChatOptions): Promise<ChatResult> {
         model: provider.model,
         stream: true,
         keep_alive: "30m",
+        // Sans ce drapeau, qwen3.5 « réfléchit » dans le contexte et peut être coupé avant d'émettre l'appel d'outil.
+        think: Boolean(provider.thinking),
         messages: toOllamaMessages(opts.messages),
         ...(opts.tools?.length
           ? {
@@ -151,7 +159,7 @@ async function chatOllama(opts: ChatOptions): Promise<ChatResult> {
           : {}),
         options: {
           temperature: provider.temperature ?? 0.2,
-          num_ctx: opts.numCtx ?? 8192,
+          num_ctx: opts.numCtx ?? provider.numCtx ?? DEFAULT_NUM_CTX,
         },
       }),
     });

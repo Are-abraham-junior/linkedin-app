@@ -1,28 +1,16 @@
 import React, { useState, useEffect, useCallback } from "react";
-import {
-  Clock,
-  Send,
-  UserPlus,
-  Eye,
-  UserCheck,
-  Calendar,
-  Trash2,
-  RefreshCw,
-  Search,
-  Filter,
-  CheckSquare,
-  Square,
-  ChevronDown,
-  ExternalLink,
-  ShieldCheck,
-  AlertCircle,
-  MoreHorizontal,
-  ChevronLeft,
-  ChevronRight,
-  ArrowUpDown,
-  Check,
-  Sparkles,
-} from "lucide-react";
+import { Clock, Send, UserPlus, Eye, UserCheck, Calendar, Trash2, RefreshCw, Search, ExternalLink, ShieldCheck, X } from "lucide-react";
+import { Avatar } from "../ui/Avatar";
+import { Badge, StatusDot } from "../ui/Badge";
+import { Button } from "../ui/Button";
+import { Card } from "../ui/Card";
+import { useConfirm } from "../ui/ConfirmProvider";
+import { EmptyState } from "../ui/EmptyState";
+import { Checkbox, Input, Select } from "../ui/Field";
+import { IconButton } from "../ui/IconButton";
+import { Skeleton } from "../ui/Skeleton";
+import { Pagination, Table, Td, TdActions, Th, Tr } from "../ui/Table";
+import { Tabs } from "../ui/Tabs";
 import { apiRequest } from "../../services/api";
 import { ScheduleActivityModal } from "./ScheduleActivityModal";
 
@@ -75,6 +63,7 @@ interface QueueStats {
 }
 
 export const QueueView: React.FC = () => {
+  const confirm = useConfirm();
   const [items, setItems] = useState<QueueItem[]>([]);
   const [stats, setStats] = useState<QueueStats | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -243,7 +232,7 @@ export const QueueView: React.FC = () => {
 
   // Handle single item deletion
   const handleDeleteItem = async (id: string) => {
-    if (!window.confirm("Êtes-vous sûr de vouloir retirer cette action de la file d'attente ?")) return;
+    if (!(await confirm({ title: "Retirer cette action ?", description: "Elle ne sera pas exécutée et disparaîtra de la file d'attente.", confirmText: "Retirer" }))) return;
 
     try {
       const res = await apiRequest(`/queue/${id}`, { method: "DELETE" });
@@ -260,7 +249,7 @@ export const QueueView: React.FC = () => {
   // Handle batch deletion
   const handleBatchDelete = async () => {
     if (selectedIds.length === 0) return;
-    if (!window.confirm(`Retirer ${selectedIds.length} action(s) de la file d'attente ?`)) return;
+    if (!(await confirm({ title: `Retirer ${selectedIds.length} action(s) ?`, description: "Elles ne seront pas exécutées et disparaîtront de la file d'attente.", confirmText: "Retirer" }))) return;
 
     setActionInProgress(true);
     try {
@@ -352,758 +341,329 @@ export const QueueView: React.FC = () => {
     return { label: `${dateStr} à ${timeStr}`, isImminent: false };
   };
 
-  // Render Action Type Icon & Badge
+  // Type d'action : icône nue + libellé
+  const actionTypeMeta: Record<string, { icon: React.ElementType; label: string }> = {
+    INVITATION: { icon: UserPlus, label: "Invitation" },
+    MESSAGE: { icon: Send, label: "Message" },
+    VISIT_PROFILE: { icon: Eye, label: "Visite de profil" },
+    FOLLOW: { icon: UserCheck, label: "Suivi de profil" },
+  };
   const renderActionTypeBadge = (type: string) => {
-    switch (type) {
-      case "INVITATION":
-        return (
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-[#592eff]/10 flex items-center justify-center text-[#592eff]">
-              <UserPlus className="w-4 h-4" />
-            </div>
-            <span className="text-xs font-bold text-[#21164c]">Invitation</span>
-          </div>
-        );
-      case "MESSAGE":
-        return (
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-[#2ed6ff]/10 flex items-center justify-center text-[#0284c7]">
-              <Send className="w-4 h-4" />
-            </div>
-            <span className="text-xs font-bold text-[#21164c]">Message</span>
-          </div>
-        );
-      case "VISIT_PROFILE":
-        return (
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-600">
-              <Eye className="w-4 h-4" />
-            </div>
-            <span className="text-xs font-bold text-[#21164c]">Visite de profil</span>
-          </div>
-        );
-      case "FOLLOW":
-        return (
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-600">
-              <UserCheck className="w-4 h-4" />
-            </div>
-            <span className="text-xs font-bold text-[#21164c]">Suivi de profil</span>
-          </div>
-        );
-      default:
-        return (
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center text-gray-600">
-              <Clock className="w-4 h-4" />
-            </div>
-            <span className="text-xs font-bold text-[#21164c]">{type}</span>
-          </div>
-        );
-    }
+    const meta = actionTypeMeta[type] ?? { icon: Clock, label: type };
+    const Icon = meta.icon;
+    return (
+      <span className="inline-flex items-center gap-2 text-ink">
+        <Icon className="h-4 w-4 text-muted" strokeWidth={1.75} aria-hidden />
+        {meta.label}
+      </span>
+    );
   };
 
   const slotStatus = getWorkingSlotStatus();
+  const allSelected = items.length > 0 && selectedIds.length === items.length;
+
+  const quotaRows = [
+    { key: "invitations", label: "Invitations", icon: UserPlus, data: stats?.quotas.invitations, fallback: 30 },
+    { key: "messages", label: "Messages", icon: Send, data: stats?.quotas.messages, fallback: 70 },
+    { key: "profileVisits", label: "Visites de profil", icon: Eye, data: stats?.quotas.profileVisits, fallback: 120 },
+    { key: "profileFollows", label: "Suivis de profil", icon: UserCheck, data: stats?.quotas.profileFollows, fallback: 80 },
+  ];
 
   return (
-    <div className="flex-1 flex flex-col p-4 sm:p-6 max-w-[1640px] mx-auto w-full">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div>
-          <div className="flex flex-wrap items-center gap-2.5">
-            <h1 className="text-2xl font-black text-[#21164c] tracking-tight">File d'attente</h1>
-            <span
-              className={`px-2.5 py-0.5 rounded-full text-xs font-bold flex items-center gap-1.5 ${
-                stats?.isQueueActive
-                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                  : "bg-amber-50 text-amber-700 border border-amber-200"
-              }`}
-            >
-              <span
-                className={`w-1.5 h-1.5 rounded-full ${
-                  stats?.isQueueActive ? "bg-emerald-500 animate-pulse" : "bg-amber-500"
-                }`}
-              />
-              {stats?.isQueueActive ? "Active" : "En pause"}
-            </span>
-
-            {/* Indicateur de tranche horaire d'activité */}
-            {!slotStatus.inHours && (
-              <span
-                className="px-2.5 py-0.5 rounded-full text-xs font-bold flex items-center gap-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200"
-                title="Les actions sont différées pour respecter vos horaires d'activité configurés et protéger votre compte."
-              >
-                <span>{slotStatus.message}</span>
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-[#5f5f69] mt-1">
-            Suivi en temps réel des actions planifiées et cadence d'exécution
-          </p>
+    <div className="space-y-4">
+      {/* Ligne de statut + actions */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <StatusDot tone={stats?.isQueueActive ? "ok" : "warn"}>{stats?.isQueueActive ? "File active" : "File en pause"}</StatusDot>
+          {!slotStatus.inHours && (
+            <Badge tone="neutral" title="Les actions sont différées pour respecter vos horaires d'activité.">
+              {slotStatus.message}
+            </Badge>
+          )}
         </div>
-
-        {/* Header Actions */}
-        <div className="flex items-center gap-2.5">
-          <button
-            onClick={() => fetchQueue()}
-            disabled={loading}
-            className="p-2.5 bg-white border border-[#e0e0db] hover:border-[#592eff]/40 rounded-2xl text-[#5f5f69] hover:text-[#592eff] transition-all shadow-sm"
-            title="Rafraîchir la file"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-[#592eff]" : ""}`} />
-          </button>
-
-          <button
-            onClick={() => setIsScheduleModalOpen(true)}
-            className="px-4 py-2.5 bg-white hover:bg-[#fafaff] border border-[#e0e0db] hover:border-[#592eff]/40 text-[#21164c] font-bold text-xs rounded-2xl transition-all shadow-sm flex items-center gap-2 cursor-pointer"
-          >
-            <Calendar className="w-4 h-4 text-[#592eff]" />
+        <div className="flex items-center gap-2">
+          <IconButton label="Rafraîchir la file" icon={RefreshCw} size="md" onClick={() => fetchQueue()} disabled={loading} className={loading ? "[&>svg]:animate-spin" : undefined} />
+          <Button variant="secondary" icon={Calendar} onClick={() => setIsScheduleModalOpen(true)}>
             Planifier l'activité
-          </button>
+          </Button>
         </div>
       </div>
 
-      {/* Main Container : Grid 2 Columns (Left: Table ~72%, Right: Quotas Sidebar ~28%) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start flex-1 min-h-0">
-        {/* Left Column (Table & Filters) */}
-        <div className="lg:col-span-8 xl:col-span-9 flex flex-col gap-4 min-w-0">
-          {/* Platform Tabs & Filter Bar */}
-          <div className="bg-white p-3 rounded-2xl border border-[#e0e0db] shadow-sm flex flex-wrap items-center justify-between gap-3">
-            {/* Platform selector */}
-            <div className="flex items-center gap-1 bg-[#f5f5f7] p-1 rounded-xl">
-              <button
-                onClick={() => setPlatformTab("LINKEDIN")}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
-                  platformTab === "LINKEDIN"
-                    ? "bg-white text-[#21164c] shadow-sm"
-                    : "text-[#5f5f69] hover:text-[#21164c]"
-                }`}
-              >
-                <span>LinkedIn</span>
-                <span className="bg-[#592eff]/10 text-[#592eff] text-[10px] px-1.5 py-0.2 rounded-full">
-                  {stats?.totalQueuedLinkedIn || 0}
-                </span>
-              </button>
-
-              <button
-                onClick={() => setPlatformTab("EMAIL")}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
-                  platformTab === "EMAIL"
-                    ? "bg-white text-[#21164c] shadow-sm"
-                    : "text-[#5f5f69] hover:text-[#21164c]"
-                }`}
-              >
-                <span>Email</span>
-                <span className="bg-gray-200 text-gray-600 text-[10px] px-1.5 py-0.2 rounded-full">
-                  0
-                </span>
-              </button>
-            </div>
-
-            {/* Campaign, Action & Status Filters */}
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+        {/* Colonne principale */}
+        <div className="flex min-w-0 flex-col gap-4 lg:col-span-8 xl:col-span-9">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Tabs
+              variant="segmented"
+              size="sm"
+              aria-label="Canal"
+              value={platformTab}
+              onChange={(v) => setPlatformTab(v as "LINKEDIN" | "EMAIL")}
+              items={[
+                { id: "LINKEDIN", label: "LinkedIn", count: stats?.totalQueuedLinkedIn || 0 },
+                { id: "EMAIL", label: "E-mail", count: 0 },
+              ]}
+            />
             <div className="flex flex-wrap items-center gap-2">
-              {/* Status select */}
-              <div className="relative">
-                <select
-                  value={statusFilter}
-                  onChange={(e) => {
-                    setStatusFilter(e.target.value);
-                    setPage(1);
-                  }}
-                  className="appearance-none bg-[#f8f9fc] border border-[#e0e0db] hover:border-[#592eff]/40 text-[#21164c] text-xs font-bold px-3 py-1.5 pr-8 rounded-xl focus:outline-none cursor-pointer"
-                >
-                  <option value="QUEUED">Statut : En attente</option>
-                  <option value="FAILED">Statut : Échouées</option>
-                  <option value="SUCCESS">Statut : Terminées</option>
-                  <option value="ALL">Statut : Tous</option>
-                </select>
-                <ChevronDown className="w-3.5 h-3.5 text-[#5f5f69] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-              </div>
-
-              {/* Campaign select */}
-              <div className="relative">
-                <select
-                  value={selectedCampaignId}
-                  onChange={(e) => {
-                    setSelectedCampaignId(e.target.value);
-                    setPage(1);
-                  }}
-                  className="appearance-none bg-[#f8f9fc] border border-[#e0e0db] hover:border-[#592eff]/40 text-[#21164c] text-xs font-bold px-3 py-1.5 pr-8 rounded-xl focus:outline-none cursor-pointer"
-                >
-                  <option value="ALL">Mes campagnes (Toutes)</option>
-                  {campaignsList.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="w-3.5 h-3.5 text-[#5f5f69] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-              </div>
-
-              {/* Action type select */}
-              <div className="relative">
-                <select
-                  value={selectedActionType}
-                  onChange={(e) => {
-                    setSelectedActionType(e.target.value);
-                    setPage(1);
-                  }}
-                  className="appearance-none bg-[#f8f9fc] border border-[#e0e0db] hover:border-[#592eff]/40 text-[#21164c] text-xs font-bold px-3 py-1.5 pr-8 rounded-xl focus:outline-none cursor-pointer"
-                >
-                  <option value="ALL">Type d'action (Tous)</option>
-                  <option value="INVITATION">Invitations</option>
-                  <option value="MESSAGE">Messages</option>
-                  <option value="VISIT_PROFILE">Visites de profil</option>
-                  <option value="FOLLOW">Suivis de profil</option>
-                </select>
-                <ChevronDown className="w-3.5 h-3.5 text-[#5f5f69] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-              </div>
-
-              {/* Search input */}
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 text-[#5f5f69] absolute left-2.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Rechercher..."
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    setPage(1);
-                  }}
-                  className="pl-8 pr-3 py-1.5 bg-[#f8f9fc] border border-[#e0e0db] focus:border-[#592eff] rounded-xl text-xs text-[#21164c] placeholder-[#5f5f69]/60 focus:outline-none transition-colors w-36 sm:w-44"
-                />
-              </div>
+              <Select
+                inline
+                size="sm"
+                aria-label="Statut"
+                value={statusFilter}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="QUEUED">En attente</option>
+                <option value="FAILED">Échouées</option>
+                <option value="SUCCESS">Terminées</option>
+                <option value="ALL">Tous les statuts</option>
+              </Select>
+              <Select
+                inline
+                size="sm"
+                aria-label="Campagne"
+                value={selectedCampaignId}
+                onChange={(e) => {
+                  setSelectedCampaignId(e.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="ALL">Toutes les campagnes</option>
+                {campaignsList.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                inline
+                size="sm"
+                aria-label="Type d'action"
+                value={selectedActionType}
+                onChange={(e) => {
+                  setSelectedActionType(e.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="ALL">Tous les types</option>
+                <option value="INVITATION">Invitations</option>
+                <option value="MESSAGE">Messages</option>
+                <option value="VISIT_PROFILE">Visites de profil</option>
+                <option value="FOLLOW">Suivis de profil</option>
+              </Select>
+              <Input
+                size="sm"
+                leftIcon={Search}
+                placeholder="Rechercher…"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setPage(1);
+                }}
+                className="w-40 sm:w-48"
+              />
             </div>
           </div>
 
-          {/* Batch Actions Toolbar (Appears when items are selected) */}
           {selectedIds.length > 0 && (
-            <div className="bg-[#592eff] text-white p-3 rounded-2xl shadow-lg shadow-[#592eff]/20 flex flex-wrap items-center justify-between gap-3 animate-in fade-in duration-200">
-              <div className="flex items-center gap-3 text-xs font-bold">
-                <span className="bg-white/20 px-2.5 py-1 rounded-lg">
-                  {selectedIds.length} sélectionnée(s)
-                </span>
-                <span>Actions groupées :</span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleBatchReschedule("hours", 2)}
-                  disabled={actionInProgress}
-                  className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
-                >
-                  <Clock className="w-3.5 h-3.5" /> Reporter de 2h
-                </button>
-
-                <button
-                  onClick={() => handleBatchReschedule("tomorrow_morning")}
-                  disabled={actionInProgress}
-                  className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
-                >
-                  <Calendar className="w-3.5 h-3.5" /> Demain 09h
-                </button>
-
-                <button
-                  onClick={handleBatchDelete}
-                  disabled={actionInProgress}
-                  className="px-3 py-1.5 bg-red-500 hover:bg-red-600 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
-                >
-                  <Trash2 className="w-3.5 h-3.5" /> Supprimer
-                </button>
-
-                <button
-                  onClick={() => setSelectedIds([])}
-                  className="p-1.5 hover:bg-white/10 rounded-lg text-white/80 hover:text-white transition-all ml-1"
-                  title="Désélectionner tout"
-                >
-                  ✕
-                </button>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface px-3 py-2 shadow-pop">
+              <span className="text-sm text-ink">
+                <span className="font-medium">{selectedIds.length}</span> sélectionnée(s)
+              </span>
+              <div className="flex items-center gap-1.5">
+                <Button variant="secondary" size="sm" icon={Clock} onClick={() => handleBatchReschedule("hours", 2)} disabled={actionInProgress}>
+                  Reporter de 2 h
+                </Button>
+                <Button variant="secondary" size="sm" icon={Calendar} onClick={() => handleBatchReschedule("tomorrow_morning")} disabled={actionInProgress}>
+                  Demain 9 h
+                </Button>
+                <Button variant="danger" size="sm" icon={Trash2} onClick={handleBatchDelete} disabled={actionInProgress}>
+                  Retirer
+                </Button>
+                <IconButton label="Tout désélectionner" icon={X} onClick={() => setSelectedIds([])} />
               </div>
             </div>
           )}
 
-          {/* Table Container */}
-          <div className="bg-white rounded-3xl border border-[#e0e0db] shadow-sm overflow-hidden flex flex-col">
-            <div className="overflow-x-auto overflow-y-auto max-h-[620px] custom-scrollbar">
-              <table className="w-full text-left border-collapse">
-                <thead className="sticky top-0 bg-[#fafaff] z-10 border-b border-[#e0e0db]/80 text-[11px] font-bold text-[#5f5f69] uppercase tracking-wider shadow-2xs">
+          <Card padding="none" className="flex flex-col overflow-hidden">
+            <div className="custom-scrollbar max-h-[620px] overflow-auto">
+              <Table>
+                <thead>
                   <tr>
-                    <th className="py-3.5 px-4 w-10">
-                      <button
-                        onClick={handleToggleSelectAll}
-                        className="text-[#5f5f69] hover:text-[#592eff] transition-colors"
-                      >
-                        {items.length > 0 && selectedIds.length === items.length ? (
-                          <CheckSquare className="w-4 h-4 text-[#592eff]" />
-                        ) : (
-                          <Square className="w-4 h-4" />
-                        )}
-                      </button>
-                    </th>
-                    <th className="py-3.5 px-4">Type</th>
-                    <th className="py-3.5 px-4">Prospect</th>
-                    <th className="py-3.5 px-4">Campagne</th>
-                    <th className="py-3.5 px-4">Statut / Exécution</th>
-                    <th className="py-3.5 px-4 text-right">Action</th>
+                    <Th className="w-10">
+                      <Checkbox checked={allSelected} onChange={handleToggleSelectAll} aria-label="Tout sélectionner" />
+                    </Th>
+                    <Th>Type</Th>
+                    <Th>Prospect</Th>
+                    <Th>Campagne</Th>
+                    <Th>Exécution</Th>
+                    <Th />
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#e0e0db]/60">
+                <tbody>
                   {loading && items.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="py-16 text-center">
-                        <div className="flex flex-col items-center justify-center gap-2">
-                          <div className="w-8 h-8 border-3 border-[#592eff] border-t-transparent rounded-full animate-spin" />
-                          <p className="text-xs text-[#5f5f69] font-semibold">
-                            Chargement de la file d'attente...
-                          </p>
-                        </div>
-                      </td>
-                    </tr>
+                    Array.from({ length: 6 }).map((_, i) => (
+                      <tr key={i}>
+                        <Td colSpan={6}>
+                          <Skeleton className="h-4 w-full" />
+                        </Td>
+                      </tr>
+                    ))
                   ) : items.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-16 text-center">
-                        <div className="flex flex-col items-center justify-center max-w-sm mx-auto">
-                          <div className="w-12 h-12 rounded-full bg-[#592eff]/10 flex items-center justify-center text-[#592eff] mb-3">
-                            <Clock className="w-6 h-6" />
-                          </div>
-                          <h4 className="text-sm font-bold text-[#21164c]">
-                            Aucune action dans cette vue
-                          </h4>
-                          <p className="text-xs text-[#5f5f69] mt-1">
-                            {statusFilter === "FAILED"
-                              ? "Aucune action échouée. Tout fonctionne parfaitement !"
+                      <Td colSpan={6} className="border-b-0">
+                        <EmptyState
+                          bare
+                          icon={Clock}
+                          title="Aucune action dans cette vue"
+                          description={
+                            statusFilter === "FAILED"
+                              ? "Aucune action échouée."
                               : statusFilter === "SUCCESS"
-                              ? "Aucune action terminée pour l'instant."
-                              : "Toutes les actions ont été traitées ou aucune campagne n'est active actuellement."}
-                          </p>
-                        </div>
-                      </td>
+                                ? "Aucune action terminée pour l'instant."
+                                : "Toutes les actions ont été traitées ou aucune campagne n'est active."
+                          }
+                        />
+                      </Td>
                     </tr>
                   ) : (
                     items.map((item) => {
                       const isSelected = selectedIds.includes(item.id);
                       const execInfo = formatExecutionTime(item.scheduledFor);
-
+                      const prospectName = `${item.prospect?.firstName || ""} ${item.prospect?.lastName || ""}`.trim() || "Prospect";
                       return (
-                        <tr
-                          key={item.id}
-                          className={`hover:bg-[#f8f9fc] transition-colors ${
-                            isSelected ? "bg-[#592eff]/5" : ""
-                          }`}
-                        >
-                          {/* Checkbox */}
-                          <td className="py-3.5 px-4">
-                            <button
-                              onClick={() => handleToggleSelectItem(item.id)}
-                              className="text-[#5f5f69] hover:text-[#592eff] transition-colors"
-                            >
-                              {isSelected ? (
-                                <CheckSquare className="w-4 h-4 text-[#592eff]" />
-                              ) : (
-                                <Square className="w-4 h-4" />
-                              )}
-                            </button>
-                          </td>
-
-                          {/* Action Type */}
-                          <td className="py-3.5 px-4">
-                            {renderActionTypeBadge(item.actionType)}
-                          </td>
-
-                          {/* Prospect */}
-                          <td className="py-3.5 px-4">
+                        <Tr key={item.id} selected={isSelected}>
+                          <Td>
+                            <Checkbox checked={isSelected} onChange={() => handleToggleSelectItem(item.id)} aria-label={`Sélectionner ${prospectName}`} />
+                          </Td>
+                          <Td>{renderActionTypeBadge(item.actionType)}</Td>
+                          <Td>
                             <div className="flex items-center gap-2.5">
-                              <img
-                                src={
-                                  item.prospect?.avatarUrl ||
-                                  `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                                    `${item.prospect?.firstName || "P"} ${item.prospect?.lastName || ""}`
-                                  )}&background=592eff&color=fff`
-                                }
-                                alt={item.prospect?.firstName}
-                                className="w-8 h-8 rounded-full object-cover border border-[#e0e0db]"
-                              />
+                              <Avatar name={prospectName} src={item.prospect?.avatarUrl} size="md" />
                               <div className="min-w-0 max-w-[220px]">
                                 <div className="flex items-center gap-1.5">
-                                  <p className="text-xs font-bold text-[#21164c] truncate">
-                                    {item.prospect?.firstName} {item.prospect?.lastName}
-                                  </p>
+                                  <p className="truncate font-medium text-ink">{prospectName}</p>
                                   {item.prospect?.linkedinUrl && (
-                                    <a
-                                      href={item.prospect.linkedinUrl}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="text-[#5f5f69] hover:text-[#592eff]"
-                                    >
-                                      <ExternalLink className="w-3 h-3" />
+                                    <a href={item.prospect.linkedinUrl} target="_blank" rel="noreferrer" className="text-muted hover:text-ink" aria-label="Profil LinkedIn">
+                                      <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.75} />
                                     </a>
                                   )}
                                 </div>
-                                <p className="text-[11px] text-[#5f5f69] truncate">
-                                  {item.prospect?.company || item.prospect?.headline || "—"}
-                                </p>
+                                <p className="truncate text-xs text-muted">{item.prospect?.company || item.prospect?.headline || "—"}</p>
                               </div>
                             </div>
-                          </td>
-
-                          {/* Campaign */}
-                          <td className="py-3.5 px-4">
-                            <span className="text-xs font-semibold text-[#21164c] bg-[#f8f9fc] border border-[#e0e0db] px-2.5 py-1 rounded-xl truncate max-w-[180px] inline-block">
-                              {item.campaign?.name || "Campagne"}
-                            </span>
-                          </td>
-
-                          {/* Execution Timing / Status */}
-                          <td className="py-3.5 px-4">
+                          </Td>
+                          <Td>
+                            <span className="inline-block max-w-[180px] truncate text-muted">{item.campaign?.name || "Campagne"}</span>
+                          </Td>
+                          <Td>
                             {item.status === "FAILED" ? (
                               <div className="flex flex-col gap-0.5">
-                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-md w-fit">
-                                  <AlertCircle className="w-3 h-3" /> Échouée
-                                </span>
+                                <Badge tone="danger" dot>
+                                  Échouée
+                                </Badge>
                                 {item.errorMessage && (
-                                  <span className="text-[10px] text-red-500 truncate max-w-[180px]" title={item.errorMessage}>
-                                    {item.errorMessage.includes("invalid_recipient")
-                                      ? "Destinataire invalide"
-                                      : item.errorMessage}
+                                  <span className="max-w-[200px] truncate text-xs text-muted" title={item.errorMessage}>
+                                    {item.errorMessage.includes("invalid_recipient") ? "Destinataire invalide" : item.errorMessage}
                                   </span>
                                 )}
                               </div>
                             ) : item.status === "SUCCESS" ? (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md w-fit">
-                                <Check className="w-3 h-3" /> Terminée
-                              </span>
+                              <Badge tone="ok" dot>
+                                Terminée
+                              </Badge>
                             ) : item.status === "EXECUTING" ? (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md w-fit animate-pulse">
-                                <RefreshCw className="w-3 h-3 animate-spin" /> En cours...
-                              </span>
+                              <Badge tone="accent" dot>
+                                En cours
+                              </Badge>
                             ) : (
-                              <div className="flex items-center gap-1.5">
-                                <span
-                                  className={`text-xs font-bold ${
-                                    execInfo.isImminent ? "text-[#592eff] animate-pulse" : "text-[#5f5f69]"
-                                  }`}
-                                >
-                                  {execInfo.label}
-                                </span>
-                              </div>
+                              <span className={execInfo.isImminent ? "font-medium text-ink" : "text-muted"}>{execInfo.label}</span>
                             )}
-                          </td>
-
-                          {/* Single Action Menu */}
-                          <td className="py-3.5 px-4 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              {item.status === "FAILED" && (
-                                <button
-                                  onClick={() => handleRetryItem(item.id)}
-                                  className="px-2.5 py-1 text-xs font-bold text-[#592eff] bg-[#592eff]/10 hover:bg-[#592eff] hover:text-white rounded-lg transition-all flex items-center gap-1"
-                                  title="Réessayer cette action"
-                                >
-                                  <RefreshCw className="w-3 h-3" /> Relancer
-                                </button>
-                              )}
-                              <button
-                                onClick={() => handleDeleteItem(item.id)}
-                                className="p-1.5 hover:bg-red-50 text-[#5f5f69] hover:text-red-600 rounded-lg transition-colors"
-                                title="Retirer de la file"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
+                          </Td>
+                          <TdActions>
+                            {item.status === "FAILED" && <IconButton label="Relancer cette action" icon={RefreshCw} onClick={() => handleRetryItem(item.id)} />}
+                            <IconButton label="Retirer de la file" icon={Trash2} tone="danger" onClick={() => handleDeleteItem(item.id)} />
+                          </TdActions>
+                        </Tr>
                       );
                     })
                   )}
                 </tbody>
-              </table>
+              </Table>
             </div>
 
-            {/* Pagination footer permanente / Barre de navigation */}
             {totalCount > 0 && (
-              <div className="p-3.5 sm:p-4 border-t border-[#e0e0db]/60 flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#fafaff]">
-                <div className="flex flex-wrap items-center gap-3">
-                  <p className="text-xs text-[#5f5f69]">
-                    Affichage de <span className="font-bold text-[#21164c]">{items.length}</span> sur{" "}
-                    <span className="font-bold text-[#21164c]">{totalCount}</span> action(s) planifiée(s)
-                  </p>
-
-                  <div className="flex items-center gap-1.5 text-xs text-[#5f5f69] border-l border-[#e0e0db] pl-3">
-                    <span className="hidden sm:inline text-[11px]">Par page :</span>
+              <Pagination
+                page={page}
+                pageCount={totalPages}
+                onPage={(p) => setPage(p)}
+                summary={
+                  <span>
+                    {items.length} sur {totalCount} action(s)
+                  </span>
+                }
+                extra={
+                  <Select
+                    inline
+                    size="sm"
+                    aria-label="Par page"
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setPage(1);
+                    }}
+                  >
                     {[15, 30, 50].map((size) => (
-                      <button
-                        key={size}
-                        type="button"
-                        onClick={() => {
-                          setPageSize(size);
-                          setPage(1);
-                        }}
-                        className={`px-2 py-0.5 rounded-md font-bold text-[11px] transition-colors cursor-pointer ${
-                          pageSize === size
-                            ? "bg-[#592eff] text-white"
-                            : "bg-white border border-[#e0e0db] text-[#5f5f69] hover:text-[#21164c]"
-                        }`}
-                      >
-                        {size}
-                      </button>
+                      <option key={size} value={size}>
+                        {size} par page
+                      </option>
                     ))}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={page <= 1 || loading}
-                    className="px-2.5 py-1.5 rounded-xl border border-[#e0e0db] bg-white text-[#21164c] text-xs font-bold disabled:opacity-40 hover:bg-[#f8f9fc] hover:border-[#592eff]/30 transition-all flex items-center gap-1 cursor-pointer disabled:cursor-not-allowed shadow-2xs"
-                    title="Page précédente"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                    <span className="hidden sm:inline">Précédent</span>
-                  </button>
-
-                  {/* Numéros de page */}
-                  <div className="flex items-center gap-1 mx-1">
-                    {Array.from({ length: totalPages }, (_, i) => i + 1)
-                      .filter((p) => p === 1 || p === totalPages || (p >= page - 1 && p <= page + 1))
-                      .map((p, idx, arr) => {
-                        const prev = arr[idx - 1];
-                        const hasGap = prev && p - prev > 1;
-                        return (
-                          <React.Fragment key={p}>
-                            {hasGap && <span className="px-1 text-xs text-[#8a8a93] font-bold">...</span>}
-                            <button
-                              type="button"
-                              onClick={() => setPage(p)}
-                              className={`min-w-[28px] h-7 px-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                                page === p
-                                  ? "bg-[#592eff] text-white shadow-sm shadow-[#592eff]/25"
-                                  : "bg-white border border-[#e0e0db] text-[#5f5f69] hover:bg-[#f5f3ff] hover:text-[#592eff]"
-                              }`}
-                            >
-                              {p}
-                            </button>
-                          </React.Fragment>
-                        );
-                      })}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={page >= totalPages || loading}
-                    className="px-2.5 py-1.5 rounded-xl border border-[#e0e0db] bg-white text-[#21164c] text-xs font-bold disabled:opacity-40 hover:bg-[#f8f9fc] hover:border-[#592eff]/30 transition-all flex items-center gap-1 cursor-pointer disabled:cursor-not-allowed shadow-2xs"
-                    title="Page suivante"
-                  >
-                    <span className="hidden sm:inline">Suivant</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
+                  </Select>
+                }
+              />
             )}
-          </div>
+          </Card>
         </div>
 
-        {/* Right Column : Quotas Journaliers Sidebar (Style Waalaxy) */}
-        <div className="lg:col-span-4 xl:col-span-3 space-y-4">
-          <div className="bg-white rounded-3xl p-5 border border-[#e0e0db] shadow-sm">
-            <div className="flex items-center justify-between mb-1">
-              <h2 className="text-sm font-black text-[#21164c] tracking-tight">
-                Quotas journaliers
-              </h2>
-              <span className="text-[10px] bg-[#592eff]/10 text-[#592eff] font-bold px-2 py-0.5 rounded-full">
-                24h
-              </span>
-            </div>
-            <p className="text-[11px] text-[#5f5f69] mb-5">
-              Ces quotas sont mis à jour quotidiennement.
-            </p>
-
-            {/* LinkedIn Header */}
-            <h3 className="text-xs font-bold text-[#21164c] uppercase tracking-wider mb-3">
-              LinkedIn
-            </h3>
-
-            {/* Quotas List */}
-            <div className="space-y-3">
-              {/* Invitations */}
-              <div className="bg-[#f8f9fc] p-3.5 rounded-2xl border border-[#e0e0db]/80 transition-all hover:border-[#592eff]/30">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-xl bg-[#592eff]/10 flex items-center justify-center text-[#592eff]">
-                      <UserPlus className="w-3.5 h-3.5" />
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-bold text-[#21164c] uppercase">Invitations</p>
-                      <p className="text-[11px] text-[#5f5f69]">
-                        <span className="font-bold text-[#592eff]">
-                          {stats?.quotas.invitations.remaining ?? 30}
-                        </span>{" "}
-                        restants aujourd'hui
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Progress Bar */}
-                <div className="w-full bg-[#e0e0db]/60 h-1.5 rounded-full overflow-hidden mb-1">
-                  <div
-                    className="bg-[#592eff] h-full rounded-full transition-all duration-500"
-                    style={{
-                      width: `${Math.min(
-                        100,
-                        Math.round(
-                          ((stats?.quotas.invitations.sent ?? 0) /
-                            (stats?.quotas.invitations.max || 30)) *
-                            100
-                        )
-                      )}%`,
-                    }}
-                  />
-                </div>
-                <div className="flex justify-between text-[10px] font-bold text-[#5f5f69]">
-                  <span>{stats?.quotas.invitations.sent ?? 0}</span>
-                  <span>{stats?.quotas.invitations.max ?? 30}</span>
-                </div>
-              </div>
-
-              {/* Messages */}
-              <div className="bg-[#f8f9fc] p-3.5 rounded-2xl border border-[#e0e0db]/80 transition-all hover:border-[#2ed6ff]/40">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-xl bg-[#2ed6ff]/10 flex items-center justify-center text-[#0284c7]">
-                      <Send className="w-3.5 h-3.5" />
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-bold text-[#21164c] uppercase">Messages</p>
-                      <p className="text-[11px] text-[#5f5f69]">
-                        <span className="font-bold text-[#0284c7]">
-                          {stats?.quotas.messages.remaining ?? 70}
-                        </span>{" "}
-                        restants aujourd'hui
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Progress Bar */}
-                <div className="w-full bg-[#e0e0db]/60 h-1.5 rounded-full overflow-hidden mb-1">
-                  <div
-                    className="bg-[#2ed6ff] h-full rounded-full transition-all duration-500"
-                    style={{
-                      width: `${Math.min(
-                        100,
-                        Math.round(
-                          ((stats?.quotas.messages.sent ?? 0) /
-                            (stats?.quotas.messages.max || 70)) *
-                            100
-                        )
-                      )}%`,
-                    }}
-                  />
-                </div>
-                <div className="flex justify-between text-[10px] font-bold text-[#5f5f69]">
-                  <span>{stats?.quotas.messages.sent ?? 0}</span>
-                  <span>{stats?.quotas.messages.max ?? 70}</span>
-                </div>
-              </div>
-
-              {/* Visites de profil */}
-              <div className="bg-[#f8f9fc] p-3.5 rounded-2xl border border-[#e0e0db]/80 transition-all hover:border-amber-400/40">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-600">
-                      <Eye className="w-3.5 h-3.5" />
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-bold text-[#21164c] uppercase">
-                        Visites de profil
-                      </p>
-                      <p className="text-[11px] text-[#5f5f69]">
-                        <span className="font-bold text-amber-600">
-                          {stats?.quotas.profileVisits.remaining ?? 120}
-                        </span>{" "}
-                        restants aujourd'hui
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="w-full bg-[#e0e0db]/60 h-1.5 rounded-full overflow-hidden mb-1">
-                  <div
-                    className="bg-amber-500 h-full rounded-full transition-all duration-500"
-                    style={{
-                      width: `${Math.min(
-                        100,
-                        Math.round(
-                          ((stats?.quotas.profileVisits.sent ?? 0) /
-                            (stats?.quotas.profileVisits.max || 120)) *
-                            100
-                        )
-                      )}%`,
-                    }}
-                  />
-                </div>
-                <div className="flex justify-between text-[10px] font-bold text-[#5f5f69]">
-                  <span>{stats?.quotas.profileVisits.sent ?? 0}</span>
-                  <span>{stats?.quotas.profileVisits.max ?? 120}</span>
-                </div>
-              </div>
-
-              {/* Suivis de profil */}
-              <div className="bg-[#f8f9fc] p-3.5 rounded-2xl border border-[#e0e0db]/80 transition-all hover:border-purple-400/40">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-600">
-                      <UserCheck className="w-3.5 h-3.5" />
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-bold text-[#21164c] uppercase">
-                        Suivis de profil
-                      </p>
-                      <p className="text-[11px] text-[#5f5f69]">
-                        <span className="font-bold text-purple-600">
-                          {stats?.quotas.profileFollows.remaining ?? 80}
-                        </span>{" "}
-                        restants aujourd'hui
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="w-full bg-[#e0e0db]/60 h-1.5 rounded-full overflow-hidden mb-1">
-                  <div
-                    className="bg-purple-500 h-full rounded-full transition-all duration-500"
-                    style={{
-                      width: `${Math.min(
-                        100,
-                        Math.round(
-                          ((stats?.quotas.profileFollows.sent ?? 0) /
-                            (stats?.quotas.profileFollows.max || 80)) *
-                            100
-                        )
-                      )}%`,
-                    }}
-                  />
-                </div>
-                <div className="flex justify-between text-[10px] font-bold text-[#5f5f69]">
-                  <span>{stats?.quotas.profileFollows.sent ?? 0}</span>
-                  <span>{stats?.quotas.profileFollows.max ?? 80}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Safety badge */}
-            <div className="mt-5 p-3 bg-[#592eff]/5 rounded-2xl border border-[#592eff]/10 flex items-center gap-2.5">
-              <ShieldCheck className="w-4 h-4 text-[#592eff] shrink-0" />
-              <p className="text-[11px] text-[#21164c] leading-tight">
-                Protection anti-blocage active : 90s d'intervalle minimum entre chaque envoi.
-              </p>
-            </div>
+        {/* Quotas journaliers */}
+        <Card padding="md" className="space-y-4 lg:col-span-4 xl:col-span-3">
+          <div>
+            <h2 className="text-base font-semibold text-ink">Quotas journaliers</h2>
+            <p className="mt-0.5 text-sm text-muted">Remis à zéro chaque jour, cible dérivée de votre offre.</p>
           </div>
-        </div>
+          <div className="divide-y divide-line">
+            {quotaRows.map((q) => {
+              const Icon = q.icon;
+              const sent = q.data?.sent ?? 0;
+              const max = q.data?.max ?? q.fallback;
+              const pct = Math.min(100, Math.round((sent / (max || 1)) * 100));
+              return (
+                <div key={q.key} className="py-3 first:pt-0 last:pb-0">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="inline-flex items-center gap-2 text-sm text-ink">
+                      <Icon className="h-4 w-4 text-muted" strokeWidth={1.75} aria-hidden />
+                      {q.label}
+                    </span>
+                    <span className="tabular-nums text-xs text-muted">
+                      <span className="text-ink">{sent}</span> / {max}
+                    </span>
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-line">
+                    <div className="h-full rounded-full bg-ink transition-[width] duration-500" style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="flex items-start gap-2 border-t border-line pt-4 text-xs text-muted">
+            <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+            Protection anti-blocage : 90 s d'intervalle minimum entre chaque envoi.
+          </p>
+        </Card>
       </div>
 
-      {/* Schedule Activity Modal */}
       <ScheduleActivityModal
         isOpen={isScheduleModalOpen}
         onClose={() => setIsScheduleModalOpen(false)}

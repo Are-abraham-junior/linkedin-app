@@ -27,8 +27,8 @@ interface FormState {
 }
 
 const CATEGORY_LABELS: Record<Category, string> = { BLEADIN: "Application Bleadin", PROSPECTION: "Prospection LinkedIn", REDACTION: "Rédaction de messages" };
-const inputCls = "w-full h-10 px-3 rounded-xl border border-[#e0e0db] bg-white text-[13px] text-[#353241] focus:outline-none focus:border-[#592eff]";
-const labelCls = "block text-[11px] font-bold uppercase tracking-wider text-[#5f5f69] mb-1.5";
+const inputCls = "w-full h-10 px-3 rounded-xl border border-line bg-white text-sm text-ink-2 focus:outline-none focus:border-ink";
+const labelCls = "block text-xs font-medium text-muted mb-1.5";
 
 export const AiKnowledgeTab: React.FC = () => {
   const [docs, setDocs] = useState<KnowledgeDoc[]>([]);
@@ -110,16 +110,16 @@ export const AiKnowledgeTab: React.FC = () => {
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-extrabold text-[#21164c]">Base de connaissances</h2>
-          <p className="text-[12px] text-[#5f5f69] mt-0.5 max-w-xl">
+          <h2 className="text-lg font-semibold text-ink">Base de connaissances</h2>
+          <p className="text-[12px] text-muted mt-0.5 max-w-xl">
             Documents Markdown que Bleadin IA consulte pour répondre sans inventer. Les documents « cœur » sont toujours transmis au modèle ; les autres sont recherchés par mots-clés selon la question. Les modifications sont prises en compte immédiatement.
           </p>
         </div>
         <div className="flex gap-2">
-          <button type="button" onClick={() => setConfirmReseed(true)} className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl border border-[#e0e0db] text-[12px] font-semibold text-[#353241] hover:bg-[#f5f5f7]">
+          <button type="button" onClick={() => setConfirmReseed(true)} className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl border border-line text-[12px] font-semibold text-ink-2 hover:bg-surface-2">
             <RotateCcw className="w-3.5 h-3.5" /> Restaurer les documents d'origine
           </button>
-          <button type="button" onClick={openCreate} className="inline-flex items-center gap-1.5 h-9 px-4 rounded-xl bg-[#592eff] text-white text-[12px] font-semibold hover:bg-[#4a22e0]">
+          <button type="button" onClick={openCreate} className="inline-flex items-center gap-1.5 h-9 px-4 rounded-xl bg-accent text-white text-[12px] font-semibold hover:bg-accent-hover">
             <Plus className="w-4 h-4" /> Nouveau document
           </button>
         </div>
@@ -127,39 +127,39 @@ export const AiKnowledgeTab: React.FC = () => {
 
       {loading ? (
         <div className="flex justify-center py-10">
-          <Loader2 className="w-5 h-5 text-[#592eff] animate-spin" />
+          <Loader2 className="w-5 h-5 text-ink animate-spin" />
         </div>
       ) : (
         grouped.map(({ cat, items }) => (
           <section key={cat} className="space-y-2">
-            <h3 className="text-[11px] font-extrabold uppercase tracking-widest text-[#5f5f69]/80">{CATEGORY_LABELS[cat]}</h3>
+            <h3 className="text-xs font-semibold text-muted/80">{CATEGORY_LABELS[cat]}</h3>
             {items.length === 0 ? (
-              <p className="text-[12px] text-[#5f5f69] italic">Aucun document.</p>
+              <p className="text-[12px] text-muted italic">Aucun document.</p>
             ) : (
-              <div className="rounded-3xl bg-white border border-[#e0e0db] divide-y divide-[#e0e0db]/70 shadow-xs">
+              <div className="rounded-2xl bg-white border border-line divide-y divide-line/70">
                 {items.map((d) => (
                   <div key={d.id} className={`flex items-center gap-3 px-4 py-3 ${d.enabled ? "" : "opacity-60"}`}>
                     <div className="w-9 h-9 rounded-2xl bg-[#bcf2ff] flex items-center justify-center shrink-0">
-                      <BookOpen className="w-4 h-4 text-[#21164c]" />
+                      <BookOpen className="w-4 h-4 text-ink" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-[13px] font-bold text-[#21164c] truncate">{d.title}</p>
-                        {d.isCore && <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#dfff9d] text-[#21164c]"><Star className="w-3 h-3" /> Cœur</span>}
-                        {seedSlugs.includes(d.slug) && <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#f5f5f7] text-[#5f5f69] border border-[#e0e0db]">Origine</span>}
+                        <p className="text-sm font-medium text-ink truncate">{d.title}</p>
+                        {d.isCore && <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-[#dfff9d] text-ink"><Star className="w-3 h-3" /> Cœur</span>}
+                        {seedSlugs.includes(d.slug) && <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-surface-2 text-muted border border-line">Origine</span>}
                       </div>
-                      <p className="text-[11px] text-[#5f5f69] truncate">
+                      <p className="text-xs text-muted truncate">
                         {d.slug} · {d.content.length.toLocaleString("fr-FR")} caractères · modifié le {new Date(d.updatedAt).toLocaleDateString("fr-FR")}
                       </p>
                     </div>
-                    <label className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#5f5f69] cursor-pointer">
+                    <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted cursor-pointer">
                       <input type="checkbox" checked={d.enabled} disabled={busy} onChange={(e) => toggle(d, { enabled: e.target.checked })} className="accent-[#592eff]" />
                       Actif
                     </label>
-                    <button type="button" onClick={() => openEdit(d)} className="w-8 h-8 rounded-lg flex items-center justify-center text-[#5f5f69] hover:bg-[#f5f5f7] hover:text-[#592eff]" title="Modifier">
+                    <button type="button" onClick={() => openEdit(d)} className="w-8 h-8 rounded-lg flex items-center justify-center text-muted hover:bg-surface-2 hover:text-ink" title="Modifier">
                       <Pencil className="w-3.5 h-3.5" />
                     </button>
-                    <button type="button" onClick={() => setToDelete(d)} className="w-8 h-8 rounded-lg flex items-center justify-center text-[#5f5f69] hover:bg-red-50 hover:text-red-600" title="Supprimer">
+                    <button type="button" onClick={() => setToDelete(d)} className="w-8 h-8 rounded-lg flex items-center justify-center text-muted hover:bg-surface-2 hover:text-danger" title="Supprimer">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -171,11 +171,11 @@ export const AiKnowledgeTab: React.FC = () => {
       )}
 
       {form && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#21164c]/40 p-4" onClick={() => !saving && setForm(null)}>
-          <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-3xl rounded-[32px] bg-white border border-[#e0e0db] shadow-2xl p-6 space-y-4 max-h-[92vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4" onClick={() => !saving && setForm(null)}>
+          <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-3xl rounded-[32px] bg-white border border-line p-6 space-y-4 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-extrabold text-[#21164c]">{form.id ? "Modifier le document" : "Nouveau document"}</h3>
-              <button type="button" onClick={() => setForm(null)} className="w-8 h-8 rounded-lg flex items-center justify-center text-[#5f5f69] hover:bg-[#f5f5f7]">
+              <h3 className="text-lg font-semibold text-ink">{form.id ? "Modifier le document" : "Nouveau document"}</h3>
+              <button type="button" onClick={() => setForm(null)} className="w-8 h-8 rounded-lg flex items-center justify-center text-muted hover:bg-surface-2">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -208,26 +208,26 @@ export const AiKnowledgeTab: React.FC = () => {
                 onChange={(e) => setForm({ ...form, content: e.target.value })}
                 rows={18}
                 required
-                className="w-full rounded-xl border border-[#e0e0db] bg-white px-3 py-2 text-[12px] font-mono text-[#353241] focus:outline-none focus:border-[#592eff] resize-y"
+                className="w-full rounded-xl border border-line bg-white px-3 py-2 text-[12px] font-mono text-ink-2 focus:outline-none focus:border-ink resize-y"
               />
-              <p className="mt-1 text-[11px] text-[#5f5f69]">Structurez avec des titres <code>##</code> : chaque section devient un passage indexé séparément.</p>
+              <p className="mt-1 text-xs text-muted">Structurez avec des titres <code>##</code> : chaque section devient un passage indexé séparément.</p>
             </div>
             <div className="flex flex-wrap gap-5">
-              <label className="inline-flex items-center gap-2 text-[12px] font-semibold text-[#353241] cursor-pointer">
+              <label className="inline-flex items-center gap-2 text-[12px] font-semibold text-ink-2 cursor-pointer">
                 <input type="checkbox" checked={form.isCore} onChange={(e) => setForm({ ...form, isCore: e.target.checked })} className="accent-[#592eff]" />
                 Document cœur (toujours transmis au modèle — à réserver aux essentiels)
               </label>
-              <label className="inline-flex items-center gap-2 text-[12px] font-semibold text-[#353241] cursor-pointer">
+              <label className="inline-flex items-center gap-2 text-[12px] font-semibold text-ink-2 cursor-pointer">
                 <input type="checkbox" checked={form.enabled} onChange={(e) => setForm({ ...form, enabled: e.target.checked })} className="accent-[#592eff]" />
                 Actif
               </label>
             </div>
-            {error && <p className="text-[12px] text-red-600">{error}</p>}
+            {error && <p className="text-[12px] text-danger">{error}</p>}
             <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setForm(null)} className="h-9 px-4 rounded-xl border border-[#e0e0db] text-[12px] font-semibold text-[#353241] hover:bg-[#f5f5f7]">
+              <button type="button" onClick={() => setForm(null)} className="h-9 px-4 rounded-xl border border-line text-[12px] font-semibold text-ink-2 hover:bg-surface-2">
                 Annuler
               </button>
-              <button type="submit" disabled={saving} className="inline-flex items-center gap-1.5 h-9 px-4 rounded-xl bg-[#592eff] text-white text-[12px] font-semibold hover:bg-[#4a22e0] disabled:opacity-60">
+              <button type="submit" disabled={saving} className="inline-flex items-center gap-1.5 h-9 px-4 rounded-xl bg-accent text-white text-[12px] font-semibold hover:bg-accent-hover disabled:opacity-60">
                 {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                 Enregistrer
               </button>

@@ -32,6 +32,8 @@ import { SettingsView } from "./components/settings/SettingsView";
 import { LinkedInSessionExpiredBanner } from "./components/common/LinkedInSessionExpiredBanner";
 import { LinkedInReconnectModal } from "./components/modals/LinkedInReconnectModal";
 import { ArrowRight } from "lucide-react";
+import { Button } from "./components/ui/Button";
+import { SkeletonPage } from "./components/ui/Skeleton";
 import { MarketingLayout } from "./marketing/MarketingLayout";
 import { HomePage } from "./marketing/pages/HomePage";
 import { FeaturesPage } from "./marketing/pages/FeaturesPage";
@@ -108,7 +110,7 @@ const AppLayout: React.FC = () => {
   );
 
   return (
-    <div className="text-[#353241] flex h-screen overflow-hidden bg-[#f8f9fc]">
+    <div className="flex h-screen overflow-hidden bg-canvas text-ink-2">
       {/* Barre latérale de navigation verticale Adora à gauche */}
       <Sidebar
         isCollapsed={isSidebarCollapsed}
@@ -135,19 +137,14 @@ const AppLayout: React.FC = () => {
         ) : (
           /* 2. Invitation initiale pour les collaborateurs sans compte LinkedIn lié */
           !user.hasLinkedInAccount && !isSuperAdmin && (
-            <div className="z-20 flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[#e0e0db] bg-white px-4 py-2.5 sm:px-6">
-              <p className="min-w-0 truncate text-[13px] text-[#21164c]">
+            <div className="z-20 flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-line bg-surface px-4 py-2.5 sm:px-6">
+              <p className="min-w-0 truncate text-sm text-ink">
                 <span className="font-semibold">Compte LinkedIn non connecté.</span>{" "}
-                <span className="text-[#5f5f69]">Connectez-le pour lancer vos campagnes.</span>
+                <span className="text-muted">Connectez-le pour lancer vos campagnes.</span>
               </p>
-              <button
-                type="button"
-                onClick={() => setShowLinkedInModal(true)}
-                className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-[#592eff] px-3 text-[13px] font-semibold text-white transition-colors hover:bg-[#4a22e0]"
-              >
+              <Button size="sm" iconRight={ArrowRight} onClick={() => setShowLinkedInModal(true)}>
                 Connecter LinkedIn
-                <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} />
-              </button>
+              </Button>
             </div>
           )
         )}
@@ -195,11 +192,8 @@ export const App: React.FC = () => {
   // Pendant le chargement initial du profil
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#f8f9fc] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-8 h-8 border-3 border-[#592eff] border-t-transparent rounded-full animate-spin"></div>
-          <span className="text-sm font-semibold text-[#5f5f69]">Chargement de votre session...</span>
-        </div>
+      <div className="min-h-screen bg-canvas">
+        <SkeletonPage />
       </div>
     );
   }

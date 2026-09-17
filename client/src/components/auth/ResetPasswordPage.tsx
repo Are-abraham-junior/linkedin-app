@@ -66,7 +66,7 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ token }) =
       title="Nouveau mot de passe"
       lead="Choisissez un mot de passe de 8 caractères minimum, puis confirmez-le."
       footer={
-        <Link to="/connexion" className="font-semibold text-[#21164c] hover:text-[#592eff]">
+        <Link to="/connexion" className="font-semibold text-ink hover:text-accent">
           Retour à la connexion
         </Link>
       }

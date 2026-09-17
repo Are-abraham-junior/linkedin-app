@@ -78,7 +78,7 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
       footer={
         <p>
           Vous avez déjà un compte ?{" "}
-          <button type="button" onClick={onSwitchToLogin} className="font-semibold text-[#21164c] hover:text-[#592eff]">
+          <button type="button" onClick={onSwitchToLogin} className="font-semibold text-ink hover:text-accent">
             Se connecter
           </button>
         </p>

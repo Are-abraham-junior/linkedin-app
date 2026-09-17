@@ -156,6 +156,8 @@ model AiProvider {
   apiKey       String?
   model        String
   temperature  Float     @default(0.2)
+  numCtx       Int       @default(16384)  // fenêtre de contexte demandée à Ollama (num_ctx)
+  thinking     Boolean   @default(false)  // laisser le modèle "réfléchir" (think) — consomme du contexte, inutile pour les appels d'outils
   isActive     Boolean   @default(false)
   status       String    @default("UNTESTED") // UNTESTED | OK | ERROR
   lastTestedAt DateTime?

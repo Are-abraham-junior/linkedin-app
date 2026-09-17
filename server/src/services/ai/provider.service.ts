@@ -40,6 +40,8 @@ export function toPublicProvider(p: NonNullable<AiProviderRow>) {
     hasApiKey: Boolean(p.apiKey),
     model: p.model,
     temperature: p.temperature,
+    numCtx: p.numCtx,
+    thinking: p.thinking,
     isActive: p.isActive,
     status: p.status,
     lastTestedAt: p.lastTestedAt,
